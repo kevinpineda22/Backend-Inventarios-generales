@@ -30,6 +30,7 @@ import ubicacionesRoutes from './src/routes/ubicaciones.routes.js';
 import conteosRoutes from './src/routes/conteos.routes.js';
 import estructuraRoutes from './src/routes/estructura.routes.js';
 import reportesRoutes from './src/routes/reportes.routes.js';
+import maestraRoutes from './src/routes/maestra.routes.js';
 
 // Configurar __dirname para ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -126,6 +127,7 @@ app.use('/api/ubicaciones', ubicacionesRoutes);
 app.use('/api/conteos', conteosRoutes);
 app.use('/api/estructura', estructuraRoutes);
 app.use('/api/reportes', reportesRoutes);
+app.use('/api/maestra', maestraRoutes);
 
 // =====================================================
 // MANEJO DE ERRORES

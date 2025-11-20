@@ -21,33 +21,33 @@ const AdminInventarioGeneral = () => {
   };
 
   return (
-    <div className="admin-inventario-general">
-      <div className="admin-header">
+    <div className="inventario-general-admin-container">
+      <div className="inventario-general-admin-header">
         <h1>Administración de Inventario General</h1>
       </div>
 
-      <div className="admin-tabs">
+      <div className="inventario-general-admin-tabs">
         <button
-          className={`tab-button ${activeTab === 'carga' ? 'active' : ''}`}
+          className={`inventario-general-tab-button ${activeTab === 'carga' ? 'active' : ''}`}
           onClick={() => setActiveTab('carga')}
         >
           Carga Maestra
         </button>
         <button
-          className={`tab-button ${activeTab === 'creacion' ? 'active' : ''}`}
+          className={`inventario-general-tab-button ${activeTab === 'creacion' ? 'active' : ''}`}
           onClick={() => setActiveTab('creacion')}
         >
           Creación de Inventario
         </button>
         <button
-          className={`tab-button ${activeTab === 'historial' ? 'active' : ''}`}
+          className={`inventario-general-tab-button ${activeTab === 'historial' ? 'active' : ''}`}
           onClick={() => setActiveTab('historial')}
         >
           Historial de Conteos
         </button>
       </div>
 
-      <div className="admin-content">
+      <div className="inventario-general-admin-content">
         {renderContent()}
       </div>
     </div>

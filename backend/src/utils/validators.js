@@ -1,3 +1,21 @@
+/**
+ * Validar fila de la base de datos maestra
+ */
+export const validateMaestraRow = (row) => {
+  if (!row.codigo || typeof row.codigo !== 'string' || row.codigo.trim() === '') {
+    return { valid: false, error: 'El campo "codigo" es requerido' };
+  }
+  if (!row.item || typeof row.item !== 'string' || row.item.trim() === '') {
+    return { valid: false, error: 'El campo "item" es requerido' };
+  }
+  if (!row.descripcion || typeof row.descripcion !== 'string' || row.descripcion.trim() === '') {
+    return { valid: false, error: 'El campo "descripcion" es requerido' };
+  }
+  if (!row.unidad_medida || typeof row.unidad_medida !== 'string' || row.unidad_medida.trim() === '') {
+    return { valid: false, error: 'El campo "unidad_medida" es requerido' };
+  }
+  return { valid: true };
+};
 // =====================================================
 // UTILIDAD: VALIDACIONES
 // =====================================================

@@ -77,13 +77,14 @@ export const getTableName = (tableName) => {
 
 // Nombres de tablas
 export const TABLES = {
-  ITEMS: getTableName('items'),
+  ITEMS: 'inv_general_items', // <-- Nombre exacto de la tabla de items
   BODEGAS: getTableName('bodegas'),
   ZONAS: getTableName('zonas'),
   PASILLOS: getTableName('pasillos'),
   UBICACIONES: getTableName('ubicaciones'),
   CONTEOS: getTableName('conteos'),
-  CONTEO_ITEMS: getTableName('conteo_items')
+  CONTEO_ITEMS: getTableName('conteo_items'),
+  CODIGOS: 'inv_general_codigos' // <-- Nombre exacto de la tabla de códigos de barras
 };
 
 console.log('📦 Cliente de Supabase inicializado');

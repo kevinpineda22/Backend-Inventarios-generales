@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { inventarioGeneralService } from '../../../services/inventarioGeneralService';
 import './ConteoPorUbicacion.css';
 
 const ConteoPorUbicacion = ({ ubicacion, usuarioId, usuarioNombre, onCerrar }) => {

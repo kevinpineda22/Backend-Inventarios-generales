@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { inventarioGeneralService } from '../../../services/inventarioGeneralService';
 import ConteoPorUbicacion from './ConteoPorUbicacion';
 import './EmpleadoInventarioGeneral.css';
 
@@ -25,9 +24,9 @@ const EmpleadoInventarioGeneral = ({ usuarioId, usuarioNombre }) => {
   const [message, setMessage] = useState({ type: '', text: '' });
 
   const companies = [
-    { id: '1', nombre: 'Makro Colombia' },
-    { id: '2', nombre: 'Makro Perú' },
-    { id: '3', nombre: 'Makro Chile' },
+    { id: '1', nombre: 'Merkahorro' },
+    { id: '2', nombre: 'Megamayorista' },
+    { id: '3', nombre: 'Construahorro' },
   ];
 
   useEffect(() => {

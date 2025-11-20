@@ -1,183 +1,169 @@
 import { useState, useEffect } from 'react';
-import { inventarioGeneralService } from '../../../services/inventarioGeneralService';
 import './CreacionInventario.css';
 
 const CreacionInventario = () => {
   const [selectedCompany, setSelectedCompany] = useState('');
-  const [bodegas, setBodegas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  // Estado para la creación
-  const [nuevaBodega, setNuevaBodega] = useState('');
-  const [bodegaSeleccionada, setBodegaSeleccionada] = useState('');
-  const [nuevaZona, setNuevaZona] = useState('');
-  const [zonaSeleccionada, setZonaSeleccionada] = useState('');
-  const [nuevoPasillo, setNuevoPasillo] = useState('');
-  const [pasilloSeleccionado, setPasilloSeleccionado] = useState('');
-  const [nuevaUbicacion, setNuevaUbicacion] = useState('');
+  // Estado del Formulario "Batch"
+  const [bodegaNombre, setBodegaNombre] = useState('');
+  const [zonas, setZonas] = useState(['']); // Array para múltiples zonas
+  const [pasilloNombre, setPasilloNombre] = useState(''); // Un solo pasillo
+  const [ubicaciones, setUbicaciones] = useState(['']); // Array para múltiples ubicaciones
 
   const companies = [
-    { id: '1', nombre: 'Makro Colombia' },
-    { id: '2', nombre: 'Makro Perú' },
-    { id: '3', nombre: 'Makro Chile' },
+    { id: '1', nombre: 'Merkahorro' },
+    { id: '2', nombre: 'Megamayorista' },
+    { id: '3', nombre: 'Construahorro' },
   ];
 
-  useEffect(() => {
-    if (selectedCompany) {
-      cargarEstructura();
-    }
-  }, [selectedCompany]);
+  // --- Manejo de Inputs Dinámicos ---
 
-  const cargarEstructura = async () => {
-    try {
-      setLoading(true);
-      const data = await inventarioGeneralService.obtenerEstructuraInventario(selectedCompany);
-      setBodegas(data);
-    } catch (error) {
-      console.error('Error al cargar estructura:', error);
-      setMessage({ type: 'error', text: 'Error al cargar la estructura del inventario' });
-    } finally {
-      setLoading(false);
+  // ZONAS
+  const handleZonaChange = (index, value) => {
+    const newZonas = [...zonas];
+    newZonas[index] = value;
+    setZonas(newZonas);
+  };
+
+  const addZonaField = () => {
+    setZonas([...zonas, '']);
+  };
+
+  const removeZonaField = (index) => {
+    if (zonas.length > 1) {
+      const newZonas = zonas.filter((_, i) => i !== index);
+      setZonas(newZonas);
     }
   };
 
-  const handleCrearBodega = async () => {
-    if (!nuevaBodega.trim()) {
-      setMessage({ type: 'error', text: 'Ingresa un nombre para la bodega' });
+  // UBICACIONES
+  const handleUbicacionChange = (index, value) => {
+    const newUbicaciones = [...ubicaciones];
+    newUbicaciones[index] = value;
+    setUbicaciones(newUbicaciones);
+  };
+
+  const addUbicacionField = () => {
+    setUbicaciones([...ubicaciones, '']);
+  };
+
+  const removeUbicacionField = (index) => {
+    if (ubicaciones.length > 1) {
+      const newUbicaciones = ubicaciones.filter((_, i) => i !== index);
+      setUbicaciones(newUbicaciones);
+    }
+  };
+
+  // --- Generación de Clave Segura ---
+  const generarClaveSegura = (bodega, zona, pasillo, ubicacion) => {
+    // Primera letra de cada nivel + 4 números aleatorios para seguridad
+    const letraB = bodega.charAt(0).toUpperCase() || 'X';
+    const letraZ = zona.charAt(0).toUpperCase() || 'X';
+    const letraP = pasillo.charAt(0).toUpperCase() || 'X';
+    const letraU = ubicacion.charAt(0).toUpperCase() || 'X';
+    const random = Math.floor(1000 + Math.random() * 9000); // 4 dígitos aleatorios
+    
+    return `${letraB}${letraZ}${letraP}${letraU}-${random}`;
+  };
+
+  // --- Guardado Completo ---
+  const handleGuardarTodo = async () => {
+    // 1. Validaciones Básicas
+    if (!selectedCompany) {
+      setMessage({ type: 'error', text: 'Selecciona una compañía' });
+      return;
+    }
+    if (!bodegaNombre.trim()) {
+      setMessage({ type: 'error', text: 'El nombre de la bodega es obligatorio' });
+      return;
+    }
+    if (zonas.some(z => !z.trim())) {
+      setMessage({ type: 'error', text: 'Todas las zonas deben tener nombre' });
+      return;
+    }
+    if (!pasilloNombre.trim()) {
+      setMessage({ type: 'error', text: 'El nombre del pasillo es obligatorio' });
+      return;
+    }
+    if (ubicaciones.some(u => !u.trim())) {
+      setMessage({ type: 'error', text: 'Todas las ubicaciones deben tener nombre/número' });
       return;
     }
 
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
     try {
-      setLoading(true);
-      await inventarioGeneralService.crearBodega({
-        nombre: nuevaBodega,
+      // 2. Crear Bodega
+      const bodegaRes = await inventarioGeneralService.crearBodega({
+        nombre: bodegaNombre,
         compania_id: selectedCompany
       });
-      setMessage({ type: 'success', text: 'Bodega creada exitosamente' });
-      setNuevaBodega('');
-      cargarEstructura();
+      const bodegaId = bodegaRes.id || bodegaRes.data.id; // Ajustar según respuesta del backend
+
+      // 3. Iterar sobre Zonas
+      for (const zonaNombre of zonas) {
+        // Crear Zona vinculada a Bodega
+        const zonaRes = await inventarioGeneralService.crearZona({
+          nombre: zonaNombre,
+          bodega_id: bodegaId
+        });
+        const zonaId = zonaRes.id || zonaRes.data.id;
+
+        // Crear Pasillo vinculado a Zona (El mismo nombre de pasillo para cada zona creada en este lote)
+        const pasilloRes = await inventarioGeneralService.crearPasillo({
+          numero: pasilloNombre,
+          zona_id: zonaId
+        });
+        const pasilloId = pasilloRes.id || pasilloRes.data.id;
+
+        // 4. Iterar sobre Ubicaciones
+        const promesasUbicaciones = ubicaciones.map(async (ubicacionNombre) => {
+          const claveGenerada = generarClaveSegura(bodegaNombre, zonaNombre, pasilloNombre, ubicacionNombre);
+          
+          return inventarioGeneralService.crearUbicacion({
+            numero: ubicacionNombre,
+            pasillo_id: pasilloId,
+            clave: claveGenerada
+          });
+        });
+
+        await Promise.all(promesasUbicaciones);
+      }
+
+      setMessage({ type: 'success', text: '¡Estructura completa guardada exitosamente!' });
+      
+      // Resetear formulario
+      setBodegaNombre('');
+      setZonas(['']);
+      setPasilloNombre('');
+      setUbicaciones(['']);
+
     } catch (error) {
-      setMessage({ type: 'error', text: 'Error al crear la bodega: ' + error.message });
+      console.error(error);
+      setMessage({ type: 'error', text: 'Error al guardar la estructura: ' + error.message });
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCrearZona = async () => {
-    if (!bodegaSeleccionada) {
-      setMessage({ type: 'error', text: 'Selecciona una bodega primero' });
-      return;
-    }
-    if (!nuevaZona.trim()) {
-      setMessage({ type: 'error', text: 'Ingresa un nombre para la zona' });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await inventarioGeneralService.crearZona({
-        nombre: nuevaZona,
-        bodega_id: bodegaSeleccionada
-      });
-      setMessage({ type: 'success', text: 'Zona creada exitosamente' });
-      setNuevaZona('');
-      cargarEstructura();
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al crear la zona: ' + error.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCrearPasillo = async () => {
-    if (!zonaSeleccionada) {
-      setMessage({ type: 'error', text: 'Selecciona una zona primero' });
-      return;
-    }
-    if (!nuevoPasillo.trim()) {
-      setMessage({ type: 'error', text: 'Ingresa un número para el pasillo' });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await inventarioGeneralService.crearPasillo({
-        numero: nuevoPasillo,
-        zona_id: zonaSeleccionada
-      });
-      setMessage({ type: 'success', text: 'Pasillo creado exitosamente' });
-      setNuevoPasillo('');
-      cargarEstructura();
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al crear el pasillo: ' + error.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCrearUbicacion = async () => {
-    if (!pasilloSeleccionado) {
-      setMessage({ type: 'error', text: 'Selecciona un pasillo primero' });
-      return;
-    }
-    if (!nuevaUbicacion.trim()) {
-      setMessage({ type: 'error', text: 'Ingresa un número para la ubicación' });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await inventarioGeneralService.crearUbicacion({
-        numero: nuevaUbicacion,
-        pasillo_id: pasilloSeleccionado,
-        clave: Math.random().toString(36).substring(2, 10).toUpperCase() // Genera clave aleatoria
-      });
-      setMessage({ type: 'success', text: 'Ubicación creada exitosamente' });
-      setNuevaUbicacion('');
-      cargarEstructura();
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Error al crear la ubicación: ' + error.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const obtenerZonasDeBodega = () => {
-    const bodega = bodegas.find(b => b.id === bodegaSeleccionada);
-    return bodega ? bodega.zonas : [];
-  };
-
-  const obtenerPasillosDeZona = () => {
-    const bodega = bodegas.find(b => b.id === bodegaSeleccionada);
-    if (!bodega) return [];
-    const zona = bodega.zonas?.find(z => z.id === zonaSeleccionada);
-    return zona ? zona.pasillos : [];
-  };
-
-  const obtenerUbicacionesDePasillo = () => {
-    const bodega = bodegas.find(b => b.id === bodegaSeleccionada);
-    if (!bodega) return [];
-    const zona = bodega.zonas?.find(z => z.id === zonaSeleccionada);
-    if (!zona) return [];
-    const pasillo = zona.pasillos?.find(p => p.id === pasilloSeleccionado);
-    return pasillo ? pasillo.ubicaciones : [];
   };
 
   return (
-    <div className="creacion-inventario">
-      <h2>Creación de Estructura de Inventario</h2>
-      <p className="subtitle">
-        Crea la jerarquía: Bodega → Zona → Pasillo → Ubicaciones
-      </p>
+    <div className="inventario-general-creacion-container">
+      <div className="inventario-general-header">
+        <h2>Creación de Estructura de Inventario</h2>
+        <p className="inventario-general-subtitle">
+          Define la jerarquía completa. Se generarán claves de seguridad automáticamente.
+        </p>
+      </div>
 
-      {/* Selección de Compañía */}
-      <div className="form-group">
+      <div className="inventario-general-form-group">
         <label>Seleccionar Compañía:</label>
         <select
           value={selectedCompany}
           onChange={(e) => setSelectedCompany(e.target.value)}
-          className="select-input"
+          className="inventario-general-select-input"
         >
           <option value="">-- Selecciona una compañía --</option>
           {companies.map((company) => (
@@ -189,172 +175,100 @@ const CreacionInventario = () => {
       </div>
 
       {selectedCompany && (
-        <div className="creation-grid">
-          {/* Crear Bodega */}
-          <div className="creation-card">
-            <h3>1. Crear Bodega</h3>
+        <div className="inventario-general-batch-form">
+          
+          {/* SECCIÓN 1: BODEGA */}
+          <div className="inventario-general-section-card">
+            <div className="inventario-general-card-header">1. Bodega</div>
             <input
               type="text"
-              placeholder="Nombre de la bodega"
-              value={nuevaBodega}
-              onChange={(e) => setNuevaBodega(e.target.value)}
-              className="input-field"
+              placeholder="Nombre de la Bodega (Ej: Bodega Central)"
+              value={bodegaNombre}
+              onChange={(e) => setBodegaNombre(e.target.value)}
+              className="inventario-general-input-field"
             />
-            <button onClick={handleCrearBodega} className="btn-create" disabled={loading}>
-              Crear Bodega
+          </div>
+
+          {/* SECCIÓN 2: ZONAS (Dinámicas) */}
+          <div className="inventario-general-section-card">
+            <div className="inventario-general-card-header">
+              2. Zonas
+              <small> (Puedes agregar múltiples zonas para esta bodega)</small>
+            </div>
+            {zonas.map((zona, index) => (
+              <div key={index} className="inventario-general-dynamic-row">
+                <input
+                  type="text"
+                  placeholder={`Nombre Zona ${index + 1} (Ej: Norte, Sur, A, B)`}
+                  value={zona}
+                  onChange={(e) => handleZonaChange(index, e.target.value)}
+                  className="inventario-general-input-field"
+                />
+                {zonas.length > 1 && (
+                  <button onClick={() => removeZonaField(index)} className="inventario-general-btn-remove">×</button>
+                )}
+              </div>
+            ))}
+            <button onClick={addZonaField} className="inventario-general-btn-add">+ Agregar otra Zona</button>
+          </div>
+
+          {/* SECCIÓN 3: PASILLO (Único por lote) */}
+          <div className="inventario-general-section-card">
+            <div className="inventario-general-card-header">
+              3. Pasillo
+              <small> (Se creará este pasillo dentro de cada zona listada arriba)</small>
+            </div>
+            <input
+              type="text"
+              placeholder="Nombre/Número del Pasillo (Ej: Pasillo 1)"
+              value={pasilloNombre}
+              onChange={(e) => setPasilloNombre(e.target.value)}
+              className="inventario-general-input-field"
+            />
+          </div>
+
+          {/* SECCIÓN 4: UBICACIONES (Dinámicas) */}
+          <div className="inventario-general-section-card">
+            <div className="inventario-general-card-header">
+              4. Ubicaciones
+              <small> (Se crearán estas ubicaciones dentro del pasillo)</small>
+            </div>
+            <div className="inventario-general-locations-grid">
+              {ubicaciones.map((ubicacion, index) => (
+                <div key={index} className="inventario-general-dynamic-row">
+                  <input
+                    type="text"
+                    placeholder={`Ubicación ${index + 1}`}
+                    value={ubicacion}
+                    onChange={(e) => handleUbicacionChange(index, e.target.value)}
+                    className="inventario-general-input-field"
+                  />
+                  {ubicaciones.length > 1 && (
+                    <button onClick={() => removeUbicacionField(index)} className="inventario-general-btn-remove">×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={addUbicacionField} className="inventario-general-btn-add">+ Agregar otra Ubicación</button>
+          </div>
+
+          {/* ACCIÓN FINAL */}
+          <div className="inventario-general-actions">
+            <button 
+              onClick={handleGuardarTodo} 
+              className="inventario-general-btn-save"
+              disabled={loading}
+            >
+              {loading ? 'Guardando Estructura...' : '💾 GUARDAR ESTRUCTURA COMPLETA'}
             </button>
           </div>
 
-          {/* Crear Zona */}
-          <div className="creation-card">
-            <h3>2. Crear Zona</h3>
-            <select
-              value={bodegaSeleccionada}
-              onChange={(e) => setBodegaSeleccionada(e.target.value)}
-              className="select-input"
-            >
-              <option value="">-- Selecciona una bodega --</option>
-              {bodegas.map((bodega) => (
-                <option key={bodega.id} value={bodega.id}>
-                  {bodega.nombre}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Nombre de la zona"
-              value={nuevaZona}
-              onChange={(e) => setNuevaZona(e.target.value)}
-              className="input-field"
-              disabled={!bodegaSeleccionada}
-            />
-            <button 
-              onClick={handleCrearZona} 
-              className="btn-create" 
-              disabled={loading || !bodegaSeleccionada}
-            >
-              Crear Zona
-            </button>
-          </div>
-
-          {/* Crear Pasillo */}
-          <div className="creation-card">
-            <h3>3. Crear Pasillo</h3>
-            <select
-              value={zonaSeleccionada}
-              onChange={(e) => setZonaSeleccionada(e.target.value)}
-              className="select-input"
-              disabled={!bodegaSeleccionada}
-            >
-              <option value="">-- Selecciona una zona --</option>
-              {obtenerZonasDeBodega().map((zona) => (
-                <option key={zona.id} value={zona.id}>
-                  {zona.nombre}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Número del pasillo"
-              value={nuevoPasillo}
-              onChange={(e) => setNuevoPasillo(e.target.value)}
-              className="input-field"
-              disabled={!zonaSeleccionada}
-            />
-            <button 
-              onClick={handleCrearPasillo} 
-              className="btn-create" 
-              disabled={loading || !zonaSeleccionada}
-            >
-              Crear Pasillo
-            </button>
-          </div>
-
-          {/* Crear Ubicación */}
-          <div className="creation-card">
-            <h3>4. Crear Ubicación</h3>
-            <select
-              value={pasilloSeleccionado}
-              onChange={(e) => setPasilloSeleccionado(e.target.value)}
-              className="select-input"
-              disabled={!zonaSeleccionada}
-            >
-              <option value="">-- Selecciona un pasillo --</option>
-              {obtenerPasillosDeZona().map((pasillo) => (
-                <option key={pasillo.id} value={pasillo.id}>
-                  Pasillo {pasillo.numero}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Número de la ubicación"
-              value={nuevaUbicacion}
-              onChange={(e) => setNuevaUbicacion(e.target.value)}
-              className="input-field"
-              disabled={!pasilloSeleccionado}
-            />
-            <button 
-              onClick={handleCrearUbicacion} 
-              className="btn-create" 
-              disabled={loading || !pasilloSeleccionado}
-            >
-              Crear Ubicación
-            </button>
-          </div>
         </div>
       )}
 
       {message.text && (
-        <div className={`message ${message.type}`}>
+        <div className={`inventario-general-message ${message.type}`}>
           {message.text}
-        </div>
-      )}
-
-      {/* Vista previa de la estructura */}
-      {selectedCompany && bodegas.length > 0 && (
-        <div className="estructura-preview">
-          <h3>Estructura Actual</h3>
-          <div className="tree-view">
-            {bodegas.map((bodega) => (
-              <div key={bodega.id} className="tree-node">
-                <div className="tree-item bodega">
-                  📦 <strong>{bodega.nombre}</strong>
-                </div>
-                {bodega.zonas && bodega.zonas.length > 0 && (
-                  <div className="tree-children">
-                    {bodega.zonas.map((zona) => (
-                      <div key={zona.id} className="tree-node">
-                        <div className="tree-item zona">
-                          📍 {zona.nombre}
-                        </div>
-                        {zona.pasillos && zona.pasillos.length > 0 && (
-                          <div className="tree-children">
-                            {zona.pasillos.map((pasillo) => (
-                              <div key={pasillo.id} className="tree-node">
-                                <div className="tree-item pasillo">
-                                  🛤️ Pasillo {pasillo.numero}
-                                </div>
-                                {pasillo.ubicaciones && pasillo.ubicaciones.length > 0 && (
-                                  <div className="tree-children">
-                                    {pasillo.ubicaciones.map((ubicacion) => (
-                                      <div key={ubicacion.id} className="tree-item ubicacion">
-                                        📌 Ubicación {ubicacion.numero} (Clave: {ubicacion.clave})
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

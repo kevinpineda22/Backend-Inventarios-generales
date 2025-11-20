@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { inventarioGeneralService } from '../../../services/inventarioGeneralService';
 import * as XLSX from 'xlsx';
 import './HistorialConteos.css';
 
@@ -16,9 +15,9 @@ const HistorialConteos = () => {
   });
 
   const companies = [
-    { id: '1', nombre: 'Makro Colombia' },
-    { id: '2', nombre: 'Makro Perú' },
-    { id: '3', nombre: 'Makro Chile' },
+    { id: '1', nombre: 'Merkahorro' },
+    { id: '2', nombre: 'Megamayorista' },
+    { id: '3', nombre: 'Construahorro' },
   ];
 
   useEffect(() => {
@@ -78,7 +77,6 @@ const HistorialConteos = () => {
       setLoading(true);
       const data = await inventarioGeneralService.obtenerDetalleConteo(conteoId);
 
-      // Preparar datos para Excel
       const excelData = data.map(item => ({
         'Bodega': item.bodega,
         'Zona': item.zona,
@@ -93,12 +91,10 @@ const HistorialConteos = () => {
         'Tipo Conteo': tipoConteo
       }));
 
-      // Crear libro de Excel
       const ws = XLSX.utils.json_to_sheet(excelData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Conteo');
 
-      // Descargar archivo
       const fileName = `Conteo_${tipoConteo}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
@@ -121,28 +117,27 @@ const HistorialConteos = () => {
 
   const getEstadoBadge = (estado) => {
     const badges = {
-      'pendiente': { class: 'badge-pending', text: 'Pendiente' },
-      'aprobado': { class: 'badge-approved', text: 'Aprobado' },
-      'rechazado': { class: 'badge-rejected', text: 'Rechazado' }
+      'pendiente': { class: 'inventario-general-badge-pending', text: 'Pendiente' },
+      'aprobado': { class: 'inventario-general-badge-approved', text: 'Aprobado' },
+      'rechazado': { class: 'inventario-general-badge-rejected', text: 'Rechazado' }
     };
     const badge = badges[estado] || badges['pendiente'];
-    return <span className={`badge ${badge.class}`}>{badge.text}</span>;
+    return <span className={`inventario-general-badge ${badge.class}`}>{badge.text}</span>;
   };
 
   return (
-    <div className="historial-conteos">
+    <div className="inventario-general-historial-container">
       <h2>Historial de Conteos</h2>
-      <p className="subtitle">
+      <p className="inventario-general-subtitle">
         Revisa, aprueba y descarga los conteos realizados por los empleados
       </p>
 
-      {/* Selección de Compañía */}
-      <div className="form-group">
+      <div className="inventario-general-form-group">
         <label>Seleccionar Compañía:</label>
         <select
           value={selectedCompany}
           onChange={(e) => setSelectedCompany(e.target.value)}
-          className="select-input"
+          className="inventario-general-select-input"
         >
           <option value="">-- Selecciona una compañía --</option>
           {companies.map((company) => (
@@ -153,36 +148,35 @@ const HistorialConteos = () => {
         </select>
       </div>
 
-      {/* Filtros */}
       {selectedCompany && (
-        <div className="filtros-section">
+        <div className="inventario-general-filtros-section">
           <h3>Filtros</h3>
-          <div className="filtros-grid">
+          <div className="inventario-general-filtros-grid">
             <input
               type="text"
               placeholder="Bodega"
               value={filtros.bodega}
               onChange={(e) => setFiltros({...filtros, bodega: e.target.value})}
-              className="input-field"
+              className="inventario-general-input-field"
             />
             <input
               type="text"
               placeholder="Zona"
               value={filtros.zona}
               onChange={(e) => setFiltros({...filtros, zona: e.target.value})}
-              className="input-field"
+              className="inventario-general-input-field"
             />
             <input
               type="text"
               placeholder="Pasillo"
               value={filtros.pasillo}
               onChange={(e) => setFiltros({...filtros, pasillo: e.target.value})}
-              className="input-field"
+              className="inventario-general-input-field"
             />
             <select
               value={filtros.tipoConteo}
               onChange={(e) => setFiltros({...filtros, tipoConteo: e.target.value})}
-              className="select-input"
+              className="inventario-general-select-input"
             >
               <option value="todos">Todos los tipos</option>
               <option value="1">Conteo #1</option>
@@ -194,20 +188,19 @@ const HistorialConteos = () => {
       )}
 
       {message.text && (
-        <div className={`message ${message.type}`}>
+        <div className={`inventario-general-message ${message.type}`}>
           {message.text}
         </div>
       )}
 
-      {/* Tabla de Conteos */}
       {selectedCompany && (
-        <div className="conteos-table-container">
+        <div className="inventario-general-table-container">
           {loading ? (
-            <div className="loading-spinner">Cargando conteos...</div>
+            <div className="inventario-general-loading">Cargando conteos...</div>
           ) : conteos.length === 0 ? (
-            <div className="no-data">No hay conteos registrados</div>
+            <div className="inventario-general-no-data">No hay conteos registrados</div>
           ) : (
-            <table className="conteos-table">
+            <table className="inventario-general-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -218,7 +211,7 @@ const HistorialConteos = () => {
                   <th>Tipo Conteo</th>
                   <th>Fecha</th>
                   <th>Usuario</th>
-                  <th>Items Contados</th>
+                  <th>Items</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
@@ -226,13 +219,13 @@ const HistorialConteos = () => {
               <tbody>
                 {conteos.map((conteo) => (
                   <tr key={conteo.id}>
-                    <td>{conteo.id}</td>
+                    <td>{conteo.id.substring(0, 8)}...</td>
                     <td>{conteo.bodega}</td>
                     <td>{conteo.zona}</td>
                     <td>{conteo.pasillo}</td>
                     <td>{conteo.ubicacion}</td>
                     <td>
-                      <span className="tipo-conteo-badge">
+                      <span className="inventario-general-tipo-badge">
                         {getTipoConteoLabel(conteo.tipo_conteo)}
                       </span>
                     </td>
@@ -241,31 +234,34 @@ const HistorialConteos = () => {
                     <td>{conteo.total_items}</td>
                     <td>{getEstadoBadge(conteo.estado)}</td>
                     <td>
-                      <div className="action-buttons">
+                      <div className="inventario-general-actions-row">
                         {conteo.estado === 'pendiente' && (
                           <>
                             <button
                               onClick={() => handleAprobarConteo(conteo.id)}
-                              className="btn-approve"
+                              className="inventario-general-btn-approve"
                               disabled={loading}
+                              title="Aprobar"
                             >
-                              ✓ Aprobar
+                              ✓
                             </button>
                             <button
                               onClick={() => handleRechazarConteo(conteo.id)}
-                              className="btn-reject"
+                              className="inventario-general-btn-reject"
                               disabled={loading}
+                              title="Rechazar"
                             >
-                              ✗ Rechazar
+                              ✗
                             </button>
                           </>
                         )}
                         <button
                           onClick={() => handleDescargarExcel(conteo.id, getTipoConteoLabel(conteo.tipo_conteo))}
-                          className="btn-download"
+                          className="inventario-general-btn-download"
                           disabled={loading}
+                          title="Descargar Excel"
                         >
-                          📥 Descargar
+                          📥
                         </button>
                       </div>
                     </td>
