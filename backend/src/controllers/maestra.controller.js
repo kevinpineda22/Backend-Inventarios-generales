@@ -7,7 +7,7 @@ export const upsertCodigos = async (req, res) => {
     }
 
     // Extraer códigos de items únicos para buscar sus UUIDs
-    const itemCodes = [...new Set(codigos.map(c => c.item_id))];
+    const itemCodes = [...new Set(codigos.map(c => c.item_codigo))];
     
     // Buscar los UUIDs de los items en la base de datos
     const { default: ItemModel } = await import('../models/Item.model.js');
@@ -29,17 +29,17 @@ export const upsertCodigos = async (req, res) => {
     // Mapear códigos con UUIDs correctos
     const codigosConUUID = codigos
       .map(c => {
-        const uuid = itemMap.get(c.item_id);
+        const uuid = itemMap.get(c.item_codigo);
         if (!uuid) {
-          console.warn(`No se encontró UUID para item_id: ${c.item_id}`);
+          console.warn(`No se encontró UUID para item_codigo: ${c.item_codigo}`);
           return null;
         }
         
         return {
           codigo_barras: c.codigo_barras,
           item_id: uuid,
-          unidad_medida: c.unidad_medida,
-          factor: c.factor,
+          unidad_medida: c.unidad_medida || 'UND',
+          factor: c.factor || 1,
           activo: typeof c.activo !== 'undefined' ? c.activo : true,
           compania_id: c.compania_id ?? null,
           imported_from: c.imported_from
@@ -65,8 +65,8 @@ export const upsertCodigos = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Error al insertar códigos',
-      error: err,
-      codigos: req.body.items
+      error: err.message,
+      details: err
     });
   }
 };
@@ -109,21 +109,33 @@ export const upsertItems = async (req, res) => {
       return responses.validationErrorResponse(res, ['No se recibieron items para insertar']);
     }
 
-    // Puedes agregar validaciones aquí si lo deseas
-    // Insertar todos los items
-    const { default: ItemModel } = await import('../models/Item.model.js');
-    const result = await ItemModel.createMany(items);
+    // Validar campos requeridos
+    const validItems = items.map(item => ({
+      codigo: item.codigo,
+      item: item.item,
+      descripcion: item.descripcion || null,
+      grupo: item.grupo || null,
+      activo: typeof item.activo !== 'undefined' ? item.activo : true,
+      compania_id: item.compania_id || null,
+      imported_from: item.imported_from || null
+    }));
 
-    return responses.successResponse(res, { count: result.length, items: result }, 'Items insertados correctamente', 201);
+    // Insertar/actualizar items usando upsert (on conflict update)
+    const { default: ItemModel } = await import('../models/Item.model.js');
+    const result = await ItemModel.upsertMany(validItems);
+
+    return responses.successResponse(res, { 
+      count: result.length, 
+      items: result 
+    }, 'Items sincronizados correctamente', 201);
   } catch (err) {
-    // Mostrar el error completo y los datos recibidos para depuración
     console.error('Error al insertar items:', err);
     console.error('Datos recibidos:', req.body.items);
     return res.status(500).json({
       success: false,
       message: 'Error al insertar items',
-      error: err,
-      items: req.body.items
+      error: err.message,
+      details: err
     });
   }
 };

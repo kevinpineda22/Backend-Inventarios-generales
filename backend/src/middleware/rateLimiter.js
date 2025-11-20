@@ -28,4 +28,17 @@ export const strictRateLimiter = rateLimit({
   }
 });
 
+// Rate limiter flexible para carga maestra (permite múltiples lotes)
+export const maestraRateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutos
+  max: 500, // 500 peticiones (suficiente para lotes grandes)
+  message: {
+    success: false,
+    message: 'Demasiadas peticiones de carga maestra, espera un momento',
+    timestamp: new Date().toISOString()
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 export default rateLimiter;

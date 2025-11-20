@@ -74,8 +74,13 @@ if (config.env === 'development') {
 // Logger de peticiones personalizado
 app.use(requestLogger);
 
-// Rate limiting
-app.use(rateLimiter);
+// Rate limiting (excluir rutas de maestra)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/maestra')) {
+    return next(); // Saltar rate limiter para rutas de maestra
+  }
+  rateLimiter(req, res, next);
+});
 
 // Directorio para archivos subidos
 const uploadDir = join(__dirname, 'uploads');

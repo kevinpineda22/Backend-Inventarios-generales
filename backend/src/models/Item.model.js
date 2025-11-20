@@ -108,6 +108,26 @@ export class ItemModel {
   }
 
   /**
+   * Upsert múltiples items (insertar o actualizar si existe)
+   */
+  static async upsertMany(itemsData) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.ITEMS)
+        .upsert(itemsData, { 
+          onConflict: 'codigo',  // Si el codigo existe, actualiza
+          ignoreDuplicates: false 
+        })
+        .select();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
    * Actualizar un item
    */
   static async update(id, updateData) {

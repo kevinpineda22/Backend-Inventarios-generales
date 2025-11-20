@@ -44,8 +44,45 @@ export class CodigoModel {
     try {
       const { data, error } = await supabase
         .from(TABLES.CODIGOS)
-        .upsert(codigos, { onConflict: ['codigo_barras'] });
+        .upsert(codigos, { 
+          onConflict: 'codigo_barras',  // Si el código de barras existe, actualiza
+          ignoreDuplicates: false 
+        })
+        .select();
       if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
+   * Buscar producto por código de barras (con JOIN a items)
+   */
+  static async findByBarcodeWithItem(codigoBarras, companiaId = null) {
+    try {
+      let query = supabase
+        .from(TABLES.CODIGOS)
+        .select(`
+          codigo_barras,
+          unidad_medida,
+          factor,
+          activo,
+          inv_general_items (
+            item,
+            descripcion,
+            grupo
+          )
+        `)
+        .eq('codigo_barras', codigoBarras)
+        .eq('activo', true);
+
+      if (companiaId) {
+        query = query.eq('compania_id', companiaId);
+      }
+
+      const { data, error } = await query.single();
+      if (error && error.code !== 'PGRST116') throw error;
       return data;
     } catch (error) {
       throw handleSupabaseError(error);
