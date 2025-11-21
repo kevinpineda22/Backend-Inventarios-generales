@@ -303,6 +303,95 @@ export class EstructuraService {
   }
 
   /**
+   * Actualizar zona
+   */
+  static async updateZona(id, updateData) {
+    try {
+      const zona = await ZonaModel.update(id, updateData);
+      
+      return {
+        success: true,
+        data: zona,
+        message: 'Zona actualizada exitosamente'
+      };
+    } catch (error) {
+      throw new Error(`Error al actualizar zona: ${error.message}`);
+    }
+  }
+
+  /**
+   * Eliminar zona
+   */
+  static async deleteZona(id) {
+    try {
+      await ZonaModel.delete(id);
+      
+      return {
+        success: true,
+        message: 'Zona eliminada exitosamente'
+      };
+    } catch (error) {
+      throw new Error(`Error al eliminar zona: ${error.message}`);
+    }
+  }
+
+  /**
+   * Actualizar pasillo
+   */
+  static async updatePasillo(id, updateData) {
+    try {
+      const pasillo = await PasilloModel.update(id, updateData);
+      
+      return {
+        success: true,
+        data: pasillo,
+        message: 'Pasillo actualizado exitosamente'
+      };
+    } catch (error) {
+      throw new Error(`Error al actualizar pasillo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Eliminar pasillo
+   */
+  static async deletePasillo(id) {
+    try {
+      await PasilloModel.delete(id);
+      
+      return {
+        success: true,
+        message: 'Pasillo eliminado exitosamente'
+      };
+    } catch (error) {
+      throw new Error(`Error al eliminar pasillo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Eliminar ubicación
+   */
+  static async deleteUbicacion(id) {
+    try {
+      await UbicacionModel.delete(id);
+      
+      return {
+        success: true,
+        message: 'Ubicación eliminada exitosamente'
+      };
+    } catch (error) {
+      throw new Error(`Error al eliminar ubicación: ${error.message}`);
+    }
+  }
+
+  /**
+   * Eliminar múltiples ubicaciones (Alias para deleteUbicacionesBatch)
+   */
+  static async deleteMultipleUbicaciones(ids) {
+    return this.deleteUbicacionesBatch(ids);
+  }
+
+  /**
    * Obtener ubicación por ID
    */
   static async getUbicacion(id) {

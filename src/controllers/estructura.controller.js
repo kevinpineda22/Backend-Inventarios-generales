@@ -166,6 +166,108 @@ export class EstructuraController {
   }
 
   /**
+   * Actualizar zona
+   * PUT /api/estructura/zona/:id
+   */
+  static async updateZona(req, res) {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      const result = await EstructuraService.updateZona(id, updateData);
+
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Eliminar zona
+   * DELETE /api/estructura/zona/:id
+   */
+  static async deleteZona(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await EstructuraService.deleteZona(id);
+
+      return successResponse(res, null, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Actualizar pasillo
+   * PUT /api/estructura/pasillo/:id
+   */
+  static async updatePasillo(req, res) {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      const result = await EstructuraService.updatePasillo(id, updateData);
+
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Eliminar pasillo
+   * DELETE /api/estructura/pasillo/:id
+   */
+  static async deletePasillo(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await EstructuraService.deletePasillo(id);
+
+      return successResponse(res, null, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Eliminar ubicación
+   * DELETE /api/estructura/ubicacion/:id
+   */
+  static async deleteUbicacion(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await EstructuraService.deleteUbicacion(id);
+
+      return successResponse(res, null, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Eliminar múltiples ubicaciones
+   * DELETE /api/estructura/ubicaciones-multiple
+   */
+  static async deleteMultipleUbicaciones(req, res) {
+    try {
+      const { ids } = req.body;
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return errorResponse(res, 'Se requiere un array de IDs', 400);
+      }
+
+      const result = await EstructuraService.deleteMultipleUbicaciones(ids);
+
+      return successResponse(res, null, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
    * Obtener ubicación por ID
    * GET /api/estructura/ubicacion/:id
    */
