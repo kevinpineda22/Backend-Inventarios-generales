@@ -13,6 +13,9 @@ router.get('/historial', ConteoController.getHistorial);
 // Obtener conteos pendientes
 router.get('/pendientes', ConteoController.getPendientes);
 
+// Obtener ubicaciones con diferencias pendientes
+router.get('/diferencias-pendientes', ConteoController.getDiferenciasPendientes);
+
 // Obtener conteo por ID
 router.get('/:id', ConteoController.getById);
 
@@ -45,8 +48,5 @@ router.post('/:conteoId/rechazar', ConteoController.rechazar);
 
 // Eliminar item de conteo (registro específico)
 router.delete('/item/:id', ConteoController.eliminarItem);
-
-// Obtener ubicaciones con diferencias pendientes
-router.get('/diferencias-pendientes', ConteoController.getDiferenciasPendientes);
 
 export default router;
