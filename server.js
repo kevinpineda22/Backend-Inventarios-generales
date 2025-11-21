@@ -152,9 +152,8 @@ app.use(errorHandler);
 
 const PORT = config.port || 3001;
 
-// Solo iniciar el servidor si no estamos en un entorno serverless (como Vercel)
-// o si el archivo se ejecuta directamente
-if (process.env.VERCEL !== "1") {
+// Solo iniciar el servidor si no estamos en producción (Vercel maneja el servidor en producción)
+if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
     console.log("=====================================================");
     console.log("🚀 BACKEND INVENTARIO GENERAL");
