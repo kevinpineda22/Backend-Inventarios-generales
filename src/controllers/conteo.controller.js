@@ -16,13 +16,25 @@ export class ConteoController {
    */
   static async iniciar(req, res) {
     try {
-      const { ubicacionId, usuarioId, tipoConteo, clave } = req.body;
+      // Debugging
+      if (!ConteoService || typeof ConteoService.iniciarConteo !== 'function') {
+        console.error('CRITICAL ERROR: ConteoService is not correctly imported or initialized', ConteoService);
+        return errorResponse(res, 'Internal Server Error: Service not available', 500);
+      }
+
+      const { ubicacionId, usuarioId, tipoConteo, clave, usuarioEmail } = req.body;
+
+      // Validar tipoConteo
+      if (!tipoConteo || isNaN(tipoConteo)) {
+         return errorResponse(res, 'El tipo de conteo es inválido o requerido', 400);
+      }
 
       const result = await ConteoService.iniciarConteo(
         ubicacionId,
         usuarioId,
-        tipoConteo,
-        clave
+        parseInt(tipoConteo), // Asegurar que es entero
+        clave,
+        usuarioEmail
       );
 
       if (!result.success) {
@@ -42,13 +54,14 @@ export class ConteoController {
   static async agregarItem(req, res) {
     try {
       const { conteoId } = req.params;
-      const { codigoBarra, cantidad, companiaId } = req.body;
+      const { codigoBarra, cantidad, companiaId, usuarioEmail } = req.body; // ✅ Recibir usuarioEmail
 
       const result = await ConteoService.agregarItem(
         conteoId,
         codigoBarra,
         cantidad,
-        companiaId
+        companiaId,
+        usuarioEmail // ✅ Pasar usuarioEmail al servicio
       );
 
       if (!result.success) {
@@ -56,6 +69,22 @@ export class ConteoController {
       }
 
       return successResponse(res, result.data, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Eliminar item de un conteo
+   * DELETE /api/conteos/item/:id
+   */
+  static async eliminarItem(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await ConteoService.eliminarItem(id);
+
+      return successResponse(res, null, result.message);
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
     }
@@ -207,6 +236,22 @@ export class ConteoController {
       const result = await ConteoService.getConteosPendientes();
 
       return successResponse(res, result.data, `${result.count} conteos pendientes`);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Obtener historial de conteos (Admin)
+   * GET /api/conteos/historial
+   */
+  static async getHistorial(req, res) {
+    try {
+      const filters = req.query; // companiaId, bodega, zona, pasillo, tipoConteo
+
+      const result = await ConteoService.getHistorial(filters);
+
+      return successResponse(res, result.data, 'Historial obtenido exitosamente');
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
     }

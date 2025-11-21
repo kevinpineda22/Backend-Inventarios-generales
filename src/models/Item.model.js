@@ -40,17 +40,59 @@ export class ItemModel {
    */
   static async findByBarcode(codigoBarra, companiaId) {
     try {
+      // Intento 1: Buscar por 'codigo' (que es el identificador del item, a veces usado como barcode principal)
       const { data, error } = await supabase
+        .from(TABLES.ITEMS)
+        .select('*')
+        .eq('codigo', codigoBarra)
+        .eq('compania_id', companiaId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) return data;
+
+      // Intento 2: Si no se encuentra por 'codigo', intentar por 'codigo_barra' (legacy)
+      // Solo si la primera consulta no devolvió datos pero tampoco error fatal
+      const { data: data2, error: error2 } = await supabase
         .from(TABLES.ITEMS)
         .select('*')
         .eq('codigo_barra', codigoBarra)
         .eq('compania_id', companiaId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-      return data;
+      if (error2 && error2.code !== 'PGRST116') {
+          // Si falla porque la columna no existe, ignoramos este error y retornamos null (no encontrado)
+          if (error2.message && error2.message.includes('does not exist')) {
+              return null;
+          }
+          throw error2;
+      }
+      
+      return data2;
+
     } catch (error) {
-      throw handleSupabaseError(error);
+       // Si el error es "column does not exist" en el primer intento, probamos el segundo directamente
+       if (error.message && error.message.includes('does not exist')) {
+           try {
+                const { data: data3, error: error3 } = await supabase
+                .from(TABLES.ITEMS)
+                .select('*')
+                .eq('codigo_barra', codigoBarra)
+                .eq('compania_id', companiaId)
+                .single();
+                
+                if (error3 && error3.code !== 'PGRST116') throw error3;
+                return data3;
+           } catch (e) {
+               // Si ambos fallan, retornamos null o lanzamos error
+               if (e.message && e.message.includes('does not exist')) {
+                   console.warn('Columnas codigo y codigo_barra no existen en inv_general_items');
+                   return null;
+               }
+               throw handleSupabaseError(e);
+           }
+       }
+       throw handleSupabaseError(error);
     }
   }
 
@@ -115,7 +157,7 @@ export class ItemModel {
       const { data, error } = await supabase
         .from(TABLES.ITEMS)
         .upsert(itemsData, { 
-          onConflict: 'codigo',  // Si el codigo existe, actualiza
+          onConflict: 'codigo, compania_id',  // Clave compuesta para unicidad por compañía
           ignoreDuplicates: false 
         })
         .select();

@@ -6,12 +6,13 @@ import ConteoModel from '../models/Conteo.model.js';
 import ConteoItemModel from '../models/ConteoItem.model.js';
 import UbicacionModel from '../models/Ubicacion.model.js';
 import ItemModel from '../models/Item.model.js';
+import CodigoModel from '../models/Codigo.model.js';
 
-export class ConteoService {
+class ConteoService {
   /**
    * Iniciar un conteo
    */
-  static async iniciarConteo(ubicacionId, usuarioId, tipoConteo, clave) {
+  static async iniciarConteo(ubicacionId, usuarioId, tipoConteo, clave, usuarioEmail = null) {
     try {
       // Verificar que la ubicación existe y la clave es correcta
       const ubicacion = await UbicacionModel.findById(ubicacionId);
@@ -32,13 +33,22 @@ export class ConteoService {
         };
       }
 
-      // Verificar si ya existe un conteo de este tipo para esta ubicación
+      // Verificar si ya existe un conteo de este tipo para esta ubicación (GLOBAL, NO POR USUARIO)
+      // Esto evita duplicados y condiciones de carrera
       const conteoExistente = await ConteoModel.findByUbicacionAndTipo(ubicacionId, tipoConteo);
       
-      if (conteoExistente && conteoExistente.estado !== 'finalizado') {
+      if (conteoExistente) {
+        if (conteoExistente.estado === 'finalizado') {
+           return {
+            success: false,
+            message: 'El conteo para esta ubicación ya ha sido finalizado'
+          };
+        }
+        // Si existe y no está finalizado, retornamos el existente (recuperación de sesión)
         return {
-          success: false,
-          message: 'Ya existe un conteo en progreso para esta ubicación'
+          success: true,
+          data: conteoExistente,
+          message: 'Sesión de conteo recuperada'
         };
       }
 
@@ -47,7 +57,8 @@ export class ConteoService {
         ubicacion_id: ubicacionId,
         usuario_id: usuarioId,
         tipo_conteo: tipoConteo,
-        estado: 'en_progreso'
+        estado: 'en_progreso',
+        correo_empleado: usuarioEmail // Guardar correo del empleado
       });
 
       return {
@@ -63,28 +74,84 @@ export class ConteoService {
   /**
    * Agregar item a un conteo
    */
-  static async agregarItem(conteoId, codigoBarra, cantidad, companiaId) {
+  static async agregarItem(conteoId, codigoBarra, cantidad, companiaId, usuarioEmail = null) {
+    console.log(`[DEBUG] AgregarItem - Barcode: ${codigoBarra}, Cia: ${companiaId}, Conteo: ${conteoId}, Email: ${usuarioEmail}`);
     try {
-      // Buscar el item por código de barras
-      const item = await ItemModel.findByBarcode(codigoBarra, companiaId);
+      // 1. Buscar el código de barras en la tabla de códigos (1:N)
+      let codigoData = await CodigoModel.findByBarcodeWithItem(codigoBarra, companiaId);
+      console.log(`[DEBUG] Busqueda en Codigos: ${codigoData ? 'ENCONTRADO' : 'NO ENCONTRADO'}`);
       
-      if (!item) {
+      // FALLBACK: Si no está en la tabla de códigos, buscar directamente en la tabla de items
+      if (!codigoData) {
+        console.log(`[DEBUG] Intentando fallback en Items con codigo: ${codigoBarra}`);
+        const itemDirecto = await ItemModel.findByBarcode(codigoBarra, companiaId);
+        console.log(`[DEBUG] Busqueda en Items: ${itemDirecto ? 'ENCONTRADO' : 'NO ENCONTRADO'}`);
+        
+        if (itemDirecto) {
+            // Construir estructura compatible con lo que espera el resto de la función
+            codigoData = {
+                codigo_barras: itemDirecto.codigo || itemDirecto.codigo_barra, // <-- Adaptar a 'codigo' o 'codigo_barra'
+                unidad_medida: itemDirecto.unidad_medida || 'UN',
+                factor: 1, // Factor por defecto para item principal
+                activo: true,
+                inv_general_items: itemDirecto
+            };
+        }
+      }
+      
+      if (!codigoData) {
         return {
           success: false,
-          message: 'Item no encontrado con ese código de barras'
+          message: 'Código de barras no encontrado en la maestra'
         };
       }
 
-      // Agregar o actualizar el item en el conteo
-      const conteoItem = await ConteoItemModel.upsert(conteoId, item.id, cantidad);
+      // 2. Obtener datos del item y factor
+      const itemMaster = codigoData.inv_general_items; // Relación traída por CodigoModel (ahora incluye id)
+      const factor = codigoData.factor || 1;
+      
+      if (!itemMaster || !itemMaster.id) {
+         return {
+          success: false,
+          message: 'Item maestro no encontrado o sin ID válido'
+        };
+      }
+
+      // 3. Calcular cantidad total (Cantidad Ingresada * Factor)
+      const cantidadTotal = cantidad * factor;
+
+      // 4. Agregar item al historial (INSERT siempre)
+      // Nota: upsert ahora hace insert internamente en el modelo modificado
+      const conteoItem = await ConteoItemModel.upsert(conteoId, itemMaster.id, cantidadTotal, usuarioEmail);
 
       return {
         success: true,
-        data: conteoItem,
-        message: 'Item agregado al conteo exitosamente'
+        data: {
+            ...conteoItem,
+            item: itemMaster, // Devolver info del item para el frontend
+            factor_aplicado: factor,
+            cantidad_registrada: cantidadTotal
+        },
+        message: `Item agregado. Factor ${factor} aplicado. Total: ${cantidadTotal}`
       };
     } catch (error) {
       throw new Error(`Error al agregar item al conteo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Eliminar un item del conteo (registro individual)
+   */
+  static async eliminarItem(itemId) {
+    try {
+      const result = await ConteoItemModel.delete(itemId);
+      
+      return {
+        success: true,
+        message: 'Item eliminado exitosamente'
+      };
+    } catch (error) {
+      throw new Error(`Error al eliminar item: ${error.message}`);
     }
   }
 
@@ -201,20 +268,28 @@ export class ConteoService {
       const diferencias = [];
       const itemsMap = new Map();
 
-      // Agregar items del conteo 1
+      // Agregar items del conteo 1 (SUMANDO CANTIDADES SI HAY MÚLTIPLES REGISTROS)
       items1.forEach(item => {
-        itemsMap.set(item.item_id, {
-          item_id: item.item_id,
-          item: item.item,
-          cantidad_conteo1: item.cantidad,
-          cantidad_conteo2: 0
-        });
+        if (itemsMap.has(item.item_id)) {
+            // Si ya existe, sumamos la cantidad
+            const existing = itemsMap.get(item.item_id);
+            existing.cantidad_conteo1 += item.cantidad;
+        } else {
+            // Si no existe, creamos entrada
+            itemsMap.set(item.item_id, {
+                item_id: item.item_id,
+                item: item.item,
+                cantidad_conteo1: item.cantidad,
+                cantidad_conteo2: 0
+            });
+        }
       });
 
-      // Agregar items del conteo 2
+      // Agregar items del conteo 2 (SUMANDO CANTIDADES)
       items2.forEach(item => {
         if (itemsMap.has(item.item_id)) {
-          itemsMap.get(item.item_id).cantidad_conteo2 = item.cantidad;
+          const existing = itemsMap.get(item.item_id);
+          existing.cantidad_conteo2 += item.cantidad;
         } else {
           itemsMap.set(item.item_id, {
             item_id: item.item_id,
@@ -298,6 +373,37 @@ export class ConteoService {
       };
     } catch (error) {
       throw new Error(`Error al obtener conteos pendientes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtener historial de conteos con filtros
+   */
+  static async getHistorial(filters) {
+    try {
+      const conteos = await ConteoModel.findAll(filters);
+      
+      // Formatear datos para el frontend
+      const data = conteos.map(c => ({
+        id: c.id,
+        bodega: c.ubicacion?.pasillo?.zona?.bodega?.nombre,
+        zona: c.ubicacion?.pasillo?.zona?.nombre,
+        pasillo: c.ubicacion?.pasillo?.numero,
+        ubicacion: c.ubicacion?.numero,
+        tipo_conteo: c.tipo_conteo,
+        fecha_inicio: c.fecha_inicio,
+        fecha_fin: c.fecha_fin,
+        usuario_nombre: c.correo_empleado || c.usuario_id, // Usar correo si existe
+        estado: c.estado,
+        total_items: c.conteo_items && c.conteo_items[0] ? c.conteo_items[0].count : 0
+      }));
+
+      return {
+        success: true,
+        data
+      };
+    } catch (error) {
+      throw new Error(`Error al obtener historial: ${error.message}`);
     }
   }
 }

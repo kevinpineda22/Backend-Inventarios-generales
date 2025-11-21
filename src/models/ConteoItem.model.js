@@ -46,7 +46,7 @@ export class ConteoItemModel {
   }
 
   /**
-   * Agregar un item al conteo
+   * Agregar un item al conteo (INSERT siempre, para historial)
    */
   static async create(conteoItemData) {
     try {
@@ -86,24 +86,17 @@ export class ConteoItemModel {
   }
 
   /**
-   * Agregar o actualizar un item en el conteo
+   * Agregar item (Ahora usa CREATE siempre para mantener historial de escaneos)
    */
-  static async upsert(conteoId, itemId, cantidad) {
+  static async upsert(conteoId, itemId, cantidad, usuarioEmail = null) {
     try {
-      // Primero intentar encontrar el item
-      const existing = await this.findByConteoAndItem(conteoId, itemId);
-
-      if (existing) {
-        // Si existe, actualizar la cantidad
-        return await this.update(existing.id, existing.cantidad + cantidad);
-      } else {
-        // Si no existe, crear nuevo
+        // YA NO HACEMOS UPSERT, SINO INSERT PUURO
         return await this.create({
           conteo_id: conteoId,
           item_id: itemId,
-          cantidad
+          cantidad,
+          usuario_email: usuarioEmail // Nuevo campo
         });
-      }
     } catch (error) {
       throw handleSupabaseError(error);
     }

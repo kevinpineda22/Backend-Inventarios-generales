@@ -7,6 +7,9 @@ import ConteoController from '../controllers/conteo.controller.js';
 
 const router = express.Router();
 
+// Obtener historial de conteos (Admin)
+router.get('/historial', ConteoController.getHistorial);
+
 // Obtener conteos pendientes
 router.get('/pendientes', ConteoController.getPendientes);
 
@@ -39,5 +42,8 @@ router.post('/:conteoId/aprobar', ConteoController.aprobar);
 
 // Rechazar conteo
 router.post('/:conteoId/rechazar', ConteoController.rechazar);
+
+// Eliminar item de conteo (registro específico)
+router.delete('/item/:id', ConteoController.eliminarItem);
 
 export default router;

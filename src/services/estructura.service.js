@@ -6,6 +6,7 @@ import BodegaModel from '../models/Bodega.model.js';
 import ZonaModel from '../models/Zona.model.js';
 import PasilloModel from '../models/Pasillo.model.js';
 import UbicacionModel from '../models/Ubicacion.model.js';
+import ConteoModel from '../models/Conteo.model.js'; // Importar ConteoModel
 
 export class EstructuraService {
   /**
@@ -78,10 +79,39 @@ export class EstructuraService {
         const pasillos = await PasilloModel.findByZona(zonaId);
         data = { pasillos };
       }
-      // Si hay pasillo, devolver ubicaciones
+      // Si hay pasillo, devolver ubicaciones con estado de conteos
       else if (pasilloId) {
         const ubicaciones = await UbicacionModel.findByPasillo(pasilloId);
-        data = { ubicaciones };
+        const conteos = await ConteoModel.getHistorialByPasillo(pasilloId);
+        
+        // Mapear conteos a ubicaciones
+        const ubicacionesConEstado = ubicaciones.map(u => {
+            const conteosUbicacion = conteos.filter(c => c.ubicacion_id === u.id);
+            
+            // Determinar estado de conteo 1
+            const conteo1 = conteosUbicacion.find(c => c.tipo_conteo === 1);
+            const conteo1_estado = conteo1 ? conteo1.estado : 'no_iniciado';
+            
+            // Determinar estado de conteo 2
+            const conteo2 = conteosUbicacion.find(c => c.tipo_conteo === 2);
+            const conteo2_estado = conteo2 ? conteo2.estado : 'no_iniciado';
+
+            // Determinar conteo actual sugerido (legacy logic)
+            let conteo_actual = 0;
+            if (conteo1 && conteo1.estado === 'finalizado') conteo_actual = 1;
+            if (conteo2 && conteo2.estado === 'finalizado') conteo_actual = 2;
+            
+            return { 
+                ...u, 
+                conteo_actual, 
+                conteo1_estado,
+                conteo2_estado,
+                conteo1_id: conteo1?.id,
+                conteo2_id: conteo2?.id
+            };
+        });
+
+        data = { ubicaciones: ubicacionesConEstado };
       }
 
       return {

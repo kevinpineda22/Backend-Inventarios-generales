@@ -3,6 +3,7 @@
 // =====================================================
 
 import ItemModel from '../models/Item.model.js';
+import CodigoModel from '../models/Codigo.model.js';
 import { 
   normalizeExcelData, 
   validateExcelStructure, 
@@ -31,14 +32,23 @@ export class ItemService {
    */
   static async getByBarcode(codigoBarra, companiaId) {
     try {
-      const item = await ItemModel.findByBarcode(codigoBarra, companiaId);
+      // Usar CodigoModel para buscar por código de barras y traer el item relacionado
+      const codigoData = await CodigoModel.findByBarcodeWithItem(codigoBarra, companiaId);
       
-      if (!item) {
+      if (!codigoData) {
         return {
           success: false,
           message: 'Item no encontrado'
         };
       }
+
+      // Formatear la respuesta para que el frontend la entienda fácilmente
+      const item = {
+        ...codigoData.inv_general_items, // id, item, descripcion, grupo
+        unidad_medida: codigoData.unidad_medida,
+        factor_empaque: codigoData.factor,
+        codigo_barra_scanned: codigoData.codigo_barras
+      };
 
       return {
         success: true,

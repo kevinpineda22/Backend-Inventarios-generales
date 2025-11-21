@@ -49,7 +49,7 @@ export class ConteoModel {
   }
 
   /**
-   * Obtener conteo específico de una ubicación
+   * Obtener conteo específico de una ubicación (Recuperar el más reciente)
    */
   static async findByUbicacionAndTipo(ubicacionId, tipoConteo) {
     try {
@@ -64,9 +64,39 @@ export class ConteoModel {
         `)
         .eq('ubicacion_id', ubicacionId)
         .eq('tipo_conteo', tipoConteo)
-        .single();
+        .order('created_at', { ascending: false }) // Traer el más reciente
+        .limit(1)
+        .maybeSingle(); // Usar maybeSingle para evitar error si hay múltiples o ninguno
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
+   * Obtener conteo específico de una ubicación y usuario (Recuperar sesión personal)
+   */
+  static async findByUbicacionTipoAndUsuario(ubicacionId, tipoConteo, usuarioId) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CONTEOS)
+        .select(`
+          *,
+          items:inv_general_conteo_items(
+            *,
+            item:inv_general_items(*)
+          )
+        `)
+        .eq('ubicacion_id', ubicacionId)
+        .eq('tipo_conteo', tipoConteo)
+        .eq('usuario_id', usuarioId) // Filtrar por usuario
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
       return data;
     } catch (error) {
       throw handleSupabaseError(error);
@@ -229,6 +259,55 @@ export class ConteoModel {
         `)
         .eq('estado', 'finalizado')
         .order('fecha_fin', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
+   * Obtener historial de conteos con filtros
+   */
+  static async findAll(filters = {}) {
+    try {
+      let query = supabase
+        .from(TABLES.CONTEOS)
+        .select(`
+          *,
+          ubicacion:inv_general_ubicaciones!inner(
+            *,
+            pasillo:inv_general_pasillos!inner(
+              *,
+              zona:inv_general_zonas!inner(
+                *,
+                bodega:inv_general_bodegas!inner(*)
+              )
+            )
+          ),
+          conteo_items:inv_general_conteo_items(count)
+        `)
+        .order('created_at', { ascending: false });
+
+      // Aplicar filtros
+      if (filters.companiaId) {
+        query = query.eq('ubicacion.pasillo.zona.bodega.compania_id', filters.companiaId);
+      }
+      if (filters.bodega) {
+        query = query.ilike('ubicacion.pasillo.zona.bodega.nombre', `%${filters.bodega}%`);
+      }
+      if (filters.zona) {
+        query = query.ilike('ubicacion.pasillo.zona.nombre', `%${filters.zona}%`);
+      }
+      if (filters.pasillo) {
+        query = query.ilike('ubicacion.pasillo.numero', `%${filters.pasillo}%`);
+      }
+      if (filters.tipoConteo && filters.tipoConteo !== 'todos') {
+        query = query.eq('tipo_conteo', filters.tipoConteo);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data;
