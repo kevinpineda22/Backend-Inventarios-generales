@@ -1,11 +1,10 @@
 
 import express from 'express';
-import multer from 'multer';
+import { upload } from '../middleware/uploadHandler.js';
 import { uploadMaestra, upsertItems, upsertCodigos } from '../controllers/maestra.controller.js';
 import { maestraRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
 
 // Aplicar rate limiter flexible solo a estas rutas
 router.use(maestraRateLimiter);
