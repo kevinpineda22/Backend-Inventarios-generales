@@ -1,11 +1,10 @@
 
 import express from 'express';
-import multer from 'multer';
+import { upload } from '../middleware/uploadHandler.js';
 import { uploadMaestra, upsertItems, upsertCodigos } from '../controllers/maestra.controller.js';
 import { maestraRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
 
 // Aplicar rate limiter flexible solo a estas rutas
 router.use(maestraRateLimiter);
@@ -80,15 +79,6 @@ router.post('/desactivar-codigos', async (req, res) => {
 		res.status(500).json({ error: 'Error desactivando códigos', details: err.message });
 	}
 });
-
-// Endpoint para subir la base de datos maestra
-router.post('/upload-maestra', upload.single('file'), uploadMaestra);
-
-// Endpoint para carga masiva de items desde frontend
-router.post('/upsert-items', upsertItems);
-
-// Endpoint para carga masiva de códigos de barras desde frontend
-router.post('/upsert-codigos', upsertCodigos);
 
 // Endpoint para obtener el estado actual de la base de datos maestra
 router.get('/estado-actual', async (req, res) => {
