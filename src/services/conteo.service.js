@@ -74,41 +74,55 @@ class ConteoService {
   /**
    * Agregar item a un conteo
    */
-  static async agregarItem(conteoId, codigoBarra, cantidad, companiaId, usuarioEmail = null) {
-    console.log(`[DEBUG] AgregarItem - Barcode: ${codigoBarra}, Cia: ${companiaId}, Conteo: ${conteoId}, Email: ${usuarioEmail}`);
+  static async agregarItem(conteoId, codigoBarra, cantidad, companiaId, usuarioEmail = null, itemId = null) {
+    console.log(`[DEBUG] AgregarItem - Barcode: ${codigoBarra}, Cia: ${companiaId}, Conteo: ${conteoId}, Email: ${usuarioEmail}, ItemID: ${itemId}`);
     try {
-      // 1. Buscar el código de barras en la tabla de códigos (1:N)
-      let codigoData = await CodigoModel.findByBarcodeWithItem(codigoBarra, companiaId);
-      console.log(`[DEBUG] Busqueda en Codigos: ${codigoData ? 'ENCONTRADO' : 'NO ENCONTRADO'}`);
-      
-      // FALLBACK: Si no está en la tabla de códigos, buscar directamente en la tabla de items
-      if (!codigoData) {
-        console.log(`[DEBUG] Intentando fallback en Items con codigo: ${codigoBarra}`);
-        const itemDirecto = await ItemModel.findByBarcode(codigoBarra, companiaId);
-        console.log(`[DEBUG] Busqueda en Items: ${itemDirecto ? 'ENCONTRADO' : 'NO ENCONTRADO'}`);
-        
-        if (itemDirecto) {
-            // Construir estructura compatible con lo que espera el resto de la función
-            codigoData = {
-                codigo_barras: itemDirecto.codigo || itemDirecto.codigo_barra, // <-- Adaptar a 'codigo' o 'codigo_barra'
-                unidad_medida: itemDirecto.unidad_medida || 'UN',
-                factor: 1, // Factor por defecto para item principal
-                activo: true,
-                inv_general_items: itemDirecto
-            };
-        }
-      }
-      
-      if (!codigoData) {
-        return {
-          success: false,
-          message: 'Código de barras no encontrado en la maestra'
-        };
-      }
+      let itemMaster;
+      let factor = 1;
 
-      // 2. Obtener datos del item y factor
-      const itemMaster = codigoData.inv_general_items; // Relación traída por CodigoModel (ahora incluye id)
-      const factor = codigoData.factor || 1;
+      if (itemId) {
+        // Búsqueda directa por ID (Prioridad Alta)
+        itemMaster = await ItemModel.findById(itemId);
+        if (!itemMaster) {
+          return {
+            success: false,
+            message: 'Item ID no encontrado'
+          };
+        }
+      } else {
+        // 1. Buscar el código de barras en la tabla de códigos (1:N)
+        let codigoData = await CodigoModel.findByBarcodeWithItem(codigoBarra, companiaId);
+        console.log(`[DEBUG] Busqueda en Codigos: ${codigoData ? 'ENCONTRADO' : 'NO ENCONTRADO'}`);
+        
+        // FALLBACK: Si no está en la tabla de códigos, buscar directamente en la tabla de items
+        if (!codigoData) {
+          console.log(`[DEBUG] Intentando fallback en Items con codigo: ${codigoBarra}`);
+          const itemDirecto = await ItemModel.findByBarcode(codigoBarra, companiaId);
+          console.log(`[DEBUG] Busqueda en Items: ${itemDirecto ? 'ENCONTRADO' : 'NO ENCONTRADO'}`);
+          
+          if (itemDirecto) {
+              // Construir estructura compatible con lo que espera el resto de la función
+              codigoData = {
+                  codigo_barras: itemDirecto.codigo || itemDirecto.codigo_barra, // <-- Adaptar a 'codigo' o 'codigo_barra'
+                  unidad_medida: itemDirecto.unidad_medida || 'UN',
+                  factor: 1, // Factor por defecto para item principal
+                  activo: true,
+                  inv_general_items: itemDirecto
+              };
+          }
+        }
+        
+        if (!codigoData) {
+          return {
+            success: false,
+            message: 'Código de barras no encontrado en la maestra'
+          };
+        }
+
+        // 2. Obtener datos del item y factor
+        itemMaster = codigoData.inv_general_items; // Relación traída por CodigoModel (ahora incluye id)
+        factor = codigoData.factor || 1;
+      }
       
       if (!itemMaster || !itemMaster.id) {
          return {
