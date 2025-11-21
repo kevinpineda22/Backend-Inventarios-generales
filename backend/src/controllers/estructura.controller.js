@@ -117,9 +117,14 @@ export class EstructuraController {
    */
   static async createMultipleUbicaciones(req, res) {
     try {
-      const { pasilloId, cantidad } = req.body;
+      const { pasilloId, cantidad, ubicaciones } = req.body;
 
-      const result = await EstructuraService.createMultipleUbicaciones(pasilloId, cantidad);
+      let result;
+      if (ubicaciones && Array.isArray(ubicaciones)) {
+        result = await EstructuraService.createUbicacionesBatch(ubicaciones);
+      } else {
+        result = await EstructuraService.createMultipleUbicaciones(pasilloId, cantidad);
+      }
 
       return successResponse(res, result.data, result.message, 201);
     } catch (error) {
@@ -155,6 +160,20 @@ export class EstructuraController {
       const result = await EstructuraService.deleteBodega(id);
 
       return successResponse(res, null, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Obtener ubicación por ID
+   * GET /api/estructura/ubicacion/:id
+   */
+  static async getUbicacion(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await EstructuraService.getUbicacion(id);
+      return successResponse(res, result.data, 'Ubicación obtenida exitosamente');
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
     }

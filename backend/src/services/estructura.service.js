@@ -194,6 +194,29 @@ export class EstructuraService {
   }
 
   /**
+   * Crear lote de ubicaciones (custom)
+   */
+  static async createUbicacionesBatch(ubicaciones) {
+    try {
+      // Asegurar que todas tengan clave
+      const ubicacionesWithKeys = ubicaciones.map(u => ({
+        ...u,
+        clave: u.clave || this.generateClave()
+      }));
+
+      const result = await UbicacionModel.createMany(ubicacionesWithKeys);
+      
+      return {
+        success: true,
+        data: result,
+        message: `${result.length} ubicaciones creadas exitosamente`
+      };
+    } catch (error) {
+      throw new Error(`Error al crear lote de ubicaciones: ${error.message}`);
+    }
+  }
+
+  /**
    * Generar clave aleatoria para ubicación
    */
   static generateClave() {
@@ -230,6 +253,24 @@ export class EstructuraService {
       };
     } catch (error) {
       throw new Error(`Error al eliminar bodega: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtener ubicación por ID
+   */
+  static async getUbicacion(id) {
+    try {
+      const ubicacion = await UbicacionModel.findById(id);
+      if (!ubicacion) {
+        throw new Error('Ubicación no encontrada');
+      }
+      return {
+        success: true,
+        data: ubicacion
+      };
+    } catch (error) {
+      throw new Error(`Error al obtener ubicación: ${error.message}`);
     }
   }
 }
