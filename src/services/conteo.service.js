@@ -406,6 +406,75 @@ class ConteoService {
       throw new Error(`Error al obtener historial: ${error.message}`);
     }
   }
+
+  /**
+   * Obtener ubicaciones con diferencias pendientes de reconteo
+   */
+  static async getUbicacionesConDiferencias(companiaId) {
+    try {
+      // 1. Obtener todos los conteos finalizados de la compañía
+      const conteos = await ConteoModel.findAll({ companiaId });
+      
+      // 2. Agrupar por ubicación
+      const ubicacionesMap = new Map();
+      
+      conteos.forEach(c => {
+        // Solo nos interesan conteos finalizados
+        if (c.estado !== 'finalizado') return;
+
+        const ubicacionId = c.ubicacion_id;
+        if (!ubicacionesMap.has(ubicacionId)) {
+          ubicacionesMap.set(ubicacionId, {
+            ubicacion: c.ubicacion, // Info de ubicación
+            c1: null,
+            c2: null,
+            c3: null
+          });
+        }
+        
+        const entry = ubicacionesMap.get(ubicacionId);
+        if (c.tipo_conteo === 1) entry.c1 = c;
+        if (c.tipo_conteo === 2) entry.c2 = c;
+        if (c.tipo_conteo === 3) entry.c3 = c;
+      });
+
+      // 3. Filtrar candidatos: Tienen C1 y C2, pero NO C3
+      const candidatos = [];
+      for (const [id, data] of ubicacionesMap) {
+        if (data.c1 && data.c2 && !data.c3) {
+          candidatos.push(data);
+        }
+      }
+
+      // 4. Calcular diferencias para los candidatos
+      // Esto puede ser lento si hay muchos, pero es necesario para saber la diferencia real
+      const resultados = [];
+      
+      for (const candidato of candidatos) {
+        // Llamamos a calcularDiferencias (que ya trae los items y calcula)
+        const diffResult = await this.calcularDiferencias(candidato.ubicacion.id);
+        
+        if (diffResult.success && diffResult.data.total_diferencias > 0) {
+          resultados.push({
+            ubicacion: candidato.ubicacion,
+            diferencias: diffResult.data.diferencias,
+            total_diferencias: diffResult.data.total_diferencias,
+            conteo1: candidato.c1,
+            conteo2: candidato.c2
+          });
+        }
+      }
+
+      return {
+        success: true,
+        data: resultados,
+        count: resultados.length
+      };
+
+    } catch (error) {
+      throw new Error(`Error al obtener ubicaciones con diferencias: ${error.message}`);
+    }
+  }
 }
 
 export default ConteoService;

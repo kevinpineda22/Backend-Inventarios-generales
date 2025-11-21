@@ -46,4 +46,7 @@ router.post('/:conteoId/rechazar', ConteoController.rechazar);
 // Eliminar item de conteo (registro específico)
 router.delete('/item/:id', ConteoController.eliminarItem);
 
+// Obtener ubicaciones con diferencias pendientes
+router.get('/diferencias-pendientes', ConteoController.getDiferenciasPendientes);
+
 export default router;

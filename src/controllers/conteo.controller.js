@@ -256,6 +256,26 @@ export class ConteoController {
       return errorResponse(res, error.message, 500, error);
     }
   }
+
+  /**
+   * Obtener ubicaciones con diferencias pendientes de reconteo
+   * GET /api/conteos/diferencias-pendientes
+   */
+  static async getDiferenciasPendientes(req, res) {
+    try {
+      const { companiaId } = req.query;
+
+      if (!companiaId) {
+        return errorResponse(res, 'CompaniaId es requerido', 400);
+      }
+
+      const result = await ConteoService.getUbicacionesConDiferencias(companiaId);
+
+      return successResponse(res, result.data, `${result.count} ubicaciones con diferencias encontradas`);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
 }
 
 export default ConteoController;
