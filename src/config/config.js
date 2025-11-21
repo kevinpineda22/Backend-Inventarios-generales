@@ -38,7 +38,8 @@ export const config = {
   // Configuración de archivos
   files: {
     maxSize: parseInt(process.env.MAX_FILE_SIZE || '10485760'), // 10MB por defecto
-    uploadDir: process.env.UPLOAD_DIR || './uploads'
+    // En producción (Vercel) usar /tmp, en desarrollo usar ./uploads
+    uploadDir: process.env.NODE_ENV === 'production' ? '/tmp' : (process.env.UPLOAD_DIR || './uploads')
   },
   
   // Configuración de logs

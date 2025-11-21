@@ -83,9 +83,15 @@ app.use((req, res, next) => {
 });
 
 // Directorio para archivos subidos
-const uploadDir = join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// En entornos serverless (Vercel) solo /tmp es escribible
+const uploadDir = process.env.NODE_ENV === 'production' ? '/tmp' : join(__dirname, 'uploads');
+
+if (process.env.NODE_ENV !== 'production' && !fs.existsSync(uploadDir)) {
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (error) {
+    console.warn('Advertencia: No se pudo crear el directorio de uploads:', error.message);
+  }
 }
 
 // =====================================================
