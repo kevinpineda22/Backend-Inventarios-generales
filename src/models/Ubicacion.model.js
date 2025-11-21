@@ -2,7 +2,7 @@
 // MODELO: UBICACIONES
 // =====================================================
 
-import { supabase, TABLES, handleSupabaseError } from '../config/supabase.js';
+import { supabase, TABLES, handleSupabaseError } from "../config/supabase.js";
 
 export class UbicacionModel {
   /**
@@ -12,10 +12,10 @@ export class UbicacionModel {
     try {
       const { data, error } = await supabase
         .from(TABLES.UBICACIONES)
-        .select('*')
-        .eq('pasillo_id', pasilloId)
-        .eq('activo', true)
-        .order('numero', { ascending: true });
+        .select("*")
+        .eq("pasillo_id", pasilloId)
+        .eq("activo", true)
+        .order("numero", { ascending: true });
 
       if (error) throw error;
       return data;
@@ -31,7 +31,8 @@ export class UbicacionModel {
     try {
       const { data, error } = await supabase
         .from(TABLES.UBICACIONES)
-        .select(`
+        .select(
+          `
           *, 
           pasillo:inv_general_pasillos(
             *, 
@@ -40,8 +41,9 @@ export class UbicacionModel {
               bodega:inv_general_bodegas(*)
             )
           )
-        `)
-        .eq('id', id)
+        `
+        )
+        .eq("id", id)
         .single();
 
       if (error) throw error;
@@ -94,7 +96,7 @@ export class UbicacionModel {
       const { data, error } = await supabase
         .from(TABLES.UBICACIONES)
         .update({ ...updateData, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -113,7 +115,7 @@ export class UbicacionModel {
       const { data, error } = await supabase
         .from(TABLES.UBICACIONES)
         .update({ activo: false, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -132,7 +134,24 @@ export class UbicacionModel {
       const { error } = await supabase
         .from(TABLES.UBICACIONES)
         .delete()
-        .eq('id', id);
+        .eq("id", id);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
+   * Eliminar múltiples ubicaciones
+   */
+  static async deleteMany(ids) {
+    try {
+      const { error } = await supabase
+        .from(TABLES.UBICACIONES)
+        .delete()
+        .in("id", ids);
 
       if (error) throw error;
       return true;
@@ -148,8 +167,8 @@ export class UbicacionModel {
     try {
       const { data, error } = await supabase
         .from(TABLES.UBICACIONES)
-        .select('clave')
-        .eq('id', id)
+        .select("clave")
+        .eq("id", id)
         .single();
 
       if (error) throw error;

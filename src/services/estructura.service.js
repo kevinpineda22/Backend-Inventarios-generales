@@ -224,6 +224,22 @@ export class EstructuraService {
   }
 
   /**
+   * Eliminar múltiples ubicaciones
+   */
+  static async deleteUbicacionesBatch(ids) {
+    try {
+      await UbicacionModel.deleteMany(ids);
+
+      return {
+        success: true,
+        message: `${ids.length} ubicaciones eliminadas exitosamente`,
+      };
+    } catch (error) {
+      throw new Error(`Error al eliminar ubicaciones: ${error.message}`);
+    }
+  }
+
+  /**
    * Crear lote de ubicaciones (custom)
    */
   static async createUbicacionesBatch(ubicaciones) {
