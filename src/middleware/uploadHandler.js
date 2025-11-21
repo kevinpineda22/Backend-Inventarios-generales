@@ -6,6 +6,7 @@ import multer from 'multer';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import os from 'os';
 import { config } from '../config/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,7 +15,9 @@ const __dirname = dirname(__filename);
 // Configurar almacenamiento
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, join(__dirname, '../../uploads'));
+    const isProduction = process.env.NODE_ENV === 'production';
+    const uploadDir = isProduction ? os.tmpdir() : join(__dirname, '../../uploads');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);

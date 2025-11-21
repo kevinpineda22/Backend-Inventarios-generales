@@ -85,8 +85,11 @@ app.use((req, res, next) => {
 });
 
 // Directorio para archivos subidos
-const uploadDir = join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
+import os from "os";
+const isProduction = process.env.NODE_ENV === "production";
+const uploadDir = isProduction ? os.tmpdir() : join(__dirname, "uploads");
+
+if (!isProduction && !fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
