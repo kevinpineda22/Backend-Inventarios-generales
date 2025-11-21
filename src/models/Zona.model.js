@@ -2,7 +2,14 @@
 // MODELO: ZONAS
 // =====================================================
 
-import { supabase, TABLES, handleSupabaseError } from '../config/supabase.js';
+import {
+  supabase,
+  supabaseAdmin,
+  TABLES,
+  handleSupabaseError,
+} from "../config/supabase.js";
+
+const client = supabaseAdmin || supabase;
 
 export class ZonaModel {
   /**
@@ -10,12 +17,12 @@ export class ZonaModel {
    */
   static async findByBodega(bodegaId) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.ZONAS)
-        .select('*')
-        .eq('bodega_id', bodegaId)
-        .eq('activo', true)
-        .order('nombre', { ascending: true });
+        .select("*")
+        .eq("bodega_id", bodegaId)
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
 
       if (error) throw error;
       return data;
@@ -29,10 +36,10 @@ export class ZonaModel {
    */
   static async findById(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.ZONAS)
-        .select('*, bodega:inv_general_bodegas(*)')
-        .eq('id', id)
+        .select("*, bodega:inv_general_bodegas(*)")
+        .eq("id", id)
         .single();
 
       if (error) throw error;
@@ -47,7 +54,7 @@ export class ZonaModel {
    */
   static async create(zonaData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.ZONAS)
         .insert([zonaData])
         .select()
@@ -65,10 +72,10 @@ export class ZonaModel {
    */
   static async update(id, updateData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.ZONAS)
         .update({ ...updateData, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -84,10 +91,10 @@ export class ZonaModel {
    */
   static async deactivate(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.ZONAS)
         .update({ activo: false, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -103,10 +110,7 @@ export class ZonaModel {
    */
   static async delete(id) {
     try {
-      const { error } = await supabase
-        .from(TABLES.ZONAS)
-        .delete()
-        .eq('id', id);
+      const { error } = await client.from(TABLES.ZONAS).delete().eq("id", id);
 
       if (error) throw error;
       return true;

@@ -2,7 +2,14 @@
 // MODELO: UBICACIONES
 // =====================================================
 
-import { supabase, TABLES, handleSupabaseError } from "../config/supabase.js";
+import {
+  supabase,
+  supabaseAdmin,
+  TABLES,
+  handleSupabaseError,
+} from "../config/supabase.js";
+
+const client = supabaseAdmin || supabase;
 
 export class UbicacionModel {
   /**
@@ -10,7 +17,7 @@ export class UbicacionModel {
    */
   static async findByPasillo(pasilloId) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .select("*")
         .eq("pasillo_id", pasilloId)
@@ -29,7 +36,7 @@ export class UbicacionModel {
    */
   static async findById(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .select(
           `
@@ -58,7 +65,7 @@ export class UbicacionModel {
    */
   static async create(ubicacionData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .insert([ubicacionData])
         .select()
@@ -76,7 +83,7 @@ export class UbicacionModel {
    */
   static async createMany(ubicacionesData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .insert(ubicacionesData)
         .select();
@@ -93,7 +100,7 @@ export class UbicacionModel {
    */
   static async update(id, updateData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .update({ ...updateData, updated_at: new Date().toISOString() })
         .eq("id", id)
@@ -112,7 +119,7 @@ export class UbicacionModel {
    */
   static async deactivate(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .update({ activo: false, updated_at: new Date().toISOString() })
         .eq("id", id)
@@ -131,7 +138,7 @@ export class UbicacionModel {
    */
   static async delete(id) {
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from(TABLES.UBICACIONES)
         .delete()
         .eq("id", id);
@@ -148,7 +155,7 @@ export class UbicacionModel {
    */
   static async deleteMany(ids) {
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from(TABLES.UBICACIONES)
         .delete()
         .in("id", ids);
@@ -165,7 +172,7 @@ export class UbicacionModel {
    */
   static async verifyClave(id, clave) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.UBICACIONES)
         .select("clave")
         .eq("id", id)

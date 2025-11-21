@@ -2,7 +2,14 @@
 // MODELO: BODEGAS
 // =====================================================
 
-import { supabase, TABLES, handleSupabaseError } from '../config/supabase.js';
+import {
+  supabase,
+  supabaseAdmin,
+  TABLES,
+  handleSupabaseError,
+} from "../config/supabase.js";
+
+const client = supabaseAdmin || supabase;
 
 export class BodegaModel {
   /**
@@ -10,12 +17,12 @@ export class BodegaModel {
    */
   static async findByCompany(companiaId) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.BODEGAS)
-        .select('*')
-        .eq('compania_id', companiaId)
-        .eq('activo', true)
-        .order('nombre', { ascending: true });
+        .select("*")
+        .eq("compania_id", companiaId)
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
 
       if (error) throw error;
       return data;
@@ -29,10 +36,10 @@ export class BodegaModel {
    */
   static async findById(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.BODEGAS)
-        .select('*')
-        .eq('id', id)
+        .select("*")
+        .eq("id", id)
         .single();
 
       if (error) throw error;
@@ -47,7 +54,7 @@ export class BodegaModel {
    */
   static async create(bodegaData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.BODEGAS)
         .insert([bodegaData])
         .select()
@@ -65,10 +72,10 @@ export class BodegaModel {
    */
   static async update(id, updateData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.BODEGAS)
         .update({ ...updateData, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -84,10 +91,10 @@ export class BodegaModel {
    */
   static async deactivate(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.BODEGAS)
         .update({ activo: false, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -103,10 +110,7 @@ export class BodegaModel {
    */
   static async delete(id) {
     try {
-      const { error } = await supabase
-        .from(TABLES.BODEGAS)
-        .delete()
-        .eq('id', id);
+      const { error } = await client.from(TABLES.BODEGAS).delete().eq("id", id);
 
       if (error) throw error;
       return true;

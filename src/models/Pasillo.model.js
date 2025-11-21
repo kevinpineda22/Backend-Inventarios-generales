@@ -2,7 +2,14 @@
 // MODELO: PASILLOS
 // =====================================================
 
-import { supabase, TABLES, handleSupabaseError } from '../config/supabase.js';
+import {
+  supabase,
+  supabaseAdmin,
+  TABLES,
+  handleSupabaseError,
+} from "../config/supabase.js";
+
+const client = supabaseAdmin || supabase;
 
 export class PasilloModel {
   /**
@@ -10,12 +17,12 @@ export class PasilloModel {
    */
   static async findByZona(zonaId) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.PASILLOS)
-        .select('*')
-        .eq('zona_id', zonaId)
-        .eq('activo', true)
-        .order('numero', { ascending: true });
+        .select("*")
+        .eq("zona_id", zonaId)
+        .eq("activo", true)
+        .order("numero", { ascending: true });
 
       if (error) throw error;
       return data;
@@ -29,10 +36,10 @@ export class PasilloModel {
    */
   static async findById(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.PASILLOS)
-        .select('*, zona:inv_general_zonas(*, bodega:inv_general_bodegas(*))')
-        .eq('id', id)
+        .select("*, zona:inv_general_zonas(*, bodega:inv_general_bodegas(*))")
+        .eq("id", id)
         .single();
 
       if (error) throw error;
@@ -47,7 +54,7 @@ export class PasilloModel {
    */
   static async create(pasilloData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.PASILLOS)
         .insert([pasilloData])
         .select()
@@ -65,10 +72,10 @@ export class PasilloModel {
    */
   static async update(id, updateData) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.PASILLOS)
         .update({ ...updateData, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -84,10 +91,10 @@ export class PasilloModel {
    */
   static async deactivate(id) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(TABLES.PASILLOS)
         .update({ activo: false, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -103,10 +110,10 @@ export class PasilloModel {
    */
   static async delete(id) {
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from(TABLES.PASILLOS)
         .delete()
-        .eq('id', id);
+        .eq("id", id);
 
       if (error) throw error;
       return true;
