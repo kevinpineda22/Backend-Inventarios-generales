@@ -117,19 +117,37 @@ export class InventarioController {
       const estadoZonas = {};
       const estadoPasillos = {};
 
+      const estructura = [];
+
       for (const zona of zonas) {
         estadoZonas[zona.id] = zona.estado || 'abierto';
         
         const pasillos = await PasilloModel.findByZona(zona.id);
+        const pasillosData = [];
+        
         for (const pasillo of pasillos) {
           estadoPasillos[pasillo.id] = pasillo.estado || 'abierto';
+          pasillosData.push({
+            id: pasillo.id,
+            numero: pasillo.numero,
+            estado: pasillo.estado || 'abierto'
+          });
         }
+
+        estructura.push({
+          id: zona.id,
+          nombre: zona.nombre,
+          estado: zona.estado || 'abierto',
+          pasillos: pasillosData
+        });
       }
 
       const result = {
         bodega: bodegaObj.estado || 'abierto',
+        bodegaId: bodegaObj.id,
         zonas: estadoZonas,
-        pasillos: estadoPasillos
+        pasillos: estadoPasillos,
+        estructura: estructura // Devolvemos la estructura completa
       };
 
       return successResponse(res, result, 'Estado obtenido');
