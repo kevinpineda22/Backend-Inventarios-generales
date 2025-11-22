@@ -118,11 +118,11 @@ export class InventarioController {
       const estadoPasillos = {};
 
       for (const zona of zonas) {
-        estadoZonas[zona.nombre] = zona.estado || 'abierto';
+        estadoZonas[zona.id] = zona.estado || 'abierto';
         
         const pasillos = await PasilloModel.findByZona(zona.id);
         for (const pasillo of pasillos) {
-          estadoPasillos[`${zona.nombre}-${pasillo.numero}`] = pasillo.estado || 'abierto';
+          estadoPasillos[pasillo.id] = pasillo.estado || 'abierto';
         }
       }
 
