@@ -401,9 +401,13 @@ class ConteoService {
       const data = conteos.map(c => ({
         id: c.id,
         bodega: c.ubicacion?.pasillo?.zona?.bodega?.nombre,
+        bodega_id: c.ubicacion?.pasillo?.zona?.bodega?.id, // ID Bodega
         zona: c.ubicacion?.pasillo?.zona?.nombre,
+        zona_id: c.ubicacion?.pasillo?.zona?.id, // ID Zona
         pasillo: c.ubicacion?.pasillo?.numero,
+        pasillo_id: c.ubicacion?.pasillo?.id, // ID Pasillo
         ubicacion: c.ubicacion?.numero,
+        ubicacion_id: c.ubicacion?.id, // ID Ubicacion
         tipo_conteo: c.tipo_conteo,
         fecha_inicio: c.fecha_inicio,
         fecha_fin: c.fecha_fin,
