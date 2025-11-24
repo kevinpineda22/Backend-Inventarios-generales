@@ -54,14 +54,15 @@ export class ConteoController {
   static async agregarItem(req, res) {
     try {
       const { conteoId } = req.params;
-      const { codigoBarra, cantidad, companiaId, usuarioEmail } = req.body; // ✅ Recibir usuarioEmail
+      const { codigoBarra, cantidad, companiaId, usuarioEmail, itemId } = req.body; // ✅ Recibir usuarioEmail e itemId
 
       const result = await ConteoService.agregarItem(
         conteoId,
         codigoBarra,
         cantidad,
         companiaId,
-        usuarioEmail // ✅ Pasar usuarioEmail al servicio
+        usuarioEmail, // ✅ Pasar usuarioEmail al servicio
+        itemId // ✅ Pasar itemId al servicio (para evitar errores de barcode)
       );
 
       if (!result.success) {
