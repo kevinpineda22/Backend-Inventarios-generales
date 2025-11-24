@@ -10,9 +10,6 @@ const router = express.Router();
 // Obtener historial de conteos (Admin)
 router.get('/historial', ConteoController.getHistorial);
 
-// Exportar datos de bodega
-router.get('/exportar/:bodegaId', ConteoController.exportarBodega);
-
 // Obtener conteos pendientes
 router.get('/pendientes', ConteoController.getPendientes);
 

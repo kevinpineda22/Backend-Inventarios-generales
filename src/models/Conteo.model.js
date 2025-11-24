@@ -317,6 +317,46 @@ export class ConteoModel {
   }
 
   /**
+   * Obtener todos los conteos con items para exportación
+   */
+  static async findAllWithItems(filters = {}) {
+    try {
+      let query = supabase
+        .from(TABLES.CONTEOS)
+        .select(`
+          *,
+          ubicacion:inv_general_ubicaciones!inner(
+            *,
+            pasillo:inv_general_pasillos!inner(
+              *,
+              zona:inv_general_zonas!inner(
+                *,
+                bodega:inv_general_bodegas!inner(*)
+              )
+            )
+          ),
+          items:inv_general_conteo_items(
+            *,
+            item:inv_general_items(*)
+          )
+        `)
+        .eq('estado', 'finalizado'); // Solo conteos finalizados
+
+      // Aplicar filtros
+      if (filters.bodegaId) {
+        query = query.eq('ubicacion.pasillo.zona.bodega.id', filters.bodegaId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
    * Eliminar un conteo
    */
   static async delete(id) {

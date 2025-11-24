@@ -306,22 +306,6 @@ export class ConteoController {
       return errorResponse(res, error.message, 500, error);
     }
   }
-
-  /**
-   * Exportar datos de bodega (Agrupado por items)
-   * GET /api/conteos/exportar/:bodegaId
-   */
-  static async exportarBodega(req, res) {
-    try {
-      const { bodegaId } = req.params;
-
-      const result = await ConteoService.exportarBodega(bodegaId);
-
-      return successResponse(res, result.data, result.message);
-    } catch (error) {
-      return errorResponse(res, error.message, 500, error);
-    }
-  }
 }
 
 export default ConteoController;
