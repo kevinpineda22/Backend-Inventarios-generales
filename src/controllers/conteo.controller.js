@@ -296,6 +296,10 @@ export class ConteoController {
         items
       );
 
+      // Forzar un pequeño delay para asegurar que la base de datos termine de escribir
+      // antes de que el frontend intente leer de nuevo.
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       return successResponse(res, result.data, result.message, 201);
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
