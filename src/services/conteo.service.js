@@ -501,38 +501,29 @@ class ConteoService {
   static async crearAjusteFinal(ubicacionId, usuarioId, usuarioEmail, items) {
     try {
       // 1. Verificar si ya existe un conteo tipo 4 para esta ubicación
-      const existente = await ConteoModel.findByUbicacionAndTipo(ubicacionId, 4);
-      if (existente) {
-        // Opcional: Eliminar el anterior o lanzar error. 
-        // Por seguridad, vamos a impedir sobreescribir si ya existe, o podríamos borrarlo.
-        // Decisión: Borrar el anterior para permitir correcciones del admin.
-        // Pero ConteoModel no tiene delete cascade fácil, así que mejor lanzamos error por ahora
-        // o asumimos que el frontend ya validó.
-        // Vamos a permitir "actualizar" borrando los items anteriores si existe, o simplemente creando uno nuevo si el modelo lo permite.
-        // Dado que el modelo busca por ubicación y tipo, si ya existe, deberíamos usar ese ID y reemplazar items.
-        
-        // Estrategia: Si existe, limpiamos sus items y lo reutilizamos. Si no, creamos uno.
-      }
-
-      let conteoId;
-
-      if (existente) {
-        conteoId = existente.id;
-        // Limpiar items anteriores
-        // Necesitaríamos un método en ConteoItemModel para borrar por conteoId.
-        // Como no lo tenemos visible aquí, vamos a asumir creación nueva y si falla por unique constraint, manejamos error.
-        // Pero espera, `iniciarConteo` maneja la creación.
-      }
-
-      // 2. Crear o recuperar el encabezado del conteo (Tipo 4)
-      // Usamos iniciarConteo que ya maneja la lógica de "si existe devuelve el actual"
-      // Pasamos clave 'ADMIN_OVERRIDE' o similar si fuera necesario, pero iniciarConteo pide clave de ubicación.
-      // Como esto es un proceso administrativo, quizás deberíamos saltarnos la validación de clave de `iniciarConteo`.
-      // Mejor creamos el registro directamente usando el modelo.
-
       let conteo = await ConteoModel.findByUbicacionAndTipo(ubicacionId, 4);
       
-      if (!conteo) {
+      if (conteo) {
+        // Si existe, eliminamos TODOS sus items previos para evitar duplicados/sumas
+        // Asumimos que ConteoItemModel tiene un método deleteByConteoId o similar.
+        // Si no, usamos una estrategia de borrado manual si tenemos acceso a la DB, 
+        // pero como estamos en capa de servicio, intentaremos usar el modelo.
+        // Si el modelo no tiene deleteByConteoId, iteramos y borramos (ineficiente pero seguro)
+        // O mejor, si ConteoModel tiene un método para resetear.
+        
+        // Como no puedo ver el modelo, voy a asumir que puedo obtener los items y borrarlos uno a uno
+        // Esto es lento pero seguro con las herramientas actuales.
+        const itemsPrevios = await ConteoItemModel.findByConteo(conteo.id);
+        for (const item of itemsPrevios) {
+            // item.id es el ID del registro en inv_general_conteo_items
+            // Ojo: findByConteo devuelve items con estructura join, verificar si trae el ID del registro
+            // Usualmente trae { id, cantidad, ... }
+            if (item.id) {
+                await ConteoItemModel.delete(item.id);
+            }
+        }
+      } else {
+        // Crear nuevo encabezado
         conteo = await ConteoModel.create({
           ubicacion_id: ubicacionId,
           usuario_id: usuarioId,
@@ -540,30 +531,18 @@ class ConteoService {
           estado: 'finalizado', // Nace finalizado
           correo_empleado: usuarioEmail
         });
-      } else {
-        // Si ya existe, actualizamos estado a finalizado por si acaso y usuario
-        // TODO: Implementar update si fuera necesario
       }
       
-      conteoId = conteo.id;
+      const conteoId = conteo.id;
 
-      // 3. Insertar los items
-      // Como es un ajuste final, reemplazamos lo que hubiera (si es que estamos editando)
-      // O simplemente insertamos.
-      // Para evitar duplicados si se corre dos veces, idealmente borraríamos items previos del conteo 4.
-      // Por ahora, iteramos e insertamos.
-      
+      // 3. Insertar los items nuevos
       const resultados = [];
       for (const item of items) {
         // item: { codigo, cantidad, companiaId }
-        // Necesitamos buscar el item por código para obtener su ID
-        // Reutilizamos la lógica de agregarItem pero optimizada o llamamos a agregarItem
-        
         // Llamamos a agregarItem internamente. 
-        // Nota: agregarItem espera codigoBarra.
         const result = await this.agregarItem(
           conteoId, 
-          item.codigo, // Asumimos que 'codigo' es el código de barras o item code que agregarItem entiende
+          item.codigo, 
           item.cantidad, 
           item.companiaId, 
           usuarioEmail
