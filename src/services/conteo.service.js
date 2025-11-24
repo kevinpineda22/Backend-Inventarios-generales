@@ -538,14 +538,15 @@ class ConteoService {
       // 3. Insertar los items nuevos
       const resultados = [];
       for (const item of items) {
-        // item: { codigo, cantidad, companiaId }
+        // item: { codigo, cantidad, companiaId, itemId }
         // Llamamos a agregarItem internamente. 
         const result = await this.agregarItem(
           conteoId, 
           item.codigo, 
           item.cantidad, 
           item.companiaId, 
-          usuarioEmail
+          usuarioEmail,
+          item.itemId // Pasar el ID directo si existe
         );
 
         if (!result.success) {
