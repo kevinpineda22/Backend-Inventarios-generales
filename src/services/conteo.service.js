@@ -547,6 +547,13 @@ class ConteoService {
           item.companiaId, 
           usuarioEmail
         );
+
+        if (!result.success) {
+          // Si falla un item, lanzamos error para que el usuario sepa que algo salió mal
+          // y no crea que se guardó todo correctamente.
+          throw new Error(`Error al guardar item ${item.codigo}: ${result.message}`);
+        }
+
         resultados.push(result);
       }
 
