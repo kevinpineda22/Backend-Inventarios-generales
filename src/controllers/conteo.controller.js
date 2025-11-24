@@ -276,6 +276,31 @@ export class ConteoController {
       return errorResponse(res, error.message, 500, error);
     }
   }
+
+  /**
+   * Crear Ajuste Final (Tipo 4)
+   * POST /api/conteos/ajuste-final
+   */
+  static async crearAjusteFinal(req, res) {
+    try {
+      const { ubicacionId, usuarioId, usuarioEmail, items } = req.body;
+
+      if (!ubicacionId || !items || !Array.isArray(items)) {
+        return errorResponse(res, 'Datos incompletos. Se requiere ubicacionId y array de items', 400);
+      }
+
+      const result = await ConteoService.crearAjusteFinal(
+        ubicacionId,
+        usuarioId,
+        usuarioEmail,
+        items
+      );
+
+      return successResponse(res, result.data, result.message, 201);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
 }
 
 export default ConteoController;

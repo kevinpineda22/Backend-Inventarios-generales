@@ -49,4 +49,7 @@ router.post('/:conteoId/rechazar', ConteoController.rechazar);
 // Eliminar item de conteo (registro específico)
 router.delete('/item/:id', ConteoController.eliminarItem);
 
+// Crear Ajuste Final
+router.post('/ajuste-final', ConteoController.crearAjusteFinal);
+
 export default router;
