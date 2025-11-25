@@ -9,10 +9,10 @@ yarn.lock
 
 # =====================================================
 # VARIABLES DE ENTORNO
-# .env
-# env.local
-# .env.production
-# env.development
+.env
+.env.local
+.env.production
+.env.development
 
 # =====================================================
 # ARCHIVOS TEMPORALES
