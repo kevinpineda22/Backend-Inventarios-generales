@@ -4,10 +4,31 @@
 
 import express from 'express';
 import { generateConteoReport } from '../utils/excelHandler.js';
+import { generateInventoryReport } from '../services/reporteIA.service.js';
 import { successResponse, errorResponse } from '../utils/responses.js';
 import ConteoModel from '../models/Conteo.model.js';
 
 const router = express.Router();
+
+/**
+ * Generar reporte IA
+ * POST /api/reportes/ia
+ */
+router.post('/ia', async (req, res) => {
+  try {
+    const { filters } = req.body;
+    
+    if (!filters || !filters.bodega) {
+      return errorResponse(res, 'Se requiere especificar la bodega para el análisis.', 400);
+    }
+
+    const report = await generateInventoryReport(filters);
+    
+    return successResponse(res, { report });
+  } catch (error) {
+    return errorResponse(res, error.message, 500, error);
+  }
+});
 
 /**
  * Generar reporte de conteos en Excel
