@@ -192,6 +192,76 @@ class ConteoService {
   static async finalizarConteo(conteoId) {
     try {
       const conteo = await ConteoModel.finalizar(conteoId);
+
+      // =================================================================
+      // AUTO-RESOLUCIÓN DE RECONTEO (TIPO 3)
+      // Si es un reconteo y coincide con C1 o C2, generamos Ajuste Final automáticamente
+      // =================================================================
+      try {
+        const conteoActualizado = await ConteoModel.findById(conteoId);
+        
+        if (conteoActualizado && conteoActualizado.tipo_conteo === 3) {
+          const ubicacionId = conteoActualizado.ubicacion_id;
+          
+          // Obtener C1 y C2
+          const c1 = await ConteoModel.findByUbicacionAndTipo(ubicacionId, 1);
+          const c2 = await ConteoModel.findByUbicacionAndTipo(ubicacionId, 2);
+          
+          if (c1 && c2) {
+            const itemsC3 = await ConteoItemModel.findByConteo(conteoId);
+            const itemsC1 = await ConteoItemModel.findByConteo(c1.id);
+            const itemsC2 = await ConteoItemModel.findByConteo(c2.id);
+            
+            // Mapas para búsqueda rápida de cantidades anteriores
+            const mapC1 = new Map(itemsC1.map(i => [i.item_id, Number(i.cantidad)]));
+            const mapC2 = new Map(itemsC2.map(i => [i.item_id, Number(i.cantidad)]));
+            
+            let allMatch = true;
+            const itemsParaAjuste = [];
+            
+            // Verificar cada item del reconteo
+            for (const itemC3 of itemsC3) {
+              const qtyC1 = mapC1.get(itemC3.item_id) || 0;
+              const qtyC2 = mapC2.get(itemC3.item_id) || 0;
+              const qtyC3 = Number(itemC3.cantidad);
+              
+              // Regla: El reconteo debe coincidir con C1 o con C2
+              if (qtyC3 === qtyC1 || qtyC3 === qtyC2) {
+                itemsParaAjuste.push({
+                  itemId: itemC3.item_id, // Usamos ID directo
+                  codigo: 'AUTO', // No necesario si hay ID
+                  cantidad: qtyC3,
+                  companiaId: 0 // No necesario si hay ID
+                });
+              } else {
+                // Si hay al menos un item que no coincide con ninguno, 
+                // NO hacemos auto-resolución (requiere revisión manual)
+                allMatch = false;
+                break; 
+              }
+            }
+            
+            // Si todos los items coinciden, creamos el ajuste final automáticamente
+            if (allMatch && itemsParaAjuste.length > 0) {
+              await this.crearAjusteFinal(
+                ubicacionId,
+                conteoActualizado.usuario_id,
+                conteoActualizado.correo_empleado,
+                itemsParaAjuste
+              );
+              
+              return {
+                success: true,
+                data: conteo,
+                message: 'Conteo finalizado y Ajuste Final generado automáticamente (Coincidencia detectada)'
+              };
+            }
+          }
+        }
+      } catch (autoError) {
+        console.error("Error en auto-resolución:", autoError);
+        // No interrumpimos el flujo principal si falla la auto-resolución
+      }
       
       return {
         success: true,
