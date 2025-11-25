@@ -20,15 +20,17 @@ export const config = {
   
   // Configuración de CORS
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || [
+    origin: process.env.CORS_ORIGIN === '*' ? '*' : (process.env.CORS_ORIGIN?.split(',') || [
       'https://merkahorro.com',
       'https://www.merkahorro.com',
       'http://localhost:3000', 
       'http://localhost:5173', 
       'http://localhost:5174', 
       'http://localhost:5175', 
-      'http://localhost:5176'
-    ]
+      'http://localhost:5176',
+      // Permitir acceso desde red local para pruebas móviles (ajusta según tu IP si es necesario)
+      '*' 
+    ])
   },
   
   // Configuración de seguridad
