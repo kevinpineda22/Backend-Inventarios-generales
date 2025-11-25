@@ -41,8 +41,8 @@ export const config = {
   
   // Configuración de rate limiting
   rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '5') * 60 * 1000, // 5 minutos por defecto
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '3000') // 3000 peticiones por ventana
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '1') * 60 * 1000, // 1 minuto
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '150000') // 150,000 peticiones para soportar 2000 usuarios
   },
   
   // Configuración de archivos
