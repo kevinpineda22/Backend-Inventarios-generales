@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import ConteoModel from '../models/Conteo.model.js';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -24,8 +24,9 @@ export const generateInventoryReport = async (params) => {
     }
 
     // 2. Obtener mapa de nombres reales (Estrategia Robusta: Cargar todos los perfiles)
-    // Cargamos todos los perfiles para poder hacer matching flexible (por ID, correo exacto, o usuario del correo)
-    const { data: allProfiles } = await supabase.from('profiles').select('id, nombre, correo');
+    // Usamos supabaseAdmin si está disponible para saltar RLS (Row Level Security)
+    const dbClient = supabaseAdmin || supabase;
+    const { data: allProfiles } = await dbClient.from('profiles').select('id, nombre, correo');
     
     const namesMap = new Map();
     if (allProfiles) {
