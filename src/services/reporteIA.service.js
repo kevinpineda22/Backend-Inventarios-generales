@@ -14,7 +14,8 @@ export const generateInventoryReport = async (params) => {
     }
 
     // Flujo normal: Reporte de Bodega (Backend fetch)
-    const filters = params; 
+    // Extraemos 'profiles' si viene del frontend, el resto son filtros
+    const { profiles: frontendProfiles, ...filters } = params; 
     
     // 1. Obtener datos de la base de datos
     const conteos = await ConteoModel.findAll(filters);
@@ -23,17 +24,26 @@ export const generateInventoryReport = async (params) => {
       throw new Error('No hay datos suficientes para generar el reporte.');
     }
 
-    // 2. Obtener mapa de nombres reales (Estrategia Robusta: Cargar todos los perfiles)
-    // Usamos supabaseAdmin si está disponible para saltar RLS (Row Level Security)
-    const dbClient = supabaseAdmin || supabase;
-    const { data: allProfiles } = await dbClient.from('profiles').select('id, nombre, correo');
+    // 2. Obtener mapa de nombres reales (Estrategia Robusta: Frontend + Backend Backup)
+    let allProfiles = frontendProfiles || [];
+    
+    // Si no vinieron del frontend, intentamos cargar desde backend (con supabaseAdmin si es posible)
+    if (!allProfiles.length) {
+      try {
+        const dbClient = supabaseAdmin || supabase;
+        const { data } = await dbClient.from('profiles').select('id, nombre, correo');
+        if (data) allProfiles = data;
+      } catch (err) {
+        console.warn("Error cargando perfiles en backend:", err.message);
+      }
+    }
     
     const namesMap = new Map();
-    if (allProfiles) {
+    if (allProfiles && allProfiles.length > 0) {
       allProfiles.forEach(p => {
         if (p.nombre) {
           // Mapa por ID
-          namesMap.set(p.id, p.nombre);
+          if (p.id) namesMap.set(p.id, p.nombre);
           // Mapa por Correo
           if (p.correo) {
             namesMap.set(p.correo.toLowerCase(), p.nombre); // Normalizar a minúsculas
