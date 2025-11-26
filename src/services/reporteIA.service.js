@@ -25,7 +25,8 @@ export const generateInventoryReport = async (params) => {
 
     // 2. Obtener mapa de nombres reales (Estrategia Doble: ID y Correo)
     const userIds = [...new Set(conteos.map(c => c.usuario_id).filter(id => id))];
-    const userEmails = [...new Set(conteos.map(c => c.correo_empleado).filter(e => e))];
+    // Usamos tanto correo_empleado como usuario_nombre (algunos registros usan uno u otro)
+    const userEmails = [...new Set(conteos.map(c => c.correo_empleado || c.usuario_nombre).filter(e => e))];
 
     const [profilesById, profilesByEmail] = await Promise.all([
       ConteoModel.getNombresUsuarios(userIds),
@@ -52,8 +53,9 @@ export const generateInventoryReport = async (params) => {
       - 📍 Ubicaciones: ${stats.ubicacionesUnicas} (Finalizadas: ${stats.ubicacionesFinalizadas})
       - 📈 Avance Real: ${stats.avance}%
       
-      RENDIMIENTO:
-      - ⚡ Velocidad: ${stats.velocidadPromedio} items/min (${stats.itemsPorHora} items/hora)
+      RENDIMIENTO (Basado en sesiones activas):
+      - ⚡ Velocidad Promedio: ${stats.itemsPorHora} items/hora (aprox. ${stats.velocidadPromedio} items/min)
+      - ⏱️ Nota: Se han excluido sesiones inactivas o "zombies" para este cálculo.
       - 🏆 Top Operadores: ${stats.topUsers.map(u => `${u.name} (${u.items})`).join(', ')}
       
       CALIDAD:
@@ -63,9 +65,12 @@ export const generateInventoryReport = async (params) => {
 
       Genera un reporte Markdown estructurado así:
       1. **Resumen Ejecutivo**: Estado general y veredicto de salud del inventario.
-      2. **Productividad y Ritmo**: Analiza la velocidad (${stats.itemsPorHora} items/h). ¿Es eficiente? (Estándar: >600 items/h es alto, <100 es bajo). Felicita a los top performers por nombre.
+      2. **Productividad y Ritmo**: Analiza la velocidad (${stats.itemsPorHora} items/h). 
+         - Benchmark: >600 items/h (Alto), 300-600 (Medio), <300 (Bajo/Requiere Atención).
+         - Si es bajo, sugiere revisar si hay pausas no registradas o problemas con el escáner.
+         - Felicita a los top performers por nombre.
       3. **Calidad y Precisión**: Analiza la tasa de error (${stats.tasaError}%). Si hay zonas críticas, menciónalas.
-      4. **Recomendaciones de Impacto**: 3 acciones específicas (ej: reentrenamiento, revisión de zonas X).
+      4. **Recomendaciones de Impacto**: 3 acciones específicas (ej: reentrenamiento, revisión de zonas X, cierre de sesiones).
       5. **Conclusión**: Cierre profesional.
 
       Usa nombres reales. Sé claro y directo.
@@ -118,9 +123,13 @@ const calculateStats = (data, namesMap) => {
       const inicio = new Date(c.fecha_inicio);
       const fin = new Date(c.fecha_fin);
       const diffMinutos = (fin - inicio) / 1000 / 60;
+      const itemsEnConteo = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
       
-      // Filtramos tiempos absurdos (ej: < 0.1 min o > 4 horas por un conteo simple)
-      if (diffMinutos > 0.1 && diffMinutos < 240) {
+      // Filtramos tiempos absurdos Y sesiones "zombies" (mucho tiempo, pocos items)
+      // Regla: Si duró más de 30 min y se contaron menos de 10 items, probablemente se dejó abierta.
+      const esZombie = diffMinutos > 30 && itemsEnConteo < 10;
+
+      if (diffMinutos > 0.1 && diffMinutos < 240 && !esZombie) {
         totalMinutos += diffMinutos;
         conteosConTiempo++;
       }
@@ -138,11 +147,15 @@ const calculateStats = (data, namesMap) => {
   // 3. Top Users con Nombres Reales (Búsqueda Dual)
   const userMap = {};
   data.forEach(c => {
-    // Intentar buscar por ID, luego por Correo
-    let name = namesMap.get(c.usuario_id) || namesMap.get(c.correo_empleado);
+    // Intentar buscar por ID, luego por Correo (usando ambos campos posibles)
+    let name = namesMap.get(c.usuario_id) || namesMap.get(c.correo_empleado) || namesMap.get(c.usuario_nombre);
     
     if (!name) {
-       name = c.correo_empleado?.split('@')[0] || c.usuario_id || 'Desconocido';
+       const rawName = c.usuario_nombre || c.correo_empleado || c.usuario_id || 'Desconocido';
+       // Si parece un email, lo cortamos. Si no, lo dejamos tal cual (puede ser un nombre de usuario)
+       name = rawName.includes('@') ? rawName.split('@')[0] : rawName;
+       // Capitalizar primera letra para que se vea mejor
+       name = name.charAt(0).toUpperCase() + name.slice(1);
     }
     
     if (!userMap[name]) userMap[name] = 0;
