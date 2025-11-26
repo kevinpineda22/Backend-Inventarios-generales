@@ -467,24 +467,35 @@ class ConteoService {
     try {
       const conteos = await ConteoModel.findAll(filters);
       
+      // Obtener nombres reales de usuarios
+      const userIds = [...new Set(conteos.map(c => c.usuario_id).filter(id => id))];
+      const profiles = await ConteoModel.getNombresUsuarios(userIds);
+      const namesMap = new Map(profiles.map(p => [p.id, p.nombre]));
+
       // Formatear datos para el frontend
-      const data = conteos.map(c => ({
-        id: c.id,
-        bodega: c.ubicacion?.pasillo?.zona?.bodega?.nombre,
-        bodega_id: c.ubicacion?.pasillo?.zona?.bodega?.id, // ID Bodega
-        zona: c.ubicacion?.pasillo?.zona?.nombre,
-        zona_id: c.ubicacion?.pasillo?.zona?.id, // ID Zona
-        pasillo: c.ubicacion?.pasillo?.numero,
-        pasillo_id: c.ubicacion?.pasillo?.id, // ID Pasillo
-        ubicacion: c.ubicacion?.numero,
-        ubicacion_id: c.ubicacion?.id, // ID Ubicacion
-        tipo_conteo: c.tipo_conteo,
-        fecha_inicio: c.fecha_inicio,
-        fecha_fin: c.fecha_fin,
-        usuario_nombre: c.correo_empleado || c.usuario_id, // Usar correo si existe
-        estado: c.estado,
-        total_items: c.conteo_items && c.conteo_items[0] ? c.conteo_items[0].count : 0
-      }));
+      const data = conteos.map(c => {
+        // Prioridad: Nombre en profile > Correo empleado > Usuario ID
+        const realName = namesMap.get(c.usuario_id);
+        const displayName = realName || c.correo_empleado || c.usuario_id;
+
+        return {
+          id: c.id,
+          bodega: c.ubicacion?.pasillo?.zona?.bodega?.nombre,
+          bodega_id: c.ubicacion?.pasillo?.zona?.bodega?.id, // ID Bodega
+          zona: c.ubicacion?.pasillo?.zona?.nombre,
+          zona_id: c.ubicacion?.pasillo?.zona?.id, // ID Zona
+          pasillo: c.ubicacion?.pasillo?.numero,
+          pasillo_id: c.ubicacion?.pasillo?.id, // ID Pasillo
+          ubicacion: c.ubicacion?.numero,
+          ubicacion_id: c.ubicacion?.id, // ID Ubicacion
+          tipo_conteo: c.tipo_conteo,
+          fecha_inicio: c.fecha_inicio,
+          fecha_fin: c.fecha_fin,
+          usuario_nombre: displayName, // Usar nombre real si existe
+          estado: c.estado,
+          total_items: c.conteo_items && c.conteo_items[0] ? c.conteo_items[0].count : 0
+        };
+      });
 
       return {
         success: true,

@@ -372,6 +372,27 @@ export class ConteoModel {
       throw handleSupabaseError(error);
     }
   }
+
+  /**
+   * Obtener nombres de usuarios desde la tabla profiles
+   */
+  static async getNombresUsuarios(ids) {
+    try {
+      if (!ids || ids.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, nombre')
+        .in('id', ids);
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      // Si falla (ej. tabla no existe), retornamos array vacío y no rompemos nada
+      console.warn('Error al obtener nombres de usuarios:', error.message);
+      return [];
+    }
+  }
 }
 
 export default ConteoModel;
