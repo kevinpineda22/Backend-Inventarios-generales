@@ -27,31 +27,14 @@ export const generateInventoryReport = async (params) => {
     // 2. Obtener mapa de nombres reales (Estrategia Robusta: Frontend + Backend Backup)
     let allProfiles = frontendProfiles || [];
     
-    // Si no vinieron del frontend, intentamos cargar desde backend
+    // Si no vinieron del frontend, intentamos cargar desde backend (con supabaseAdmin si es posible)
     if (!allProfiles.length) {
-      // A. Intentar tabla 'profiles' (Public)
       try {
         const dbClient = supabaseAdmin || supabase;
         const { data } = await dbClient.from('profiles').select('id, nombre, correo');
-        if (data && data.length > 0) allProfiles = data;
+        if (data) allProfiles = data;
       } catch (err) {
-        console.warn("Error cargando perfiles en backend (tabla profiles):", err.message);
-      }
-
-      // B. Si falla o está vacía, intentar Supabase Auth (Admin API)
-      if ((!allProfiles || allProfiles.length === 0) && supabaseAdmin) {
-        try {
-          const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
-          if (users && !error) {
-            allProfiles = users.map(u => ({
-              id: u.id,
-              correo: u.email,
-              nombre: u.user_metadata?.nombre || u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0]
-            }));
-          }
-        } catch (err) {
-          console.warn("Error cargando usuarios desde Auth Admin:", err.message);
-        }
+        console.warn("Error cargando perfiles en backend:", err.message);
       }
     }
     
