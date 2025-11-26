@@ -42,6 +42,7 @@ export const generateInventoryReport = async (params) => {
       - Ubicaciones Únicas Intervenidas: ${stats.ubicacionesUnicas}
       - Ubicaciones Finalizadas (Cerradas): ${stats.ubicacionesFinalizadas}
       - Porcentaje de Cierre (Sobre lo iniciado): ${stats.avance}%
+      - Velocidad Promedio del Equipo: ${stats.velocidadPromedio} items/minuto
       - Cantidad de Reconteos (Discrepancias Graves): ${stats.reconteos}
       - Tasa de Conflicto (Reconteos / Ubicaciones): ${stats.tasaError}%
       - Top 3 Operadores más activos: ${stats.topUsers.map(u => `${u.name} (${u.items} referencias)`).join(', ')}
@@ -49,7 +50,7 @@ export const generateInventoryReport = async (params) => {
 
       Genera un reporte ejecutivo profesional en formato Markdown que incluya:
       1. 📊 **Resumen Ejecutivo**: Visión general del estado del inventario.
-      2. 🚀 **Análisis de Productividad**: Evaluación del rendimiento del equipo (menciona a los líderes).
+      2. 🚀 **Análisis de Productividad**: Evaluación del rendimiento del equipo. ¿La velocidad de ${stats.velocidadPromedio} items/min es adecuada? Menciona a los líderes.
       3. ⚠️ **Hallazgos Críticos**: Análisis de la tasa de conflicto. ¿El proceso es fluido o hay muchas discrepancias?
       4. 💡 **Recomendaciones Estratégicas**: 3 acciones concretas para mejorar la eficiencia.
       5. 🏁 **Conclusión**: Veredicto final sobre la calidad y avance del inventario.
@@ -77,28 +78,51 @@ const calculateStats = (data, namesMap) => {
 
   const totalConteos = data.length;
   
-  // Calcular ubicaciones únicas para tener un denominador real
+  // Calcular ubicaciones únicas
   const ubicacionesSet = new Set(data.map(c => c.ubicacion_id));
   const ubicacionesUnicas = ubicacionesSet.size;
 
-  // Calcular ubicaciones finalizadas (aquellas que tienen al menos un conteo 'finalizado' o tipo 4)
-  // Una ubicación está "cerrada" si tiene un conteo finalizado.
-  // Ajuste: Contamos cuántas ubicaciones únicas tienen al menos un conteo en estado 'finalizado'
+  // Ubicaciones finalizadas
   const ubicacionesFinalizadasSet = new Set(
     data.filter(c => c.estado === 'finalizado').map(c => c.ubicacion_id)
   );
   const ubicacionesFinalizadas = ubicacionesFinalizadasSet.size;
 
-  // Total items (SKUs contados)
+  // Total items
   const totalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
   
-  // Reconteos (Tipo 3)
+  // --- NUEVAS MÉTRICAS AVANZADAS ---
+
+  // 1. Clasificación de Diferencias (Solo en reconteos/ajustes)
+  // Asumimos que si es tipo 3 (Reconteo) hubo diferencia. 
+  // Idealmente necesitaríamos el valor de la diferencia, pero por ahora contaremos la frecuencia.
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
+
+  // 2. Velocidad Promedio (Items / Minuto)
+  let totalMinutos = 0;
+  let conteosConTiempo = 0;
+
+  data.forEach(c => {
+    if (c.fecha_inicio && c.fecha_fin) {
+      const inicio = new Date(c.fecha_inicio);
+      const fin = new Date(c.fecha_fin);
+      const diffMinutos = (fin - inicio) / 1000 / 60;
+      
+      // Filtramos tiempos absurdos (ej: < 0.1 min o > 4 horas por un conteo simple)
+      if (diffMinutos > 0.5 && diffMinutos < 240) {
+        totalMinutos += diffMinutos;
+        conteosConTiempo++;
+      }
+    }
+  });
   
-  // Top Users con Nombres Reales
+  const velocidadPromedio = conteosConTiempo > 0 && totalMinutos > 0
+    ? (totalItems / totalMinutos).toFixed(1) 
+    : "N/A";
+
+  // 3. Top Users con Nombres Reales
   const userMap = {};
   data.forEach(c => {
-    // Prioridad: Nombre Real > Correo > ID
     let name = namesMap.get(c.usuario_id);
     if (!name) {
        name = c.correo_empleado?.split('@')[0] || c.usuario_id || 'Desconocido';
@@ -133,6 +157,7 @@ const calculateStats = (data, namesMap) => {
     avance: ubicacionesUnicas > 0 ? ((ubicacionesFinalizadas / ubicacionesUnicas) * 100).toFixed(1) : 0,
     reconteos,
     tasaError: ubicacionesUnicas > 0 ? ((reconteos / ubicacionesUnicas) * 100).toFixed(1) : 0,
+    velocidadPromedio, // Nueva métrica
     topUsers,
     topZonas
   };
