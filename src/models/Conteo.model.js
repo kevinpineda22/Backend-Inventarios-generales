@@ -382,7 +382,7 @@ export class ConteoModel {
       
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, nombre')
+        .select('id, nombre, correo')
         .in('id', ids);
 
       if (error) throw error;
@@ -390,6 +390,26 @@ export class ConteoModel {
     } catch (error) {
       // Si falla (ej. tabla no existe), retornamos array vacío y no rompemos nada
       console.warn('Error al obtener nombres de usuarios:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Obtener perfiles por correo (Fallback para cuando no hay ID)
+   */
+  static async getPerfilesPorCorreo(correos) {
+    try {
+      if (!correos || correos.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, nombre, correo')
+        .in('correo', correos);
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.warn('Error al obtener perfiles por correo:', error.message);
       return [];
     }
   }

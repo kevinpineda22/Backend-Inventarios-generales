@@ -23,10 +23,20 @@ export const generateInventoryReport = async (params) => {
       throw new Error('No hay datos suficientes para generar el reporte.');
     }
 
-    // 2. Obtener mapa de nombres reales (Corrección para precisión)
+    // 2. Obtener mapa de nombres reales (Estrategia Doble: ID y Correo)
     const userIds = [...new Set(conteos.map(c => c.usuario_id).filter(id => id))];
-    const profiles = await ConteoModel.getNombresUsuarios(userIds);
-    const namesMap = new Map(profiles.map(p => [p.id, p.nombre]));
+    const userEmails = [...new Set(conteos.map(c => c.correo_empleado).filter(e => e))];
+
+    const [profilesById, profilesByEmail] = await Promise.all([
+      ConteoModel.getNombresUsuarios(userIds),
+      ConteoModel.getPerfilesPorCorreo(userEmails)
+    ]);
+
+    const namesMap = new Map();
+    // Prioridad 1: ID
+    profilesById.forEach(p => namesMap.set(p.id, p.nombre));
+    // Prioridad 2: Correo (para mapear correo -> nombre si falla ID)
+    profilesByEmail.forEach(p => namesMap.set(p.correo, p.nombre));
 
     // 3. Calcular estadísticas mejoradas
     const stats = calculateStats(conteos, namesMap);
@@ -34,28 +44,31 @@ export const generateInventoryReport = async (params) => {
 
     // 4. Construir Prompt
     const prompt = `
-      Actúa como un experto consultor de logística e inventarios. Analiza los siguientes datos reales de un inventario físico realizado en la bodega "${bodegaNombre}".
+      Actúa como un Auditor Senior de Inventarios y Logística. Analiza los siguientes datos del inventario en bodega "${bodegaNombre}".
       
-      DATOS DEL INVENTARIO (Precisión Alta):
-      - Total de Sesiones de Conteo: ${stats.totalConteos}
-      - Referencias (SKUs) Auditadas: ${stats.totalItems}
-      - Ubicaciones Únicas Intervenidas: ${stats.ubicacionesUnicas}
-      - Ubicaciones Finalizadas (Cerradas): ${stats.ubicacionesFinalizadas}
-      - Porcentaje de Cierre (Sobre lo iniciado): ${stats.avance}%
-      - Velocidad Promedio del Equipo: ${stats.velocidadPromedio} items/minuto
-      - Cantidad de Reconteos (Discrepancias Graves): ${stats.reconteos}
-      - Tasa de Conflicto (Reconteos / Ubicaciones): ${stats.tasaError}%
-      - Top 3 Operadores más activos: ${stats.topUsers.map(u => `${u.name} (${u.items} referencias)`).join(', ')}
-      - Zonas con más actividad: ${stats.topZonas.join(', ')}
+      DATOS CLAVE:
+      - 📅 Sesiones: ${stats.totalConteos}
+      - 📦 Referencias (SKUs): ${stats.totalItems}
+      - 📍 Ubicaciones: ${stats.ubicacionesUnicas} (Finalizadas: ${stats.ubicacionesFinalizadas})
+      - 📈 Avance Real: ${stats.avance}%
+      
+      RENDIMIENTO:
+      - ⚡ Velocidad: ${stats.velocidadPromedio} items/min (${stats.itemsPorHora} items/hora)
+      - 🏆 Top Operadores: ${stats.topUsers.map(u => `${u.name} (${u.items})`).join(', ')}
+      
+      CALIDAD:
+      - ❌ Discrepancias (Reconteos): ${stats.reconteos}
+      - 📉 Tasa de Conflicto: ${stats.tasaError}%
+      - 🔥 Zonas Críticas (Más errores): ${stats.topErrorZonas.join(', ') || 'Ninguna'}
 
-      Genera un reporte ejecutivo profesional en formato Markdown que incluya:
-      1. 📊 **Resumen Ejecutivo**: Visión general del estado del inventario.
-      2. 🚀 **Análisis de Productividad**: Evaluación del rendimiento del equipo. ¿La velocidad de ${stats.velocidadPromedio} items/min es adecuada? Menciona a los líderes.
-      3. ⚠️ **Hallazgos Críticos**: Análisis de la tasa de conflicto. ¿El proceso es fluido o hay muchas discrepancias?
-      4. 💡 **Recomendaciones Estratégicas**: 3 acciones concretas para mejorar la eficiencia.
-      5. 🏁 **Conclusión**: Veredicto final sobre la calidad y avance del inventario.
+      Genera un reporte Markdown estructurado así:
+      1. **Resumen Ejecutivo**: Estado general y veredicto de salud del inventario.
+      2. **Productividad y Ritmo**: Analiza la velocidad (${stats.itemsPorHora} items/h). ¿Es eficiente? (Estándar: >600 items/h es alto, <100 es bajo). Felicita a los top performers por nombre.
+      3. **Calidad y Precisión**: Analiza la tasa de error (${stats.tasaError}%). Si hay zonas críticas, menciónalas.
+      4. **Recomendaciones de Impacto**: 3 acciones específicas (ej: reentrenamiento, revisión de zonas X).
+      5. **Conclusión**: Cierre profesional.
 
-      Usa un tono profesional, objetivo y constructivo. Usa emojis para resaltar puntos clave.
+      Usa nombres reales. Sé claro y directo.
     `;
 
     // 5. Llamar a OpenAI
@@ -74,7 +87,7 @@ export const generateInventoryReport = async (params) => {
 };
 
 const calculateStats = (data, namesMap) => {
-  if (!data || data.length === 0) return { totalConteos: 0, totalItems: 0, avance: 0, reconteos: 0, tasaError: 0, topUsers: [], topZonas: [] };
+  if (!data || data.length === 0) return { totalConteos: 0, totalItems: 0, avance: 0, reconteos: 0, tasaError: 0, topUsers: [], topZonas: [], topErrorZonas: [], itemsPorHora: 0 };
 
   const totalConteos = data.length;
   
@@ -94,11 +107,9 @@ const calculateStats = (data, namesMap) => {
   // --- NUEVAS MÉTRICAS AVANZADAS ---
 
   // 1. Clasificación de Diferencias (Solo en reconteos/ajustes)
-  // Asumimos que si es tipo 3 (Reconteo) hubo diferencia. 
-  // Idealmente necesitaríamos el valor de la diferencia, pero por ahora contaremos la frecuencia.
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
 
-  // 2. Velocidad Promedio (Items / Minuto)
+  // 2. Velocidad Promedio (Items / Minuto y Hora)
   let totalMinutos = 0;
   let conteosConTiempo = 0;
 
@@ -109,7 +120,7 @@ const calculateStats = (data, namesMap) => {
       const diffMinutos = (fin - inicio) / 1000 / 60;
       
       // Filtramos tiempos absurdos (ej: < 0.1 min o > 4 horas por un conteo simple)
-      if (diffMinutos > 0.5 && diffMinutos < 240) {
+      if (diffMinutos > 0.1 && diffMinutos < 240) {
         totalMinutos += diffMinutos;
         conteosConTiempo++;
       }
@@ -120,10 +131,16 @@ const calculateStats = (data, namesMap) => {
     ? (totalItems / totalMinutos).toFixed(1) 
     : "N/A";
 
-  // 3. Top Users con Nombres Reales
+  const itemsPorHora = conteosConTiempo > 0 && totalMinutos > 0
+    ? ((totalItems / totalMinutos) * 60).toFixed(0)
+    : "0";
+
+  // 3. Top Users con Nombres Reales (Búsqueda Dual)
   const userMap = {};
   data.forEach(c => {
-    let name = namesMap.get(c.usuario_id);
+    // Intentar buscar por ID, luego por Correo
+    let name = namesMap.get(c.usuario_id) || namesMap.get(c.correo_empleado);
+    
     if (!name) {
        name = c.correo_empleado?.split('@')[0] || c.usuario_id || 'Desconocido';
     }
@@ -137,7 +154,7 @@ const calculateStats = (data, namesMap) => {
     .slice(0, 3)
     .map(([name, items]) => ({ name, items }));
 
-  // Top Zonas
+  // Top Zonas (Actividad)
   const zonaMap = {};
   data.forEach(c => {
     const zonaNombre = c.ubicacion?.pasillo?.zona?.nombre || c.zona || 'Desconocida';
@@ -145,6 +162,18 @@ const calculateStats = (data, namesMap) => {
     zonaMap[zonaNombre]++;
   });
   const topZonas = Object.entries(zonaMap)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 3)
+    .map(([name]) => name);
+
+  // Top Zonas de Error (Donde hubo reconteos)
+  const errorZonaMap = {};
+  data.filter(c => c.tipo_conteo === 3).forEach(c => {
+    const zonaNombre = c.ubicacion?.pasillo?.zona?.nombre || 'Desconocida';
+    if (!errorZonaMap[zonaNombre]) errorZonaMap[zonaNombre] = 0;
+    errorZonaMap[zonaNombre]++;
+  });
+  const topErrorZonas = Object.entries(errorZonaMap)
     .sort(([,a], [,b]) => b - a)
     .slice(0, 3)
     .map(([name]) => name);
@@ -157,9 +186,11 @@ const calculateStats = (data, namesMap) => {
     avance: ubicacionesUnicas > 0 ? ((ubicacionesFinalizadas / ubicacionesUnicas) * 100).toFixed(1) : 0,
     reconteos,
     tasaError: ubicacionesUnicas > 0 ? ((reconteos / ubicacionesUnicas) * 100).toFixed(1) : 0,
-    velocidadPromedio, // Nueva métrica
+    velocidadPromedio,
+    itemsPorHora,
     topUsers,
-    topZonas
+    topZonas,
+    topErrorZonas
   };
 };
 
