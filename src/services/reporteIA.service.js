@@ -5,8 +5,16 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const generateInventoryReport = async (filters) => {
+export const generateInventoryReport = async (params) => {
   try {
+    // Si se proporcionan datos de análisis pre-calculados (ej: reporte de operador desde frontend)
+    if (params.reportType === 'operator' && params.analysisData) {
+      return await generateOperatorReport(params.analysisData);
+    }
+
+    // Flujo normal: Reporte de Bodega (Backend fetch)
+    const filters = params; // Asumimos que params son los filtros si no es un reporte especial
+    
     // 1. Obtener datos de la base de datos
     const conteos = await ConteoModel.findAll(filters);
 
@@ -122,4 +130,37 @@ const calculateStats = (data) => {
     topUsers,
     topZonas
   };
+};
+
+const generateOperatorReport = async (data) => {
+  const { operatorName, totalLocations, accuracyRate, errorLocations, totalItemsCounted } = data;
+
+  const prompt = `
+    Actúa como un supervisor de auditoría de inventario. Analiza el desempeño del operador "${operatorName}" basado en los siguientes datos:
+
+    DATOS DEL OPERADOR:
+    - Ubicaciones Contadas: ${totalLocations}
+    - Total Items Contados: ${totalItemsCounted}
+    - Tasa de Precisión (Coincidencia con Conteo Final): ${accuracyRate}%
+    - Cantidad de Errores Detectados: ${errorLocations.length}
+
+    DETALLE DE ERRORES (Muestra de discrepancias):
+    ${errorLocations.slice(0, 5).map(e => `- En ${e.location}: Contó ${e.counted}, Real era ${e.real} (Item: ${e.item})`).join('\n')}
+
+    Genera un reporte de retroalimentación constructiva en Markdown que incluya:
+    1. 👤 **Evaluación de Desempeño**: Resumen de su fiabilidad y velocidad.
+    2. 🎯 **Análisis de Precisión**: ¿Es confiable? ¿Tiende a contar de más o de menos?
+    3. 🛑 **Áreas de Mejora**: Basado en los errores, ¿qué debe corregir? (Atención al detalle, conteo de packs, etc).
+    4. ✅ **Conclusión**: ¿Se recomienda mantenerlo en conteos críticos?
+
+    Sé directo, profesional y motivador pero firme con los errores.
+  `;
+
+  const completion = await openai.chat.completions.create({
+    messages: [{ role: "user", content: prompt }],
+    model: "gpt-3.5-turbo",
+    temperature: 0.7,
+  });
+
+  return completion.choices[0].message.content;
 };
