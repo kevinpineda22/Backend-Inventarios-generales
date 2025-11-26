@@ -23,21 +23,26 @@ export const generateInventoryReport = async (params) => {
       throw new Error('No hay datos suficientes para generar el reporte.');
     }
 
-    // 2. Obtener mapa de nombres reales (Estrategia Doble: ID y Correo)
-    const userIds = [...new Set(conteos.map(c => c.usuario_id).filter(id => id))];
-    // Usamos tanto correo_empleado como usuario_nombre (algunos registros usan uno u otro)
-    const userEmails = [...new Set(conteos.map(c => c.correo_empleado || c.usuario_nombre).filter(e => e))];
-
-    const [profilesById, profilesByEmail] = await Promise.all([
-      ConteoModel.getNombresUsuarios(userIds),
-      ConteoModel.getPerfilesPorCorreo(userEmails)
-    ]);
-
+    // 2. Obtener mapa de nombres reales (Estrategia Robusta: Cargar todos los perfiles)
+    // Cargamos todos los perfiles para poder hacer matching flexible (por ID, correo exacto, o usuario del correo)
+    const { data: allProfiles } = await supabase.from('profiles').select('id, nombre, correo');
+    
     const namesMap = new Map();
-    // Prioridad 1: ID
-    profilesById.forEach(p => namesMap.set(p.id, p.nombre));
-    // Prioridad 2: Correo (para mapear correo -> nombre si falla ID)
-    profilesByEmail.forEach(p => namesMap.set(p.correo, p.nombre));
+    if (allProfiles) {
+      allProfiles.forEach(p => {
+        if (p.nombre) {
+          // Mapa por ID
+          namesMap.set(p.id, p.nombre);
+          // Mapa por Correo
+          if (p.correo) {
+            namesMap.set(p.correo.toLowerCase(), p.nombre); // Normalizar a minúsculas
+            // Mapa por "Username" (parte antes del @) para coincidir con logins cortos
+            const username = p.correo.split('@')[0].toLowerCase();
+            namesMap.set(username, p.nombre);
+          }
+        }
+      });
+    }
 
     // 3. Calcular estadísticas mejoradas
     const stats = calculateStats(conteos, namesMap);
@@ -58,19 +63,22 @@ export const generateInventoryReport = async (params) => {
       - ⏱️ Nota: Se han excluido sesiones inactivas o "zombies" para este cálculo.
       - 🏆 Top Operadores: ${stats.topUsers.map(u => `${u.name} (${u.items})`).join(', ')}
       
-      CALIDAD:
-      - ❌ Discrepancias (Reconteos): ${stats.reconteos}
+      CALIDAD Y DISCREPANCIAS:
+      - ❌ Total Discrepancias (Reconteos): ${stats.reconteos}
       - 📉 Tasa de Conflicto: ${stats.tasaError}%
       - 🔥 Zonas Críticas (Más errores): ${stats.topErrorZonas.join(', ') || 'Ninguna'}
+      
+      📍 DETALLE EXACTO DE UBICACIONES CON CONFLICTO (Donde se requirió reconteo):
+      ${stats.ubicacionesConflicto.length > 0 ? stats.ubicacionesConflicto.join('\n') : 'No se registraron conflictos.'}
 
       Genera un reporte Markdown estructurado así:
       1. **Resumen Ejecutivo**: Estado general y veredicto de salud del inventario.
       2. **Productividad y Ritmo**: Analiza la velocidad (${stats.itemsPorHora} items/h). 
          - Benchmark: >600 items/h (Alto), 300-600 (Medio), <300 (Bajo/Requiere Atención).
-         - Si es bajo, sugiere revisar si hay pausas no registradas o problemas con el escáner.
          - Felicita a los top performers por nombre.
-      3. **Calidad y Precisión**: Analiza la tasa de error (${stats.tasaError}%). Si hay zonas críticas, menciónalas.
-      4. **Recomendaciones de Impacto**: 3 acciones específicas (ej: reentrenamiento, revisión de zonas X, cierre de sesiones).
+      3. **Calidad y Precisión**: Analiza la tasa de error (${stats.tasaError}%).
+         - IMPORTANTE: Lista explícitamente las ubicaciones exactas donde hubo conflictos (Zona > Pasillo > Ubicación) mencionadas arriba, para que el supervisor sepa exactamente dónde ir.
+      4. **Recomendaciones de Impacto**: 3 acciones específicas.
       5. **Conclusión**: Cierre profesional.
 
       Usa nombres reales. Sé claro y directo.
@@ -147,14 +155,21 @@ const calculateStats = (data, namesMap) => {
   // 3. Top Users con Nombres Reales (Búsqueda Dual)
   const userMap = {};
   data.forEach(c => {
-    // Intentar buscar por ID, luego por Correo (usando ambos campos posibles)
-    let name = namesMap.get(c.usuario_id) || namesMap.get(c.correo_empleado) || namesMap.get(c.usuario_nombre);
+    // Normalizar claves de búsqueda
+    const userId = c.usuario_id;
+    const userEmail = (c.correo_empleado || '').toLowerCase();
+    const userName = (c.usuario_nombre || '').toLowerCase();
+
+    // Intentar buscar por ID, luego por Correo, luego por Username
+    let name = namesMap.get(userId) || 
+               namesMap.get(userEmail) || 
+               namesMap.get(userName);
     
     if (!name) {
        const rawName = c.usuario_nombre || c.correo_empleado || c.usuario_id || 'Desconocido';
-       // Si parece un email, lo cortamos. Si no, lo dejamos tal cual (puede ser un nombre de usuario)
+       // Si parece un email, lo cortamos. Si no, lo dejamos tal cual
        name = rawName.includes('@') ? rawName.split('@')[0] : rawName;
-       // Capitalizar primera letra para que se vea mejor
+       // Capitalizar primera letra
        name = name.charAt(0).toUpperCase() + name.slice(1);
     }
     
@@ -191,6 +206,18 @@ const calculateStats = (data, namesMap) => {
     .slice(0, 3)
     .map(([name]) => name);
 
+  // Lista detallada de ubicaciones con conflicto
+  const ubicacionesConflicto = data
+    .filter(c => c.tipo_conteo === 3)
+    .map(c => {
+       const u = c.ubicacion;
+       const zona = u?.pasillo?.zona?.nombre || c.zona || 'Zona ?';
+       const pasillo = u?.pasillo?.numero || c.pasillo || '?';
+       const ubic = u?.nombre || u?.numero || c.ubicacion || '?';
+       return `- ${zona} > Pasillo ${pasillo} > Ubicación ${ubic}`;
+    })
+    .slice(0, 20); // Top 20 conflictos para no saturar
+
   return {
     totalConteos,
     totalItems,
@@ -203,7 +230,8 @@ const calculateStats = (data, namesMap) => {
     itemsPorHora,
     topUsers,
     topZonas,
-    topErrorZonas
+    topErrorZonas,
+    ubicacionesConflicto // Nueva lista detallada
   };
 };
 
