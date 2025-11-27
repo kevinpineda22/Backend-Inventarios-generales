@@ -137,7 +137,7 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.cantidad ?? 0);
     const usuario = c.usuario_nombre || c.correo_empleado || 'Anon';
     const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Requiere Reconteo)' : 'Conteo Normal';
-    const itemsNames = c.conteo_items?.map(i => i.item?.nombre).slice(0, 2).join(', ') || 'N/A';
+    const itemsNames = c.conteo_items?.map(i => i.item?.descripcion).slice(0, 2).join(', ') || 'N/A';
     
     return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Cantidad_Registrada: ${itemsCount}, Tipo: "${tipoTexto}", Usuario: "${usuario}", Producto: "${itemsNames}" }`;
   }).join('\n');
@@ -406,7 +406,7 @@ const calculateStats = (data, namesMap) => {
        const zona = u?.pasillo?.zona?.nombre || c.zona || 'Zona ?';
        const pasillo = u?.pasillo?.numero || c.pasillo || '?';
        const ubic = u?.nombre || u?.numero || c.ubicacion || '?';
-       const items = c.conteo_items?.map(i => i.item?.nombre).filter(Boolean).join(', ') || 'Varios';
+       const items = c.conteo_items?.map(i => i.item?.descripcion).filter(Boolean).join(', ') || 'Varios';
        return `- ${zona} > Pasillo ${pasillo} > Ubicación ${ubic} (Producto: ${items})`;
     })
     .slice(0, 100); // Aumentado a 100 para incluir más detalles
