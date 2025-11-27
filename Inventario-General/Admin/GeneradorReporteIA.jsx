@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users } from 'lucide-react';
+import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './GeneradorReporteIA.css';
 import { inventarioGeneralService as inventarioService } from '../../services/inventarioGeneralService';
@@ -19,6 +19,10 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
   const [selectedBodega, setSelectedBodega] = useState('');
   const [selectedOperator, setSelectedOperator] = useState('');
   const [showJson, setShowJson] = useState(false);
+  
+  // Paginación de Anomalías
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
   
   // Mapa de usuarios (Correo -> Nombre)
   const [userMap, setUserMap] = useState({});
@@ -92,6 +96,25 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
     });
     return Array.from(ops).sort();
   }, [conteos, selectedBodega, mode]);
+
+  // Paginación Logic
+  const anomalies = reportData?.anomalias || [];
+  const totalPages = Math.ceil(anomalies.length / itemsPerPage);
+  const currentAnomalies = anomalies.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const handleExportAnomalies = () => {
+    if (!anomalies.length) return;
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + "Ubicacion,Producto,Situacion,Accion\n"
+        + anomalies.map(a => `"${a.ubicacion}","${a.producto || ''}","${a.situacion}","${a.accion}"`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "anomalias_inventario.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (!isOpen) return null;
 
@@ -402,13 +425,24 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                   {/* ANOMALIAS (GRID) */}
                   {reportData.anomalias?.length > 0 && (
                     <div className="ia-section">
-                      <h3 className="ia-section-title" style={{color: '#ef4444'}}><AlertTriangle size={18} /> Anomalías Detectadas</h3>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
+                        <h3 className="ia-section-title" style={{color: '#ef4444', margin: 0}}><AlertTriangle size={18} /> Anomalías Detectadas</h3>
+                        <button onClick={handleExportAnomalies} className="ia-btn-export" title="Descargar CSV">
+                          <Download size={16} /> Exportar
+                        </button>
+                      </div>
+                      
                       <div className="ia-card-grid">
-                        {reportData.anomalias.map((anomalia, idx) => (
+                        {currentAnomalies.map((anomalia, idx) => (
                           <div key={idx} className="ia-anomaly-card">
                             <div className="ia-anomaly-header">
                               <span>{anomalia.ubicacion}</span>
                             </div>
+                            {anomalia.producto && (
+                              <div className="ia-anomaly-product" style={{fontSize: '0.85rem', color: '#6366f1', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                <Package size={12} /> {anomalia.producto}
+                              </div>
+                            )}
                             <div className="ia-anomaly-body">
                               <strong>Situación:</strong> {anomalia.situacion}
                             </div>
@@ -418,6 +452,31 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                           </div>
                         ))}
                       </div>
+
+                      {/* Pagination Controls */}
+                      {totalPages > 1 && (
+                        <div className="ia-pagination" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '1.5rem'}}>
+                          <button 
+                            disabled={currentPage === 1} 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            className="ia-page-btn"
+                            style={{background: 'white', border: '1px solid #e2e8f0', padding: '0.5rem', borderRadius: '8px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1}}
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <span className="ia-page-info" style={{fontSize: '0.9rem', color: '#64748b'}}>
+                            Página {currentPage} de {totalPages}
+                          </span>
+                          <button 
+                            disabled={currentPage === totalPages} 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            className="ia-page-btn"
+                            style={{background: 'white', border: '1px solid #e2e8f0', padding: '0.5rem', borderRadius: '8px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1}}
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 

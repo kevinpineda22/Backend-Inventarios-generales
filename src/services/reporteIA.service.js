@@ -134,11 +134,12 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     const pasillo = c.ubicacion?.pasillo?.numero ?? c.pasillo ?? 'N/A';
     const zona = c.ubicacion?.pasillo?.zona?.nombre ?? c.zona ?? 'N/A';
     const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? 'N/A';
-    const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.count ?? 0);
+    const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.cantidad ?? 0);
     const usuario = c.usuario_nombre || c.correo_empleado || 'Anon';
     const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Requiere Reconteo)' : 'Conteo Normal';
+    const itemsNames = c.conteo_items?.map(i => i.item?.nombre).slice(0, 2).join(', ') || 'N/A';
     
-    return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Cantidad_Registrada: ${itemsCount}, Tipo: "${tipoTexto}", Usuario: "${usuario}" }`;
+    return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Cantidad_Registrada: ${itemsCount}, Tipo: "${tipoTexto}", Usuario: "${usuario}", Producto: "${itemsNames}" }`;
   }).join('\n');
 
   return `
@@ -187,7 +188,8 @@ Genera un objeto JSON con la siguiente estructura exacta:
       "ubicacion": "Zona > Pasillo > Ubic",
       "situacion": "Descripción...",
       "cantidad": 0,
-      "accion": "Recomendación..."
+      "accion": "Recomendación...",
+      "producto": "Nombre del producto (si disponible)"
     }
   ],
   "conclusion": "Texto breve de conclusión..."
@@ -196,8 +198,10 @@ Genera un objeto JSON con la siguiente estructura exacta:
 IMPORTANTE:
 1. En "resumenEjecutivo", explica claramente la diferencia entre "Esfuerzo Operativo" (Total de conteos/scans realizados) y "Unidades Físicas" (Cantidad real final). Si el esfuerzo es mucho mayor, explica que esto implica ineficiencia por múltiples reconteos.
 2. En "hallazgos", usa siempre el término "Reconteos" en lugar de "errores" y menciona que el objetivo es minimizarlos.
-3. En "analisisProductividad", menciona explícitamente cuántos items contó cada operador destacado (ej: "Juan (500 items)").
-4. En "anomalias", genera una tarjeta para CADA una de las ubicaciones listadas en "UBICACIONES CONFLICTIVAS DETECTADAS". No omitas ninguna. Si la lista es larga, inclúyelas todas.
+3. En "analisisProductividad", menciona explícitamente cuántos items contó cada operador destacado y si tuvieron buen nivel de acierto (ej: "Juan (500 items, 95% Acierto)").
+4. En "anomalias", genera una tarjeta para CADA una de las ubicaciones listadas en "UBICACIONES CONFLICTIVAS DETECTADAS". No omitas ninguna.
+   - Incluye el nombre del producto en el campo "producto".
+   - Si la anomalía proviene de un 3er conteo (Reconteo), NO recomiendes "hacer otro conteo". Recomienda "Revisión de Proceso", "Validar Ubicación Física" o "Auditoría de Calidad".
 5. El contenido de los campos de texto (resumenEjecutivo, analisisProductividad) debe usar formato Markdown para negritas y listas.
 6. Sé profesional y constructivo.
 `.trim();
@@ -225,14 +229,14 @@ const calculateStats = (data, namesMap) => {
 
   // 1. Stock Real vs Esfuerzo Operativo
   // Esfuerzo: Todo lo que se contó (incluyendo errores y reconteos)
-  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
+  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items.reduce((s, i) => s + (i.cantidad || 0), 0) : 0) || 0), 0);
   
   // Stock: Lo que realmente hay (Último estado válido de cada ubicación)
   const ubicacionMap = new Map();
   data.forEach(c => {
       // Si es conteo final (4) tiene prioridad absoluta. Si no, usamos el más reciente.
       const current = ubicacionMap.get(c.ubicacion_id);
-      const cantidad = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
+      const cantidad = (c.total_items || (c.conteo_items ? c.conteo_items.reduce((s, i) => s + (i.cantidad || 0), 0) : 0) || 0);
       
       if (!current) {
           ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
@@ -285,7 +289,7 @@ const calculateStats = (data, namesMap) => {
       const inicio = new Date(c.fecha_inicio);
       const fin = new Date(c.fecha_fin);
       const diffMinutos = (fin - inicio) / 1000 / 60;
-      const itemsEnConteo = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
+      const itemsEnConteo = (c.total_items || (c.conteo_items ? c.conteo_items.reduce((s, i) => s + (i.cantidad || 0), 0) : 0) || 0);
       
       // Filtramos tiempos absurdos Y sesiones "zombies" (mucho tiempo, pocos items)
       // Regla: Si duró más de 30 min y se contaron menos de 10 items, probablemente se dejó abierta.
@@ -306,8 +310,16 @@ const calculateStats = (data, namesMap) => {
     ? ((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)
     : "0";
 
-  // 4. Top Users con Nombres Reales (Búsqueda Dual)
-  const userMap = {};
+  // 4. Top Users con Nombres Reales (Búsqueda Dual) + Accuracy Check
+  const userStats = {}; // { name: { items: 0, matches: 0, comparisons: 0 } }
+  
+  // Pre-build map of Final Counts for fast lookup
+  const finalCountsMap = new Map(); // key: locationId, value: totalItems
+  data.filter(c => c.tipo_conteo === 4).forEach(c => {
+      const total = (c.total_items || (c.conteo_items ? c.conteo_items.reduce((s, i) => s + (i.cantidad || 0), 0) : 0));
+      finalCountsMap.set(c.ubicacion_id, total);
+  });
+
   data.forEach(c => {
     // Normalizar claves de búsqueda
     const userId = c.usuario_id;
@@ -327,14 +339,26 @@ const calculateStats = (data, namesMap) => {
        name = name.charAt(0).toUpperCase() + name.slice(1);
     }
     
-    if (!userMap[name]) userMap[name] = 0;
-    userMap[name] += (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 1);
+    if (!userStats[name]) userStats[name] = { items: 0, matches: 0, comparisons: 0 };
+    const countVal = (c.total_items || (c.conteo_items ? c.conteo_items.reduce((s, i) => s + (i.cantidad || 0), 0) : 0));
+    userStats[name].items += countVal;
+
+    // Accuracy Check (Only for Type 1 and 2)
+    if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && finalCountsMap.has(c.ubicacion_id)) {
+        userStats[name].comparisons++;
+        if (finalCountsMap.get(c.ubicacion_id) === countVal) {
+            userStats[name].matches++;
+        }
+    }
   });
 
-  const topUsers = Object.entries(userMap)
-    .sort(([,a], [,b]) => b - a)
+  const topUsers = Object.entries(userStats)
+    .sort(([,a], [,b]) => b.items - a.items)
     .slice(0, 3)
-    .map(([name, items]) => ({ name, items }));
+    .map(([name, s]) => {
+        const acc = s.comparisons > 0 ? ((s.matches / s.comparisons) * 100).toFixed(0) : null;
+        return { name, items: `${s.items}${acc !== null ? `, ${acc}% Acierto` : ''}` };
+    });
 
   // Top Zonas (Actividad)
   const zonaMap = {};
@@ -382,7 +406,8 @@ const calculateStats = (data, namesMap) => {
        const zona = u?.pasillo?.zona?.nombre || c.zona || 'Zona ?';
        const pasillo = u?.pasillo?.numero || c.pasillo || '?';
        const ubic = u?.nombre || u?.numero || c.ubicacion || '?';
-       return `- ${zona} > Pasillo ${pasillo} > Ubicación ${ubic}`;
+       const items = c.conteo_items?.map(i => i.item?.nombre).filter(Boolean).join(', ') || 'Varios';
+       return `- ${zona} > Pasillo ${pasillo} > Ubicación ${ubic} (Producto: ${items})`;
     })
     .slice(0, 100); // Aumentado a 100 para incluir más detalles
 
