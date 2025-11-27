@@ -88,11 +88,13 @@ export const generateInventoryReport = async (params) => {
     // 5. Llamar a OpenAI
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: "Eres un Auditor Senior de Inventarios. Genera un reporte ejecutivo en formato Markdown, profesional y claro. Usa únicamente los datos entregados. No inventes nombres ni ubicaciones." },
+        { role: "system", content: "Eres un Auditor Senior de Inventarios. Tu salida debe ser EXCLUSIVAMENTE un objeto JSON válido. No incluyas markdown ```json``` ni texto adicional antes o después." },
         { role: "user", content: prompt }
       ],
-      model: "gpt-3.5-turbo", // Puedes cambiar a gpt-4 si tienes acceso
-      temperature: 0.5, // Un poco más bajo para ser más analítico y menos creativo
+      model: "gpt-3.5-turbo",
+      temperature: 0.5,
+      max_tokens: 3000,
+      response_format: { type: "json_object" } // Forzar modo JSON si usas modelos recientes, si no, el prompt basta
     });
 
     return completion.choices[0].message.content;
@@ -156,48 +158,48 @@ MÉTRICAS GLOBALES:
 - Zonas con más Discrepancias: ${s.topZonasReconteo.join(', ') || 'Ninguna'}
 - Pasillos con más Discrepancias: ${s.topPasillosReconteo.join(', ') || 'Ninguno'}
 
-UBICACIONES CONFLICTIVAS DETECTADAS (Muestra):
+UBICACIONES CONFLICTIVAS DETECTADAS (Lista Completa):
 ${ubicacionesConflicto.length > 0 ? ubicacionesConflicto.join('\n') : 'Ninguna reportada.'}
 
 REGISTROS DE MUESTRA (Estructura real de datos):
 ${sampleLines || '- No hay filas de muestra -'}
 
-INSTRUCCIONES PARA EL REPORTE (Formato Markdown):
-
-1) **Resumen Ejecutivo**: Veredicto claro (Bueno / Atención / Crítico).
-   - DESTACA EN NEGRITA EL TOTAL DE UNIDADES FÍSICAS ENCONTRADAS (${s.totalUnidadesFisicas}).
-   - Explica la relación entre "Esfuerzo Operativo" y "Total Unidades Físicas". 
-     * NOTA: Si el Esfuerzo es mucho mayor (ej: el doble o triple), explica que **"Se han realizado múltiples conteos sobre los mismos productos debido a que el Conteo 1 y Conteo 2 no coincidieron"**. No uses la palabra "ineficiencia" de forma agresiva, úsala como oportunidad de mejora en la precisión inicial.
-
-2) **Hallazgos Clave**: Usa bullets.
-   - Menciona patrones de **discrepancias** (no digas "errores", di "diferencias de conteo") en zonas o pasillos.
-   - Identifica dónde se están produciendo más reconteos.
-
-3) **Acciones Inmediatas (24-72h)**: 3 a 5 acciones concretas. Formato: **Actor** -> **Acción** -> **Resultado Esperado**.
-
-4) **Análisis de Productividad**: Evalúa la velocidad (${s.itemsPorHora} items/h). ¿Es aceptable? (Benchmark: >600 Alto, <300 Bajo). Felicita a los mejores operadores.
-
-5) **Tarjetas de Anomalías**:
-   - Genera una lista de tarjetas para cada ubicación con discrepancia detectada en la muestra.
-   - Usa el formato de cita (>) para cada tarjeta.
-   - Formato dentro de la cita:
-     > **Ubicación:** [Zona > Pasillo > Ubicación]
-     > **Situación:** [Describe que hubo una diferencia entre conteos]
-     > **Cantidad Reportada en Último Evento:** [Cantidad] (Si es 0, indica "Posible ubicación vacía o conteo nulo")
-     > **Acción:** [Acción recomendada]
-   
-   - Ejemplo:
-     > **Ubicación:** Bodega 1 > Pasillo A > 10
-     > **Situación:** Discrepancia entre operadores (C1 vs C2 no coincidieron)
-     > **Cantidad Reportada en Último Evento:** 5
-     > **Acción:** Auditar ubicación para confirmar real
-
-6) **Conclusión Técnica**: Breve cierre sobre la confiabilidad de los datos y la necesidad de reducir la tasa de reconteos.
+INSTRUCCIONES DE SALIDA (FORMATO JSON):
+Genera un objeto JSON con la siguiente estructura exacta:
+{
+  "resumenEjecutivo": "Texto en markdown del resumen ejecutivo...",
+  "kpis": {
+    "totalUnidades": ${s.totalUnidadesFisicas},
+    "esfuerzoOperativo": ${s.esfuerzoTotalItems},
+    "tasaDiscrepancia": ${s.tasaDiscrepancia},
+    "velocidad": ${s.itemsPorHora}
+  },
+  "analisisProductividad": "Texto en markdown del análisis de productividad...",
+  "hallazgos": [
+    "Hallazgo 1...",
+    "Hallazgo 2..."
+  ],
+  "acciones": [
+    { "actor": "Nombre", "accion": "Acción...", "impacto": "Impacto esperado..." }
+  ],
+  "anomalias": [
+    {
+      "ubicacion": "Zona > Pasillo > Ubic",
+      "situacion": "Descripción...",
+      "cantidad": 0,
+      "accion": "Recomendación..."
+    }
+  ],
+  "conclusion": "Texto breve de conclusión..."
+}
 
 IMPORTANTE:
-- Sé profesional, constructivo y directo.
-- Evita la palabra "Error" a menos que sea crítico. Prefiere "Discrepancia", "Diferencia" o "Reconteo".
-- Usa los nombres reales de los operadores.
+1. En "resumenEjecutivo", explica claramente la diferencia entre "Esfuerzo Operativo" (Total de conteos/scans realizados) y "Unidades Físicas" (Cantidad real final). Si el esfuerzo es mucho mayor, explica que esto implica ineficiencia por múltiples reconteos.
+2. En "hallazgos", usa siempre el término "Reconteos" en lugar de "errores" y menciona que el objetivo es minimizarlos.
+3. En "analisisProductividad", menciona explícitamente cuántos items contó cada operador destacado (ej: "Juan (500 items)").
+4. En "anomalias", genera una tarjeta para CADA una de las ubicaciones listadas en "UBICACIONES CONFLICTIVAS DETECTADAS". No omitas ninguna. Si la lista es larga, inclúyelas todas.
+5. El contenido de los campos de texto (resumenEjecutivo, analisisProductividad) debe usar formato Markdown para negritas y listas.
+6. Sé profesional y constructivo.
 `.trim();
 };
 
@@ -382,7 +384,7 @@ const calculateStats = (data, namesMap) => {
        const ubic = u?.nombre || u?.numero || c.ubicacion || '?';
        return `- ${zona} > Pasillo ${pasillo} > Ubicación ${ubic}`;
     })
-    .slice(0, 20); // Top 20 conflictos para no saturar
+    .slice(0, 100); // Aumentado a 100 para incluir más detalles
 
   return {
     totalConteos,

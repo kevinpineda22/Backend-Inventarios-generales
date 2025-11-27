@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Sparkles, X, Bot, User, Warehouse, BarChart3 } from 'lucide-react';
+import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './GeneradorReporteIA.css';
 import { inventarioGeneralService as inventarioService } from '../../services/inventarioGeneralService';
 import { supabase } from '../../supabaseClient';
 
 const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bodegas: initialBodegas = [] }) => {
-  const [report, setReport] = useState('');
+  const [reportData, setReportData] = useState(null); // Puede ser string (markdown) o objeto (JSON)
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState('input'); // 'input' | 'loading' | 'result'
   const [mode, setMode] = useState('bodega'); // 'bodega' | 'operador'
@@ -209,7 +209,15 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
         });
       }
 
-      setReport(reportContent);
+      // Intentar parsear JSON para el nuevo dashboard visual
+      try {
+        const parsed = JSON.parse(reportContent);
+        setReportData(parsed);
+      } catch (e) {
+        // Si falla (o es el reporte de operador que aun es texto plano), usar como string
+        setReportData(reportContent);
+      }
+      
       setStep('result');
 
     } catch (error) {
@@ -355,7 +363,94 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
 
           {step === 'result' && (
             <div className="ia-markdown-content">
-              <ReactMarkdown>{report}</ReactMarkdown>
+              {typeof reportData === 'string' ? (
+                <ReactMarkdown>{reportData}</ReactMarkdown>
+              ) : (
+                <div className="ia-dashboard">
+                  {/* KPI GRID */}
+                  <div className="ia-kpi-grid">
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><Package size={14} /> Total Unidades</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.totalUnidades}</span>
+                      <span className="ia-kpi-sub">Inventario Físico Real</span>
+                    </div>
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><TrendingUp size={14} /> Esfuerzo Operativo</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.esfuerzoOperativo}</span>
+                      <span className="ia-kpi-sub">Items contados (incl. reconteos)</span>
+                    </div>
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><AlertTriangle size={14} /> Tasa de Reconteos</span>
+                      <span className="ia-kpi-value" style={{color: reportData.kpis?.tasaDiscrepancia > 10 ? '#ef4444' : '#10b981'}}>
+                        {reportData.kpis?.tasaDiscrepancia}%
+                      </span>
+                      <span className="ia-kpi-sub">Ubicaciones con diferencias</span>
+                    </div>
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><Clock size={14} /> Velocidad</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.velocidad}</span>
+                      <span className="ia-kpi-sub">Items / Hora</span>
+                    </div>
+                  </div>
+
+                  {/* RESUMEN EJECUTIVO */}
+                  <div className="ia-section">
+                    <h3 className="ia-section-title"><Sparkles size={18} /> Resumen Ejecutivo</h3>
+                    <ReactMarkdown>{reportData.resumenEjecutivo}</ReactMarkdown>
+                  </div>
+
+                  {/* ANOMALIAS (GRID) */}
+                  {reportData.anomalias?.length > 0 && (
+                    <div className="ia-section">
+                      <h3 className="ia-section-title" style={{color: '#ef4444'}}><AlertTriangle size={18} /> Anomalías Detectadas</h3>
+                      <div className="ia-card-grid">
+                        {reportData.anomalias.map((anomalia, idx) => (
+                          <div key={idx} className="ia-anomaly-card">
+                            <div className="ia-anomaly-header">
+                              <span>{anomalia.ubicacion}</span>
+                            </div>
+                            <div className="ia-anomaly-body">
+                              <strong>Situación:</strong> {anomalia.situacion}
+                            </div>
+                            <div className="ia-anomaly-action">
+                              Recomendación: {anomalia.accion}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ACCIONES (LIST) */}
+                  {reportData.acciones?.length > 0 && (
+                    <div className="ia-section">
+                      <h3 className="ia-section-title" style={{color: '#10b981'}}><CheckCircle size={18} /> Plan de Acción Inmediato</h3>
+                      <div className="ia-action-list">
+                        {reportData.acciones.map((accion, idx) => (
+                          <div key={idx} className="ia-action-item">
+                            <div className="ia-action-actor">{accion.actor}</div>
+                            <div className="ia-action-desc">{accion.accion}</div>
+                            <div className="ia-action-impact">Impacto: {accion.impacto}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PRODUCTIVIDAD */}
+                  <div className="ia-section">
+                    <h3 className="ia-section-title"><Users size={18} /> Análisis de Productividad</h3>
+                    <ReactMarkdown>{reportData.analisisProductividad}</ReactMarkdown>
+                  </div>
+                  
+                  {/* CONCLUSION */}
+                  <div className="ia-section" style={{marginTop: '1rem', padding: '1rem', background: '#f1f5f9', borderRadius: '8px'}}>
+                    <strong>Conclusión Técnica:</strong> {reportData.conclusion}
+                  </div>
+
+                </div>
+              )}
+
               <div style={{marginTop: '2rem', textAlign: 'center'}}>
                 <button 
                   className="ia-btn-generate" 
