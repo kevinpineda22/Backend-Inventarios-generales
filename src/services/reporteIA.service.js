@@ -108,7 +108,7 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
   // Normaliza campos de stats
   const s = {
     totalConteos: stats.totalConteos ?? 0,
-    stockEstimadoItems: stats.stockEstimadoItems ?? 0,
+    stockEstimadoItems: stats.stockEstimadoItems ?? 0, // Total Unidades Físicas
     esfuerzoTotalItems: stats.esfuerzoTotalItems ?? 0,
     ubicacionesUnicas: stats.ubicacionesUnicas ?? 0,
     ubicacionesFinalizadas: stats.ubicacionesFinalizadas ?? 0,
@@ -144,7 +144,7 @@ A continuación recibes métricas resumidas y una muestra de registros reales.
 
 MÉTRICAS GLOBALES:
 - Sesiones Totales: ${s.totalConteos}
-- Stock Estimado (items únicos reales): ${s.stockEstimadoItems}
+- 📦 TOTAL UNIDADES FÍSICAS (Stock Real Estimado): ${s.stockEstimadoItems}
 - Esfuerzo Operativo (total items contados): ${s.esfuerzoTotalItems}
 - Ubicaciones Únicas: ${s.ubicacionesUnicas} (Finalizadas: ${s.ubicacionesFinalizadas})
 - Avance Global: ${s.avance} %
@@ -163,11 +163,21 @@ ${sampleLines || '- No hay filas de muestra -'}
 
 INSTRUCCIONES PARA EL REPORTE (Formato Markdown):
 
-1) **Resumen Ejecutivo**: Veredicto claro (Bueno / Atención / Crítico). Compara el "Esfuerzo Operativo" vs "Stock Estimado". Si el esfuerzo es mucho mayor, explica que hay ineficiencia por reconteos.
+1) **Resumen Ejecutivo**: Veredicto claro (Bueno / Atención / Crítico).
+   - DESTACA EN NEGRITA EL TOTAL DE UNIDADES FÍSICAS ENCONTRADAS (${s.stockEstimadoItems}).
+   - Compara el "Esfuerzo Operativo" vs "Stock Estimado". Si el esfuerzo es mucho mayor, explica que hay ineficiencia por reconteos.
+
 2) **Hallazgos Clave**: Usa bullets. Menciona patrones de error en zonas o pasillos específicos basándote en las métricas.
+
 3) **Acciones Inmediatas (24-72h)**: 3 a 5 acciones concretas. Formato: **Actor** -> **Acción** -> **Resultado Esperado**.
+
 4) **Análisis de Productividad**: Evalúa la velocidad (${s.itemsPorHora} items/h). ¿Es aceptable? (Benchmark: >600 Alto, <300 Bajo). Felicita a los mejores operadores.
-5) **Tabla de Anomalías**: Crea una tabla Markdown con las ubicaciones conflictivas mencionadas, sugiriendo una acción rápida para cada una (ej: "Auditar", "Aprobar").
+
+5) **Tabla de Anomalías**: Crea una tabla Markdown estándar.
+   - Columnas: | Ubicación | Problema Detectado | Acción Recomendada |
+   - Asegúrate de usar saltos de línea correctos después de cada fila.
+   - Incluye las ubicaciones conflictivas mencionadas.
+
 6) **Conclusión Técnica**: Breve cierre sobre la confiabilidad de los datos.
 
 IMPORTANTE:
@@ -225,7 +235,31 @@ const calculateStats = (data, namesMap) => {
       }
   });
   
+  // Suma total de items (unidades físicas)
   const stockEstimadoItems = Array.from(ubicacionMap.values()).reduce((acc, val) => acc + val.cantidad, 0);
+
+  // Suma total de productos únicos (SKUs distintos contados)
+  // Nota: Esto requiere que 'data' traiga información de items. 
+  // Si 'data' es solo conteos, necesitamos iterar sobre los items dentro de cada conteo si estuvieran disponibles.
+  // Como 'findAll' trae 'conteo_items(count)', solo sabemos la cantidad de filas (SKUs distintos por conteo).
+  // Para un estimado rápido de "Referencias Únicas", sumamos el 'count' de conteo_items de los conteos válidos.
+  const referenciasUnicasEstimadas = Array.from(ubicacionMap.values()).reduce((acc, val) => {
+      // Aquí asumimos que 'cantidad' es unidades totales. 
+      // Si queremos SKUs distintos, necesitamos acceder al conteo original.
+      // Como simplificación, usaremos el dato que ya tenemos o lo dejaremos como métrica separada si el backend lo soporta.
+      return acc; // Placeholder si no tenemos el dato exacto de SKUs únicos globales
+  }, 0);
+  
+  // Mejor aproximación con los datos actuales:
+  // Si queremos saber "Total Unidades Físicas" -> stockEstimadoItems (Ya lo tenemos)
+  // Si queremos saber "Total Referencias (SKUs)" -> Necesitamos extraer todos los item_id distintos.
+  
+  // Vamos a recolectar todos los items de los conteos seleccionados como "válidos" en el mapa
+  // (Esto es costoso si no tenemos los items cargados, pero intentaremos con lo que hay)
+  
+  // Para el reporte solicitado "cuantos productos hay en total", se suele referir a UNIDADES FÍSICAS.
+  // Ya tenemos 'stockEstimadoItems' que suma las cantidades.
+  // Vamos a renombrarlo para que sea más claro en el prompt.
 
   // 2. Clasificación de Diferencias (Solo en reconteos/ajustes)
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
