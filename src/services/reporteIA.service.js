@@ -32,7 +32,7 @@ export const generateInventoryReport = async (params) => {
       // A. Intentar tabla 'profiles' (Public)
       try {
         const dbClient = supabaseAdmin || supabase;
-        const { data } = await dbClient.from('profiles').select('id, nombre, correo');
+        const { data } = await dbClient.from('profiles').select('user_id, nombre, correo');
         if (data && data.length > 0) allProfiles = data;
       } catch (err) {
         console.warn("Error cargando perfiles en backend (tabla profiles):", err.message);
@@ -59,8 +59,9 @@ export const generateInventoryReport = async (params) => {
     if (allProfiles && allProfiles.length > 0) {
       allProfiles.forEach(p => {
         if (p.nombre) {
-          // Mapa por ID
-          if (p.id) namesMap.set(p.id, p.nombre);
+          // Mapa por ID (Soporte para user_id o id)
+          const uid = p.user_id || p.id;
+          if (uid) namesMap.set(uid, p.nombre);
           // Mapa por Correo
           if (p.correo) {
             namesMap.set(p.correo.toLowerCase(), p.nombre); // Normalizar a minúsculas
