@@ -88,7 +88,7 @@ export const generateInventoryReport = async (params) => {
     // 5. Llamar a OpenAI
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: "Eres un Auditor Senior de Inventarios y Analista de Datos experto en logística. Tu objetivo es encontrar ineficiencias y prevenir pérdidas." },
+        { role: "system", content: "Eres un Auditor Senior de Inventarios. RESPONDE en 2 partes: (A) Markdown legible para supervisores y (B) un JSON válido (solo JSON) al final. Usa únicamente los datos entregados. No inventes nombres ni ubicaciones." },
         { role: "user", content: prompt }
       ],
       model: "gpt-3.5-turbo", // Puedes cambiar a gpt-4 si tienes acceso
@@ -108,7 +108,7 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
   // Normaliza campos de stats
   const s = {
     totalConteos: stats.totalConteos ?? 0,
-    stockEstimadoItems: stats.stockEstimadoItems ?? 0, // Total Unidades Físicas
+    totalUnidadesFisicas: stats.totalUnidadesFisicas ?? 0, // Total Unidades Físicas
     esfuerzoTotalItems: stats.esfuerzoTotalItems ?? 0,
     ubicacionesUnicas: stats.ubicacionesUnicas ?? 0,
     ubicacionesFinalizadas: stats.ubicacionesFinalizadas ?? 0,
@@ -144,7 +144,7 @@ A continuación recibes métricas resumidas y una muestra de registros reales.
 
 MÉTRICAS GLOBALES:
 - Sesiones Totales: ${s.totalConteos}
-- 📦 TOTAL UNIDADES FÍSICAS (Stock Real Estimado): ${s.stockEstimadoItems}
+- 📦 TOTAL UNIDADES FÍSICAS (Inventario Real): ${s.totalUnidadesFisicas}
 - Esfuerzo Operativo (total items contados): ${s.esfuerzoTotalItems}
 - Ubicaciones Únicas: ${s.ubicacionesUnicas} (Finalizadas: ${s.ubicacionesFinalizadas})
 - Avance Global: ${s.avance} %
@@ -164,8 +164,8 @@ ${sampleLines || '- No hay filas de muestra -'}
 INSTRUCCIONES PARA EL REPORTE (Formato Markdown):
 
 1) **Resumen Ejecutivo**: Veredicto claro (Bueno / Atención / Crítico).
-   - DESTACA EN NEGRITA EL TOTAL DE UNIDADES FÍSICAS ENCONTRADAS (${s.stockEstimadoItems}).
-   - Compara el "Esfuerzo Operativo" vs "Stock Estimado". Si el esfuerzo es mucho mayor, explica que hay ineficiencia por reconteos.
+   - DESTACA EN NEGRITA EL TOTAL DE UNIDADES FÍSICAS ENCONTRADAS (${s.totalUnidadesFisicas}).
+   - Compara el "Esfuerzo Operativo" vs "Total Unidades Físicas". Si el esfuerzo es mucho mayor, explica que hay ineficiencia por reconteos.
 
 2) **Hallazgos Clave**: Usa bullets. Menciona patrones de error en zonas o pasillos específicos basándote en las métricas.
 
@@ -236,7 +236,7 @@ const calculateStats = (data, namesMap) => {
   });
   
   // Suma total de items (unidades físicas)
-  const stockEstimadoItems = Array.from(ubicacionMap.values()).reduce((acc, val) => acc + val.cantidad, 0);
+  const totalUnidadesFisicas = Array.from(ubicacionMap.values()).reduce((acc, val) => acc + val.cantidad, 0);
 
   // Suma total de productos únicos (SKUs distintos contados)
   // Nota: Esto requiere que 'data' traiga información de items. 
@@ -257,10 +257,6 @@ const calculateStats = (data, namesMap) => {
   // Vamos a recolectar todos los items de los conteos seleccionados como "válidos" en el mapa
   // (Esto es costoso si no tenemos los items cargados, pero intentaremos con lo que hay)
   
-  // Para el reporte solicitado "cuantos productos hay en total", se suele referir a UNIDADES FÍSICAS.
-  // Ya tenemos 'stockEstimadoItems' que suma las cantidades.
-  // Vamos a renombrarlo para que sea más claro en el prompt.
-
   // 2. Clasificación de Diferencias (Solo en reconteos/ajustes)
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
 
@@ -376,7 +372,7 @@ const calculateStats = (data, namesMap) => {
 
   return {
     totalConteos,
-    stockEstimadoItems,
+    totalUnidadesFisicas,
     esfuerzoTotalItems,
     ubicacionesUnicas,
     ubicacionesFinalizadas,
