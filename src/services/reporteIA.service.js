@@ -173,17 +173,26 @@ INSTRUCCIONES PARA EL REPORTE (Formato Markdown):
 
 4) **Análisis de Productividad**: Evalúa la velocidad (${s.itemsPorHora} items/h). ¿Es aceptable? (Benchmark: >600 Alto, <300 Bajo). Felicita a los mejores operadores.
 
-5) **Tabla de Anomalías**: Crea una tabla Markdown estándar.
-   - Columnas: | Ubicación | Problema Detectado | Acción Recomendada |
-   - Asegúrate de usar saltos de línea correctos después de cada fila.
-   - Incluye las ubicaciones conflictivas mencionadas.
+5) **Tarjetas de Anomalías**:
+   - En lugar de una tabla, genera una lista de tarjetas para cada anomalía detectada.
+   - Usa el formato de cita (>) para cada tarjeta.
+   - Formato dentro de la cita:
+     > **Ubicación:** [Zona > Pasillo > Ubicación]
+     > **Problema:** [Descripción breve]
+     > **Acción:** [Acción recomendada]
+   
+   - Ejemplo:
+     > **Ubicación:** Bodega 1 > Pasillo A > 10
+     > **Problema:** Diferencia de conteo recurrente (-5 items)
+     > **Acción:** Auditar ubicación completa
 
 6) **Conclusión Técnica**: Breve cierre sobre la confiabilidad de los datos.
 
 IMPORTANTE:
 - Sé profesional y directo.
 - Si la tasa de error es > 10%, usa un tono de alerta.
-- Usa los nombres reales de los operadores y las ubicaciones exactas.
+- Usa los nombres reales de los operadores.
+- Separa claramente la parte (A) del (B).
 `.trim();
 };
 

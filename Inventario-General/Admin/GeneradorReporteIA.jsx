@@ -18,6 +18,7 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
 
   const [selectedBodega, setSelectedBodega] = useState('');
   const [selectedOperator, setSelectedOperator] = useState('');
+  const [showJson, setShowJson] = useState(false);
   
   // Mapa de usuarios (Correo -> Nombre)
   const [userMap, setUserMap] = useState({});
@@ -354,7 +355,43 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
 
           {step === 'result' && (
             <div className="ia-markdown-content">
-              <ReactMarkdown>{report}</ReactMarkdown>
+              {/* Renderizar solo la parte (A) Markdown */}
+              <ReactMarkdown>
+                {report.split(/\(B\)/)[0]}
+              </ReactMarkdown>
+              
+              {/* Detectar si existe la parte (B) JSON */}
+              {report.match(/\(B\)/) && (
+                <div style={{marginTop: '2rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem'}}>
+                  <button 
+                    onClick={() => setShowJson(!showJson)}
+                    style={{background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '5px'}}
+                  >
+                    <BarChart3 size={16} />
+                    {showJson ? 'Ocultar Datos Técnicos (JSON)' : 'Ver Datos Técnicos (JSON)'}
+                  </button>
+                  
+                  {showJson && (
+                    <div style={{position: 'relative'}}>
+                      <pre style={{background: '#1e293b', color: '#e2e8f0', padding: '1rem', borderRadius: '8px', fontSize: '0.8rem', overflowX: 'auto', marginTop: '1rem', textAlign: 'left'}}>
+                        {/* Intentar limpiar el JSON si viene con texto extra */}
+                        {(() => {
+                          const parts = report.split(/\(B\)/);
+                          const jsonPart = parts[1] || '';
+                          // Buscar el primer '{' y el último '}'
+                          const firstBrace = jsonPart.indexOf('{');
+                          const lastBrace = jsonPart.lastIndexOf('}');
+                          if (firstBrace !== -1 && lastBrace !== -1) {
+                            return jsonPart.substring(firstBrace, lastBrace + 1);
+                          }
+                          return jsonPart;
+                        })()}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div style={{marginTop: '2rem', textAlign: 'center'}}>
                 <button 
                   className="ia-btn-generate" 

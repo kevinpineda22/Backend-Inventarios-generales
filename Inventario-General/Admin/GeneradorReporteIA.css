@@ -95,28 +95,101 @@
   transform: none;
 }
 
+/* --- MARKDOWN STYLING --- */
 .ia-markdown-content {
-  line-height: 1.6;
+  line-height: 1.7;
   color: #334155;
+  font-size: 0.95rem;
 }
 
 .ia-markdown-content h1, 
 .ia-markdown-content h2, 
 .ia-markdown-content h3 {
   color: #1e293b;
-  margin-top: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.ia-markdown-content h1 { font-size: 1.8rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+.ia-markdown-content h2 { font-size: 1.4rem; color: #4f46e5; }
+.ia-markdown-content h3 { font-size: 1.1rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.ia-markdown-content p {
+  margin-bottom: 1rem;
 }
 
 .ia-markdown-content ul {
   padding-left: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .ia-markdown-content li {
   margin-bottom: 0.5rem;
+  position: relative;
 }
 
 .ia-markdown-content strong {
   color: #0f172a;
+  font-weight: 700;
+}
+
+/* Card Style for Blockquotes (Anomalies) */
+.ia-markdown-content blockquote {
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+  background: #fff;
+  border-left: 4px solid #ef4444; /* Red for alerts */
+  border-radius: 0 8px 8px 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  color: #475569;
+  font-style: normal; /* Override default italic */
+}
+
+.ia-markdown-content blockquote p {
+  margin: 0;
+}
+
+/* Highlight specific metrics */
+.ia-markdown-content code {
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'Monaco', monospace;
+}
+
+/* Table Styling (if rendered) */
+.ia-markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.ia-markdown-content th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ia-markdown-content td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.ia-markdown-content tr:last-child td {
+  border-bottom: none;
 }
 
 .ia-loading {
