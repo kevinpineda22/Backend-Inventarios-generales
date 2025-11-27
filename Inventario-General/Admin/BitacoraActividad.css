@@ -1,0 +1,157 @@
+.bitacora-panel {
+  position: fixed;
+  top: 0;
+  right: -400px; /* Hidden by default */
+  width: 380px;
+  height: 100vh;
+  background: white;
+  box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transition: right 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #e2e8f0;
+}
+
+.bitacora-panel.open {
+  right: 0;
+}
+
+.bitacora-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+}
+
+.bitacora-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitacora-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0;
+  line-height: 1;
+}
+
+.bitacora-close:hover {
+  color: #ef4444;
+}
+
+.bitacora-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.bitacora-timeline {
+  position: relative;
+  padding-left: 1.5rem;
+  border-left: 2px solid #e2e8f0;
+}
+
+.bitacora-item {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.bitacora-item:last-child {
+  margin-bottom: 0;
+}
+
+.bitacora-dot {
+  position: absolute;
+  left: -1.95rem;
+  top: 0.25rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  border: 2px solid white;
+  box-shadow: 0 0 0 2px #e2e8f0;
+}
+
+.bitacora-dot.start { background: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
+.bitacora-dot.finish { background: #10b981; box-shadow: 0 0 0 2px #d1fae5; }
+.bitacora-dot.alert { background: #ef4444; box-shadow: 0 0 0 2px #fee2e2; }
+.bitacora-dot.auto { background: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+
+.bitacora-time {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+
+.bitacora-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: transform 0.2s;
+}
+
+.bitacora-card:hover {
+  transform: translateX(4px);
+  border-color: #cbd5e1;
+}
+
+.bitacora-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.bitacora-desc {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.bitacora-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.bitacora-empty {
+  text-align: center;
+  color: #94a3b8;
+  padding: 2rem;
+  font-style: italic;
+}
+
+.bitacora-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.2);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.bitacora-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}

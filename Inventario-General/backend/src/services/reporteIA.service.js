@@ -27,31 +27,14 @@ export const generateInventoryReport = async (params) => {
     // 2. Obtener mapa de nombres reales (Estrategia Robusta: Frontend + Backend Backup)
     let allProfiles = frontendProfiles || [];
     
-    // Si no vinieron del frontend, intentamos cargar desde backend
+    // Si no vinieron del frontend, intentamos cargar desde backend (con supabaseAdmin si es posible)
     if (!allProfiles.length) {
-      // A. Intentar tabla 'profiles' (Public)
       try {
         const dbClient = supabaseAdmin || supabase;
-        const { data } = await dbClient.from('profiles').select('user_id, nombre, correo');
-        if (data && data.length > 0) allProfiles = data;
+        const { data } = await dbClient.from('profiles').select('id, nombre, correo');
+        if (data) allProfiles = data;
       } catch (err) {
-        console.warn("Error cargando perfiles en backend (tabla profiles):", err.message);
-      }
-
-      // B. Si falla o está vacía, intentar Supabase Auth (Admin API)
-      if ((!allProfiles || allProfiles.length === 0) && supabaseAdmin) {
-        try {
-          const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
-          if (users && !error) {
-            allProfiles = users.map(u => ({
-              id: u.id,
-              correo: u.email,
-              nombre: u.user_metadata?.nombre || u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0]
-            }));
-          }
-        } catch (err) {
-          console.warn("Error cargando usuarios desde Auth Admin:", err.message);
-        }
+        console.warn("Error cargando perfiles en backend:", err.message);
       }
     }
     
@@ -59,9 +42,8 @@ export const generateInventoryReport = async (params) => {
     if (allProfiles && allProfiles.length > 0) {
       allProfiles.forEach(p => {
         if (p.nombre) {
-          // Mapa por ID (Soporte para user_id o id)
-          const uid = p.user_id || p.id;
-          if (uid) namesMap.set(uid, p.nombre);
+          // Mapa por ID
+          if (p.id) namesMap.set(p.id, p.nombre);
           // Mapa por Correo
           if (p.correo) {
             namesMap.set(p.correo.toLowerCase(), p.nombre); // Normalizar a minúsculas
@@ -82,9 +64,8 @@ export const generateInventoryReport = async (params) => {
       Actúa como un Auditor Senior de Inventarios y Logística. Analiza los siguientes datos del inventario en bodega "${bodegaNombre}".
       
       DATOS CLAVE:
-      - 📅 Sesiones Totales: ${stats.totalConteos}
-      - 📦 Stock Estimado (Items Únicos): ${stats.stockEstimadoItems}
-      - 💪 Esfuerzo Operativo (Total Items Contados): ${stats.esfuerzoTotalItems}
+      - 📅 Sesiones: ${stats.totalConteos}
+      - 📦 Referencias (SKUs): ${stats.totalItems}
       - 📍 Ubicaciones: ${stats.ubicacionesUnicas} (Finalizadas: ${stats.ubicacionesFinalizadas})
       - 📈 Avance Real: ${stats.avance}%
       
@@ -97,23 +78,21 @@ export const generateInventoryReport = async (params) => {
       - ❌ Total Discrepancias (Reconteos): ${stats.reconteos}
       - 📉 Tasa de Conflicto: ${stats.tasaError}%
       - 🔥 Zonas Críticas (Más errores): ${stats.topErrorZonas.join(', ') || 'Ninguna'}
-      - ⚠️ Pasillos Problemáticos: ${stats.topErrorPasillos.join(', ') || 'Ninguno'}
       
       📍 DETALLE EXACTO DE UBICACIONES CON CONFLICTO (Donde se requirió reconteo):
       ${stats.ubicacionesConflicto.length > 0 ? stats.ubicacionesConflicto.join('\n') : 'No se registraron conflictos.'}
 
       Genera un reporte Markdown estructurado así:
-      1. **Resumen Ejecutivo**: Estado general y veredicto de salud del inventario. Compara el esfuerzo operativo vs el stock real.
+      1. **Resumen Ejecutivo**: Estado general y veredicto de salud del inventario.
       2. **Productividad y Ritmo**: Analiza la velocidad (${stats.itemsPorHora} items/h). 
          - Benchmark: >600 items/h (Alto), 300-600 (Medio), <300 (Bajo/Requiere Atención).
          - Felicita a los top performers por nombre.
       3. **Calidad y Precisión**: Analiza la tasa de error (${stats.tasaError}%).
-         - IMPORTANTE: Identifica patrones en los pasillos problemáticos listados arriba.
-         - Lista explícitamente las ubicaciones exactas donde hubo conflictos (Zona > Pasillo > Ubicación) mencionadas arriba, para que el supervisor sepa exactamente dónde ir.
-      4. **Recomendaciones de Impacto**: 3 acciones específicas basadas en los datos (ej: reforzar conteo en Pasillo X).
+         - IMPORTANTE: Lista explícitamente las ubicaciones exactas donde hubo conflictos (Zona > Pasillo > Ubicación) mencionadas arriba, para que el supervisor sepa exactamente dónde ir.
+      4. **Recomendaciones de Impacto**: 3 acciones específicas.
       5. **Conclusión**: Cierre profesional.
 
-      Usa nombres reales. Sé claro, directo y analítico.
+      Usa nombres reales. Sé claro y directo.
     `;
 
     // 5. Llamar a OpenAI
@@ -147,44 +126,14 @@ const calculateStats = (data, namesMap) => {
   const ubicacionesFinalizadas = ubicacionesFinalizadasSet.size;
 
   // Total items
-  // const totalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
+  const totalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
   
   // --- NUEVAS MÉTRICAS AVANZADAS ---
 
-  // 1. Stock Real vs Esfuerzo Operativo
-  // Esfuerzo: Todo lo que se contó (incluyendo errores y reconteos)
-  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
-  
-  // Stock: Lo que realmente hay (Último estado válido de cada ubicación)
-  const ubicacionMap = new Map();
-  data.forEach(c => {
-      // Si es conteo final (4) tiene prioridad absoluta. Si no, usamos el más reciente.
-      const current = ubicacionMap.get(c.ubicacion_id);
-      const cantidad = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
-      
-      if (!current) {
-          ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
-      } else {
-          // Si el actual ya es final (4), no lo sobreescribimos a menos que este tambien sea 4 y mas nuevo (raro)
-          if (current.tipo === 4) return;
-          
-          // Si este es 4, sobreescribimos
-          if (c.tipo_conteo === 4) {
-              ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
-          } 
-          // Si ninguno es 4, nos quedamos con el más reciente
-          else if (new Date(c.created_at) > current.fecha) {
-              ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
-          }
-      }
-  });
-  
-  const stockEstimadoItems = Array.from(ubicacionMap.values()).reduce((acc, val) => acc + val.cantidad, 0);
-
-  // 2. Clasificación de Diferencias (Solo en reconteos/ajustes)
+  // 1. Clasificación de Diferencias (Solo en reconteos/ajustes)
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
 
-  // 3. Velocidad Promedio (Items / Minuto y Hora)
+  // 2. Velocidad Promedio (Items / Minuto y Hora)
   let totalMinutos = 0;
   let conteosConTiempo = 0;
 
@@ -207,14 +156,14 @@ const calculateStats = (data, namesMap) => {
   });
   
   const velocidadPromedio = conteosConTiempo > 0 && totalMinutos > 0
-    ? (esfuerzoTotalItems / totalMinutos).toFixed(1) 
+    ? (totalItems / totalMinutos).toFixed(1) 
     : "N/A";
 
   const itemsPorHora = conteosConTiempo > 0 && totalMinutos > 0
-    ? ((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)
+    ? ((totalItems / totalMinutos) * 60).toFixed(0)
     : "0";
 
-  // 4. Top Users con Nombres Reales (Búsqueda Dual)
+  // 3. Top Users con Nombres Reales (Búsqueda Dual)
   const userMap = {};
   data.forEach(c => {
     // Normalizar claves de búsqueda
@@ -268,20 +217,6 @@ const calculateStats = (data, namesMap) => {
     .slice(0, 3)
     .map(([name]) => name);
 
-  // Analisis de Errores por Pasillo (Más granular que Zona)
-  const errorPasilloMap = {};
-  data.filter(c => c.tipo_conteo === 3).forEach(c => {
-      const pasillo = c.ubicacion?.pasillo?.numero || c.pasillo || 'Desconocido';
-      const zona = c.ubicacion?.pasillo?.zona?.nombre || 'Desconocida';
-      const key = `${zona} - Pasillo ${pasillo}`;
-      if (!errorPasilloMap[key]) errorPasilloMap[key] = 0;
-      errorPasilloMap[key]++;
-  });
-  const topErrorPasillos = Object.entries(errorPasilloMap)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 5)
-      .map(([k, v]) => `${k} (${v} errores)`);
-
   // Lista detallada de ubicaciones con conflicto
   const ubicacionesConflicto = data
     .filter(c => c.tipo_conteo === 3)
@@ -296,8 +231,7 @@ const calculateStats = (data, namesMap) => {
 
   return {
     totalConteos,
-    stockEstimadoItems,
-    esfuerzoTotalItems,
+    totalItems,
     ubicacionesUnicas,
     ubicacionesFinalizadas,
     avance: ubicacionesUnicas > 0 ? ((ubicacionesFinalizadas / ubicacionesUnicas) * 100).toFixed(1) : 0,
@@ -308,7 +242,6 @@ const calculateStats = (data, namesMap) => {
     topUsers,
     topZonas,
     topErrorZonas,
-    topErrorPasillos,
     ubicacionesConflicto // Nueva lista detallada
   };
 };
