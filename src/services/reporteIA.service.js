@@ -77,50 +77,22 @@ export const generateInventoryReport = async (params) => {
     const stats = calculateStats(conteos, namesMap);
     const bodegaNombre = filters.bodega || 'General';
 
-    // 4. Construir Prompt
-    const prompt = `
-      Actúa como un Auditor Senior de Inventarios y Logística. Analiza los siguientes datos del inventario en bodega "${bodegaNombre}".
-      
-      DATOS CLAVE:
-      - 📅 Sesiones Totales: ${stats.totalConteos}
-      - 📦 Stock Estimado (Items Únicos): ${stats.stockEstimadoItems}
-      - 💪 Esfuerzo Operativo (Total Items Contados): ${stats.esfuerzoTotalItems}
-      - 📍 Ubicaciones: ${stats.ubicacionesUnicas} (Finalizadas: ${stats.ubicacionesFinalizadas})
-      - 📈 Avance Real: ${stats.avance}%
-      
-      RENDIMIENTO (Basado en sesiones activas):
-      - ⚡ Velocidad Promedio: ${stats.itemsPorHora} items/hora (aprox. ${stats.velocidadPromedio} items/min)
-      - ⏱️ Nota: Se han excluido sesiones inactivas o "zombies" para este cálculo.
-      - 🏆 Top Operadores: ${stats.topUsers.map(u => `${u.name} (${u.items})`).join(', ')}
-      
-      CALIDAD Y DISCREPANCIAS:
-      - ❌ Total Discrepancias (Reconteos): ${stats.reconteos}
-      - 📉 Tasa de Conflicto: ${stats.tasaError}%
-      - 🔥 Zonas Críticas (Más errores): ${stats.topErrorZonas.join(', ') || 'Ninguna'}
-      - ⚠️ Pasillos Problemáticos: ${stats.topErrorPasillos.join(', ') || 'Ninguno'}
-      
-      📍 DETALLE EXACTO DE UBICACIONES CON CONFLICTO (Donde se requirió reconteo):
-      ${stats.ubicacionesConflicto.length > 0 ? stats.ubicacionesConflicto.join('\n') : 'No se registraron conflictos.'}
-
-      Genera un reporte Markdown estructurado así:
-      1. **Resumen Ejecutivo**: Estado general y veredicto de salud del inventario. Compara el esfuerzo operativo vs el stock real.
-      2. **Productividad y Ritmo**: Analiza la velocidad (${stats.itemsPorHora} items/h). 
-         - Benchmark: >600 items/h (Alto), 300-600 (Medio), <300 (Bajo/Requiere Atención).
-         - Felicita a los top performers por nombre.
-      3. **Calidad y Precisión**: Analiza la tasa de error (${stats.tasaError}%).
-         - IMPORTANTE: Identifica patrones en los pasillos problemáticos listados arriba.
-         - Lista explícitamente las ubicaciones exactas donde hubo conflictos (Zona > Pasillo > Ubicación) mencionadas arriba, para que el supervisor sepa exactamente dónde ir.
-      4. **Recomendaciones de Impacto**: 3 acciones específicas basadas en los datos (ej: reforzar conteo en Pasillo X).
-      5. **Conclusión**: Cierre profesional.
-
-      Usa nombres reales. Sé claro, directo y analítico.
-    `;
+    // 4. Construir Prompt Avanzado
+    const prompt = buildInventoryPrompt({
+      bodegaNombre,
+      stats,
+      sampleConteos: conteos, // Enviamos todos, la función recortará
+      ubicacionesConflicto: stats.ubicacionesConflicto // Pasamos los conflictos detectados previamente
+    });
 
     // 5. Llamar a OpenAI
     const completion = await openai.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "gpt-3.5-turbo",
-      temperature: 0.7,
+      messages: [
+        { role: "system", content: "Eres un Auditor Senior de Inventarios y Analista de Datos experto en logística. Tu objetivo es encontrar ineficiencias y prevenir pérdidas." },
+        { role: "user", content: prompt }
+      ],
+      model: "gpt-3.5-turbo", // Puedes cambiar a gpt-4 si tienes acceso
+      temperature: 0.5, // Un poco más bajo para ser más analítico y menos creativo
     });
 
     return completion.choices[0].message.content;
@@ -129,6 +101,80 @@ export const generateInventoryReport = async (params) => {
     console.error('Error generating AI report:', error);
     throw error;
   }
+};
+
+// --- NUEVA FUNCIÓN DE PROMPT AVANZADO ---
+const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleConteos = [], ubicacionesConflicto = [] }) => {
+  // Normaliza campos de stats
+  const s = {
+    totalConteos: stats.totalConteos ?? 0,
+    stockEstimadoItems: stats.stockEstimadoItems ?? 0,
+    esfuerzoTotalItems: stats.esfuerzoTotalItems ?? 0,
+    ubicacionesUnicas: stats.ubicacionesUnicas ?? 0,
+    ubicacionesFinalizadas: stats.ubicacionesFinalizadas ?? 0,
+    avance: stats.avance ?? 0,
+    velocidadPromedio: stats.velocidadPromedio ?? "N/A",
+    itemsPorHora: stats.itemsPorHora ?? "0",
+    reconteos: stats.reconteos ?? 0,
+    tasaError: stats.tasaError ?? 0,
+    topUsers: (stats.topUsers || []).map(u => `${u.name} (${u.items})`),
+    topErrorZonas: stats.topErrorZonas || [],
+    topErrorPasillos: stats.topErrorPasillos || []
+  };
+
+  // Formatea hasta 10 filas de muestra como objetos legibles para la IA
+  // Seleccionamos preferiblemente filas con problemas (tipo_conteo 3) para que la IA vea ejemplos de errores
+  const errorSamples = sampleConteos.filter(c => c.tipo_conteo === 3).slice(0, 5);
+  const normalSamples = sampleConteos.filter(c => c.tipo_conteo !== 3).slice(0, 5);
+  const mixedSamples = [...errorSamples, ...normalSamples];
+
+  const sampleLines = mixedSamples.map(c => {
+    const pasillo = c.ubicacion?.pasillo?.numero ?? c.pasillo ?? 'N/A';
+    const zona = c.ubicacion?.pasillo?.zona?.nombre ?? c.zona ?? 'N/A';
+    const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? 'N/A';
+    const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.count ?? 0);
+    const usuario = c.usuario_nombre || c.correo_empleado || 'Anon';
+    
+    return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Items: ${itemsCount}, Tipo: ${c.tipo_conteo} (${c.tipo_conteo === 3 ? 'Reconteo/Error' : 'Normal'}), Usuario: "${usuario}", Estado: "${c.estado}" }`;
+  }).join('\n');
+
+  return `
+Analiza los datos del inventario de la bodega "${bodegaNombre}".
+A continuación recibes métricas resumidas y una muestra de registros reales.
+
+MÉTRICAS GLOBALES:
+- Sesiones Totales: ${s.totalConteos}
+- Stock Estimado (items únicos reales): ${s.stockEstimadoItems}
+- Esfuerzo Operativo (total items contados): ${s.esfuerzoTotalItems}
+- Ubicaciones Únicas: ${s.ubicacionesUnicas} (Finalizadas: ${s.ubicacionesFinalizadas})
+- Avance Global: ${s.avance} %
+- Velocidad Promedio: ${s.itemsPorHora} items/h (aprox ${s.velocidadPromedio} items/min)
+- Total Reconteos (Errores): ${s.reconteos}
+- Tasa de Error: ${s.tasaError} %
+- Top Operadores: ${s.topUsers.join(', ') || 'N/A'}
+- Zonas Críticas: ${s.topErrorZonas.join(', ') || 'Ninguna'}
+- Pasillos Problemáticos: ${s.topErrorPasillos.join(', ') || 'Ninguno'}
+
+UBICACIONES CONFLICTIVAS DETECTADAS (Muestra):
+${ubicacionesConflicto.length > 0 ? ubicacionesConflicto.join('\n') : 'Ninguna reportada.'}
+
+REGISTROS DE MUESTRA (Estructura real de datos):
+${sampleLines || '- No hay filas de muestra -'}
+
+INSTRUCCIONES PARA EL REPORTE (Formato Markdown):
+
+1) **Resumen Ejecutivo**: Veredicto claro (Bueno / Atención / Crítico). Compara el "Esfuerzo Operativo" vs "Stock Estimado". Si el esfuerzo es mucho mayor, explica que hay ineficiencia por reconteos.
+2) **Hallazgos Clave**: Usa bullets. Menciona patrones de error en zonas o pasillos específicos basándote en las métricas.
+3) **Acciones Inmediatas (24-72h)**: 3 a 5 acciones concretas. Formato: **Actor** -> **Acción** -> **Resultado Esperado**.
+4) **Análisis de Productividad**: Evalúa la velocidad (${s.itemsPorHora} items/h). ¿Es aceptable? (Benchmark: >600 Alto, <300 Bajo). Felicita a los mejores operadores.
+5) **Tabla de Anomalías**: Crea una tabla Markdown con las ubicaciones conflictivas mencionadas, sugiriendo una acción rápida para cada una (ej: "Auditar", "Aprobar").
+6) **Conclusión Técnica**: Breve cierre sobre la confiabilidad de los datos.
+
+IMPORTANTE:
+- Sé profesional y directo.
+- Si la tasa de error es > 10%, usa un tono de alerta.
+- Usa los nombres reales de los operadores y las ubicaciones exactas.
+`.trim();
 };
 
 const calculateStats = (data, namesMap) => {
