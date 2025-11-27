@@ -116,10 +116,10 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     velocidadPromedio: stats.velocidadPromedio ?? "N/A",
     itemsPorHora: stats.itemsPorHora ?? "0",
     reconteos: stats.reconteos ?? 0,
-    tasaError: stats.tasaError ?? 0,
+    tasaDiscrepancia: stats.tasaError ?? 0,
     topUsers: (stats.topUsers || []).map(u => `${u.name} (${u.items})`),
-    topErrorZonas: stats.topErrorZonas || [],
-    topErrorPasillos: stats.topErrorPasillos || []
+    topZonasReconteo: stats.topErrorZonas || [],
+    topPasillosReconteo: stats.topErrorPasillos || []
   };
 
   // Formatea hasta 10 filas de muestra como objetos legibles para la IA
@@ -134,8 +134,9 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? 'N/A';
     const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.count ?? 0);
     const usuario = c.usuario_nombre || c.correo_empleado || 'Anon';
+    const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Requiere Reconteo)' : 'Conteo Normal';
     
-    return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Items: ${itemsCount}, Tipo: ${c.tipo_conteo} (${c.tipo_conteo === 3 ? 'Reconteo/Error' : 'Normal'}), Usuario: "${usuario}", Estado: "${c.estado}" }`;
+    return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Cantidad_Registrada: ${itemsCount}, Tipo: "${tipoTexto}", Usuario: "${usuario}" }`;
   }).join('\n');
 
   return `
@@ -145,15 +146,15 @@ A continuación recibes métricas resumidas y una muestra de registros reales.
 MÉTRICAS GLOBALES:
 - Sesiones Totales: ${s.totalConteos}
 - 📦 TOTAL UNIDADES FÍSICAS (Inventario Real): ${s.totalUnidadesFisicas}
-- Esfuerzo Operativo (total items contados): ${s.esfuerzoTotalItems}
+- Esfuerzo Operativo (total items contados en todas las pasadas): ${s.esfuerzoTotalItems}
 - Ubicaciones Únicas: ${s.ubicacionesUnicas} (Finalizadas: ${s.ubicacionesFinalizadas})
 - Avance Global: ${s.avance} %
 - Velocidad Promedio: ${s.itemsPorHora} items/h (aprox ${s.velocidadPromedio} items/min)
-- Total Reconteos (Errores): ${s.reconteos}
-- Tasa de Error: ${s.tasaError} %
+- Total Discrepancias (Reconteos generados): ${s.reconteos}
+- Tasa de Discrepancia: ${s.tasaDiscrepancia} % (Porcentaje de ubicaciones que requirieron 3er conteo por no coincidir C1 vs C2)
 - Top Operadores: ${s.topUsers.join(', ') || 'N/A'}
-- Zonas Críticas: ${s.topErrorZonas.join(', ') || 'Ninguna'}
-- Pasillos Problemáticos: ${s.topErrorPasillos.join(', ') || 'Ninguno'}
+- Zonas con más Discrepancias: ${s.topZonasReconteo.join(', ') || 'Ninguna'}
+- Pasillos con más Discrepancias: ${s.topPasillosReconteo.join(', ') || 'Ninguno'}
 
 UBICACIONES CONFLICTIVAS DETECTADAS (Muestra):
 ${ubicacionesConflicto.length > 0 ? ubicacionesConflicto.join('\n') : 'Ninguna reportada.'}
@@ -165,32 +166,37 @@ INSTRUCCIONES PARA EL REPORTE (Formato Markdown):
 
 1) **Resumen Ejecutivo**: Veredicto claro (Bueno / Atención / Crítico).
    - DESTACA EN NEGRITA EL TOTAL DE UNIDADES FÍSICAS ENCONTRADAS (${s.totalUnidadesFisicas}).
-   - Compara el "Esfuerzo Operativo" vs "Total Unidades Físicas". Si el esfuerzo es mucho mayor, explica que hay ineficiencia por reconteos.
+   - Explica la relación entre "Esfuerzo Operativo" y "Total Unidades Físicas". 
+     * NOTA: Si el Esfuerzo es mucho mayor (ej: el doble o triple), explica que **"Se han realizado múltiples conteos sobre los mismos productos debido a que el Conteo 1 y Conteo 2 no coincidieron"**. No uses la palabra "ineficiencia" de forma agresiva, úsala como oportunidad de mejora en la precisión inicial.
 
-2) **Hallazgos Clave**: Usa bullets. Menciona patrones de error en zonas o pasillos específicos basándote en las métricas.
+2) **Hallazgos Clave**: Usa bullets.
+   - Menciona patrones de **discrepancias** (no digas "errores", di "diferencias de conteo") en zonas o pasillos.
+   - Identifica dónde se están produciendo más reconteos.
 
 3) **Acciones Inmediatas (24-72h)**: 3 a 5 acciones concretas. Formato: **Actor** -> **Acción** -> **Resultado Esperado**.
 
 4) **Análisis de Productividad**: Evalúa la velocidad (${s.itemsPorHora} items/h). ¿Es aceptable? (Benchmark: >600 Alto, <300 Bajo). Felicita a los mejores operadores.
 
 5) **Tarjetas de Anomalías**:
-   - En lugar de una tabla, genera una lista de tarjetas para cada anomalía detectada.
+   - Genera una lista de tarjetas para cada ubicación con discrepancia detectada en la muestra.
    - Usa el formato de cita (>) para cada tarjeta.
    - Formato dentro de la cita:
      > **Ubicación:** [Zona > Pasillo > Ubicación]
-     > **Problema:** [Descripción breve]
+     > **Situación:** [Describe que hubo una diferencia entre conteos]
+     > **Cantidad Reportada en Último Evento:** [Cantidad] (Si es 0, indica "Posible ubicación vacía o conteo nulo")
      > **Acción:** [Acción recomendada]
    
    - Ejemplo:
      > **Ubicación:** Bodega 1 > Pasillo A > 10
-     > **Problema:** Diferencia de conteo recurrente (-5 items)
-     > **Acción:** Auditar ubicación completa
+     > **Situación:** Discrepancia entre operadores (C1 vs C2 no coincidieron)
+     > **Cantidad Reportada en Último Evento:** 5
+     > **Acción:** Auditar ubicación para confirmar real
 
-6) **Conclusión Técnica**: Breve cierre sobre la confiabilidad de los datos.
+6) **Conclusión Técnica**: Breve cierre sobre la confiabilidad de los datos y la necesidad de reducir la tasa de reconteos.
 
 IMPORTANTE:
-- Sé profesional y directo.
-- Si la tasa de error es > 10%, usa un tono de alerta.
+- Sé profesional, constructivo y directo.
+- Evita la palabra "Error" a menos que sea crítico. Prefiere "Discrepancia", "Diferencia" o "Reconteo".
 - Usa los nombres reales de los operadores.
 `.trim();
 };
