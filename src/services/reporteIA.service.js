@@ -88,7 +88,7 @@ export const generateInventoryReport = async (params) => {
     // 5. Llamar a OpenAI
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: "Eres un Auditor Senior de Inventarios. RESPONDE en 2 partes: (A) Markdown legible para supervisores y (B) un JSON válido (solo JSON) al final. Usa únicamente los datos entregados. No inventes nombres ni ubicaciones." },
+        { role: "system", content: "Eres un Auditor Senior de Inventarios. Genera un reporte ejecutivo en formato Markdown, profesional y claro. Usa únicamente los datos entregados. No inventes nombres ni ubicaciones." },
         { role: "user", content: prompt }
       ],
       model: "gpt-3.5-turbo", // Puedes cambiar a gpt-4 si tienes acceso
@@ -192,7 +192,6 @@ IMPORTANTE:
 - Sé profesional y directo.
 - Si la tasa de error es > 10%, usa un tono de alerta.
 - Usa los nombres reales de los operadores.
-- Separa claramente la parte (A) del (B).
 `.trim();
 };
 
