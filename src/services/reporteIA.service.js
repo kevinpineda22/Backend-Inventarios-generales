@@ -437,7 +437,9 @@ const calculateStats = (data, namesMap) => {
 
   // Estadísticas por operador
   const userStats = {};
-  data.forEach(c => {
+  
+  // Helper para normalizar nombres
+  const getNormalizedName = (c) => {
     const userId = c.usuario_id;
     const userEmail = (c.correo_empleado || '').toLowerCase();
     const userNameKey = (c.usuario_nombre || '').toLowerCase();
@@ -447,6 +449,11 @@ const calculateStats = (data, namesMap) => {
       name = raw.includes('@') ? raw.split('@')[0] : raw;
       name = name.charAt(0).toUpperCase() + name.slice(1);
     }
+    return name;
+  };
+
+  data.forEach(c => {
+    const name = getNormalizedName(c);
     if (!userStats[name]) userStats[name] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
     const val = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
     userStats[name].items += val;
@@ -455,8 +462,51 @@ const calculateStats = (data, namesMap) => {
       const finalQty = locationMap.get(c.ubicacion_id).last?.qty ?? null;
       if (finalQty !== null && finalQty === val) userStats[name].matches++;
     }
-    if (c.tipo_conteo === 3) userStats[name].reconteosCaused++;
+    // NOTA: Ya no sumamos reconteosCaused aquí simplemente por ser tipo 3.
+    // Se calculará analizando quién falló en la comparación.
   });
+
+  // Análisis de Culpabilidad de Reconteos (Quién causó el reconteo)
+  for (const [uid, info] of locationMap.entries()) {
+    const records = info.records; // Ya están ordenados por fecha
+    
+    // Buscar si hubo un reconteo (tipo 3)
+    const t3 = records.find(r => r.tipo === 3);
+    if (!t3) continue;
+
+    // Buscar los conteos previos (tipo 1 y 2) más recientes antes del reconteo
+    // Asumimos que records está ordenado ascendente por fecha
+    const t1 = records.filter(r => r.tipo === 1 && r.date < t3.date).pop();
+    const t2 = records.filter(r => r.tipo === 2 && r.date < t3.date).pop();
+
+    if (t1 && t2) {
+      const q1 = t1.qty;
+      const q2 = t2.qty;
+      const q3 = t3.qty;
+
+      // Si q1 != q2, hubo discrepancia que causó el reconteo.
+      // Si q3 coincide con q1, entonces q2 estaba mal -> Culpa de T2
+      // Si q3 coincide con q2, entonces q1 estaba mal -> Culpa de T1
+      // Si q3 es diferente a ambos, ambos fallaron -> Culpa compartida (o del sistema)
+
+      const name1 = getNormalizedName(t1.raw);
+      const name2 = getNormalizedName(t2.raw);
+
+      // Asegurar que existan en stats (deberían, por el loop anterior)
+      if (!userStats[name1]) userStats[name1] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
+      if (!userStats[name2]) userStats[name2] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
+
+      if (q3 === q1 && q3 !== q2) {
+        userStats[name2].reconteosCaused++; // T2 falló
+      } else if (q3 === q2 && q3 !== q1) {
+        userStats[name1].reconteosCaused++; // T1 falló
+      } else if (q3 !== q1 && q3 !== q2) {
+        // Ambos fallaron respecto al reconteo final
+        userStats[name1].reconteosCaused++;
+        userStats[name2].reconteosCaused++;
+      }
+    }
+  }
 
   const operatorsCorrectTop = Object.entries(userStats)
     .map(([name, s]) => {
