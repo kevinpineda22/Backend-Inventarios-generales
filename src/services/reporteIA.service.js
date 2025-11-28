@@ -633,9 +633,6 @@ const calculateStats = (data, namesMap) => {
     else reconteosTrend = 'Estable';
   }
 
-  // Ordenar productos sin coincidencia por gravedad (más conteos sin coincidencia es peor)
-  productosSinCoincidencia.sort((a,b) => b.num_conteos - a.num_conteos);
-
   return {
     totalConteos,
     totalUnidadesFisicas,
@@ -659,7 +656,6 @@ const calculateStats = (data, namesMap) => {
     operatorsCorrectTop,
     operatorsReconTop,
     reconteosPerDay,
-    productosSinCoincidencia, // Nuevo campo
     rawSamples: data.slice(0, 20),
     confidenceScore,
     reconteosTrend
