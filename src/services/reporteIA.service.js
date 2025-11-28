@@ -271,6 +271,7 @@ Genera exactamente un objeto JSON con la estructura (rellena datos y textos en M
 IMPORTANTE:
 - El campo "resumenEjecutivo" debe mencionar **números exactos** (ej: \"Se detectaron 24 reconteos que afectan 18 ubicaciones, representando 60% de las ubicaciones analizadas\").
 - En "anomalias_top10" NO recomiendes otro reconteo; recomienda \"Verificar discrepancia encontrada para confirmar stock final\" o \"Validar físicamente\".
+- En "operators", incluye la lista COMPLETA de operadores disponibles en los datos (hasta 50), no los resumas.
 - El "trend_comment" debe usar la serie reconteos_per_day y decir si está 'Aumentando', 'Disminuyendo' o 'Estable', con valores numéricos si aplica.
 `.trim();
 };
@@ -344,8 +345,8 @@ const calculateStats = (data, namesMap) => {
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? null);
     const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
 
-    // Filtrar anomalías: Si la diferencia es 0 y hay pocos reconteos, no es anomalía crítica
-    if (diffAbs === 0 && info.reconteoCount < 2) continue;
+    // Filtrar anomalías: Si la diferencia es 0, NO es una anomalía activa (ya se estabilizó o coincidió)
+    if (diffAbs === 0) continue;
 
     const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
     const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
@@ -429,12 +430,12 @@ const calculateStats = (data, namesMap) => {
     })
     // .filter(u => u.comparisons > 0) // Eliminamos filtro estricto para mostrar más operadores si hay pocos datos
     .sort((a,b) => (b.matches - a.matches) || (b.accuracyPct - a.accuracyPct))
-    .slice(0, 10); // Aumentamos slice a 10
+    .slice(0, 50); // Aumentamos slice a 50 para mostrar todos los operadores posibles
 
   const operatorsReconTop = Object.entries(userStats)
     .map(([name, s]) => ({ name, reconteosCaused: s.reconteosCaused, items: s.items }))
     .sort((a,b) => b.reconteosCaused - a.reconteosCaused)
-    .slice(0, 10); // Aumentamos slice a 10
+    .slice(0, 50); // Aumentamos slice a 50
 
   // Top zonas / pasillos (actividad y errores)
   const zonaMap = {}; const errorZonaMap = {}; const errorPasilloMap = {};
