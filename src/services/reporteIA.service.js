@@ -350,7 +350,9 @@ const calculateStats = (data, namesMap) => {
   let totalSKUsFisicos = 0;
   const anomalies = [];
   for (const [uid, info] of locationMap.entries()) {
-    info.records.sort((a,b) => a.date - b.date);
+    // Ordenar por fecha y luego por tipo de conteo para asegurar orden lógico (1 -> 2 -> 3)
+    info.records.sort((a,b) => (a.date - b.date) || (a.tipo - b.tipo));
+    
     const last = info.records[info.records.length - 1];
     const prev = info.records.length >= 2 ? info.records[info.records.length - 2] : null;
     info.last = last; info.prev = prev;
@@ -523,11 +525,16 @@ const calculateStats = (data, namesMap) => {
 
   const operatorsCorrectTop = Object.entries(userStats)
     .map(([name, s]) => {
-      const accuracyPct = s.comparisons > 0 ? Number(((s.matches / s.comparisons) * 100).toFixed(0)) : null;
+      const accuracyPct = s.comparisons > 0 ? Number(((s.matches / s.comparisons) * 100).toFixed(0)) : 0;
       return { name, items: s.items, comparisons: s.comparisons, matches: s.matches, accuracyPct, reconteosCaused: s.reconteosCaused };
     })
     // .filter(u => u.comparisons > 0) // Eliminamos filtro estricto para mostrar más operadores si hay pocos datos
-    .sort((a,b) => (b.matches - a.matches) || (b.accuracyPct - a.accuracyPct))
+    .sort((a,b) => {
+      // Ordenar por matches descendente
+      if (b.matches !== a.matches) return b.matches - a.matches;
+      // Luego por precisión descendente
+      return b.accuracyPct - a.accuracyPct;
+    })
     .slice(0, 50); // Aumentamos slice a 50 para mostrar todos los operadores posibles
 
   const operatorsReconTop = Object.entries(userStats)
