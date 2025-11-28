@@ -476,50 +476,46 @@ const calculateStats = (data, namesMap) => {
   for (const [uid, info] of locationMap.entries()) {
     const records = info.records; // Ya están ordenados por fecha
     
-    // Buscar si hubo un reconteo (tipo 3)
-    const t3 = records.find(r => r.tipo === 3);
-    if (!t3) continue;
+    // Si no hubo reconteos, no hay culpables de reconteo
+    if (info.reconteoCount === 0) continue;
 
-    // Buscar los conteos previos (tipo 1 y 2) más recientes antes del reconteo
-    // Asumimos que records está ordenado ascendente por fecha
-    const t1 = records.filter(r => r.tipo === 1 && r.date < t3.date).pop();
-    const t2 = records.filter(r => r.tipo === 2 && r.date < t3.date).pop();
+    // Buscar los conteos iniciales (tipo 1 y 2)
+    // Asumimos que records está ordenado: T1, T2, T3...
+    const t1 = records.find(r => r.tipo === 1);
+    const t2 = records.find(r => r.tipo === 2);
+    
+    // Usamos el ÚLTIMO conteo como la verdad absoluta (puede ser T3, T4, T5...)
+    const finalRec = info.last;
 
-    if (t1 && t2) {
+    if (t1 && t2 && finalRec) {
       const q1 = t1.qty;
       const q2 = t2.qty;
-      const q3 = t3.qty;
-
-      // Si q1 != q2, hubo discrepancia que causó el reconteo.
-      // Si q3 coincide con q1, entonces q2 estaba mal -> Culpa de T2
-      // Si q3 coincide con q2, entonces q1 estaba mal -> Culpa de T1
-      // Si q3 es diferente a ambos, ambos fallaron -> Culpa compartida (o del sistema)
+      const qFinal = finalRec.qty;
 
       const name1 = getNormalizedName(t1.raw);
       const name2 = getNormalizedName(t2.raw);
 
-      // Asegurar que existan en stats (deberían, por el loop anterior)
+      // Asegurar que existan en stats
       if (!userStats[name1]) userStats[name1] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
       if (!userStats[name2]) userStats[name2] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
 
-      if (q3 === q1 && q3 !== q2) {
-        userStats[name2].reconteosCaused++; // T2 falló
-      } else if (q3 === q2 && q3 !== q1) {
-        userStats[name1].reconteosCaused++; // T1 falló
+      // Lógica de culpa basada en la VERDAD FINAL
+      if (qFinal === q1 && qFinal !== q2) {
+        userStats[name2].reconteosCaused++; // T1 tenía la razón, T2 falló
+      } else if (qFinal === q2 && qFinal !== q1) {
+        userStats[name1].reconteosCaused++; // T2 tenía la razón, T1 falló
       } else {
-        // Ninguno coincidió exactamente con el reconteo.
-        // Asignamos la culpa al que estuvo MÁS LEJOS del valor real (q3).
-        const diff1 = Math.abs(q3 - q1);
-        const diff2 = Math.abs(q3 - q2);
+        // Ninguno coincidió con el final (o ambos fallaron, o el final es diferente a ambos)
+        // Calculamos quién estuvo más lejos
+        const diff1 = Math.abs(qFinal - q1);
+        const diff2 = Math.abs(qFinal - q2);
 
         if (diff1 < diff2) {
-          // T1 estuvo más cerca, culpamos a T2
-          userStats[name2].reconteosCaused++;
+          userStats[name2].reconteosCaused++; // T1 más cerca
         } else if (diff2 < diff1) {
-          // T2 estuvo más cerca, culpamos a T1
-          userStats[name1].reconteosCaused++;
+          userStats[name1].reconteosCaused++; // T2 más cerca
         } else {
-          // Ambos estuvieron igual de lejos (o igual de mal), culpamos a ambos
+          // Empate de error -> Culpa compartida
           userStats[name1].reconteosCaused++;
           userStats[name2].reconteosCaused++;
         }
