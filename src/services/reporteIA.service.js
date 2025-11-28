@@ -170,29 +170,25 @@ const parseJSONFromText = (text) => {
  *   y pidiendo el resumen ejecutivo más descriptivo y profesional.
  */
 const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleConteos = [], ubicacionesConflicto = [] }) => {
+  // Stats now include confidenceScore and reconteosTrend
   const s = {
     totalConteos: stats.totalConteos ?? 0,
     totalUnidadesFisicas: stats.totalUnidadesFisicas ?? 0,
     esfuerzoTotalItems: stats.esfuerzoTotalItems ?? 0,
     ubicacionesUnicas: stats.ubicacionesUnicas ?? 0,
-    ubicacionesFinalizadas: stats.ubicacionesFinalizadas ?? 0,
     avance: stats.avance ?? 0,
-    velocidadPromedio: stats.velocidadPromedio ?? "N/A",
     itemsPorHora: stats.itemsPorHora ?? 0,
     reconteos: stats.reconteos ?? 0,
     tasaDiscrepancia: stats.tasaError ?? 0,
     anomaliesTop10: stats.anomaliesTop10 || [],
     operatorsCorrectTop: stats.operatorsCorrectTop || [],
     operatorsReconTop: stats.operatorsReconTop || [],
-    reconteosPerDay: stats.reconteosPerDay || []
+    reconteosPerDay: stats.reconteosPerDay || [],
+    confidenceScore: stats.confidenceScore ?? null,
+    reconteosTrend: stats.reconteosTrend ?? 'N/D'
   };
 
-  const mixedSamples = [
-    ...sampleConteos.filter(c => c.tipo_conteo === 3).slice(0, 6),
-    ...sampleConteos.filter(c => c.tipo_conteo !== 3).slice(0, 4)
-  ].slice(0, 10);
-
-  const sampleLines = mixedSamples.map(c => {
+  const sampleLines = (sampleConteos || []).slice(0,10).map(c => {
     const pasillo = c.ubicacion?.pasillo?.numero ?? c.pasillo ?? 'N/A';
     const zona = c.ubicacion?.pasillo?.zona?.nombre ?? c.zona ?? 'N/A';
     const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? c.ubicacion_id ?? 'N/A';
@@ -203,50 +199,51 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
   }).join('\n');
 
   return `
-Analiza los datos de la bodega "${bodegaNombre}" y genera UN SOLO OBJETO JSON con los campos requeridos (ver esquema abajo). Usa únicamente los datos entregados. No inventes nombres ni ubicaciones.
+Analiza exhaustivamente los datos de la bodega "${bodegaNombre}" y entrega UN SOLO OBJETO JSON válido con los campos requeridos. Usa únicamente los datos entregados.
 
-RESUMEN DE ESTADÍSTICAS:
+ESTADÍSTICAS CLAVE:
 - totalConteos: ${s.totalConteos}
 - totalUnidadesFisicas: ${s.totalUnidadesFisicas}
 - esfuerzoTotalItems: ${s.esfuerzoTotalItems}
 - ubicacionesUnicas: ${s.ubicacionesUnicas}
 - avance: ${s.avance} %
 - itemsPorHora: ${s.itemsPorHora}
-- reconteos (totales): ${s.reconteos}
+- reconteos totales: ${s.reconteos}
 - tasaDiscrepancia: ${s.tasaDiscrepancia} %
+- confidenceScore: ${s.confidenceScore}
+- reconteosTrend: ${s.reconteosTrend}
 
 MUESTRAS (máx 10):
 ${sampleLines || '- No hay muestras -'}
 
-ANOMALIES_TOP10 (pasadas detectadas por el sistema):
-${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | last:${a.reported_last} | prev:${a.reported_prev} | diff%:${a.diff_percent} | reconteos:${a.reconteoCount}`).join('\n')}
+ANOMALIES_TOP10 (ya priorizadas por el sistema):
+${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | last:${a.reported_last} | prev:${a.reported_prev} | diff%:${a.diff_percent} | reconteos:${a.reconteos} | prioridad:${a.prioridad}`).join('\n')}
 
-OPERADORES (Top correctos):
+OPERADORES (Top precisión y Top reconteos):
 ${(s.operatorsCorrectTop || []).map(o => `- ${o.name}: ${o.matches}/${o.comparisons} ok (${o.accuracyPct ?? 'N/D'}%)`).join('\n')}
-
-OPERADORES (Top por reconteos causados):
 ${(s.operatorsReconTop || []).map(o => `- ${o.name}: ${o.reconteosCaused} reconteos`).join('\n')}
 
 RECONTEOS POR DÍA (serie): ${JSON.stringify(s.reconteosPerDay)}
 
---- SALIDA REQUERIDA (UN SOLO JSON) ---
-Genera exactamente un único JSON válido con esta estructura (rellena con datos y textos en Markdown donde corresponde):
+--- SALIDA REQUERIDA: JSON único ---
+Genera exactamente un objeto JSON con la estructura (rellena datos y textos en Markdown donde corresponda):
 
 {
-  "resumenEjecutivo": "Markdown: resumen ejecutivo descriptivo y profesional (3-6 párrafos). Debe analizar causas posibles, impacto y prioridad de acción.",
+  "resumenEjecutivo": "Markdown: 4-6 párrafos. Debe ser descriptivo: (1) descripción del estado actual (cifras clave) (2) causas probables (ej: falta conteo final, ubicaciones sin ID, sesiones abiertas) (3) impacto (unidades y tiempo) (4) prioridades (qué auditar primero).",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
     "esfuerzoOperativo": ${s.esfuerzoTotalItems},
     "tasaDiscrepancia": ${s.tasaDiscrepancia},
     "velocidad": ${s.itemsPorHora},
-    "confidence_score": null
+    "confidenceScore": ${s.confidenceScore}
   },
-  "analisisProductividad": "Markdown: análisis de productividad. Debe listar operadores destacados y sus métricas exactas (items, matches/comparisons, % acierto).",
+  "analisisProductividad": "Markdown: listar operadores destacados con items, comparisons, matches y % acierto. Incluir breve comentario sobre reconteosTrend: ${s.reconteosTrend}.",
   "hallazgos": [
-    "Listado de hallazgos cuantificados (use cifras: reconteos= X, ubicaciones conflictivas = Y, top zona = Z)"
+    "Hallazgo 1 (quantificado)",
+    "Hallazgo 2"
   ],
   "acciones": [
-    { "actor": "Nombre", "accion": "Acción concreta", "evidencia_requerida": "foto, formulario", "prioridad": "alta/media/baja", "deadline": "YYYY-MM-DD" }
+    { "actor": "Nombre", "accion": "Qué hacer", "prioridad": "alta/media/baja", "deadline": "YYYY-MM-DD", "evidencia_requerida": "foto/form" }
   ],
   "anomalias_top10": [
     {
@@ -260,28 +257,25 @@ Genera exactamente un único JSON válido con esta estructura (rellena con datos
     }
   ],
   "operators": {
-    "top_correct": [
-      { "name":"X", "items": 420, "comparisons": 50, "matches": 49, "accuracyPct": 98 }
-    ],
-    "top_reconteos": [
-      { "name":"Y", "reconteosCaused": 12 }
-    ]
+    "top_correct": [{ "name":"X", "items":420, "comparisons":50, "matches":49, "accuracyPct":98 }],
+    "top_reconteos": [{ "name":"Y", "reconteosCaused":12 }]
   },
   "reconteos_per_day": ${JSON.stringify(s.reconteosPerDay)},
+  "trend_comment": "Breve comentario (sube/baja/estable) basado en la serie de reconteos",
   "sql_checks": [
-    "SELECT ... top reconteos ...",
-    "SELECT ... últimos 2 conteos por ubicación ...",
-    "SELECT ... comparar contra snapshot ..."
+    "SELECT ... último conteo por ubicacion ...",
+    "SELECT ... reconteos por usuario ..."
   ],
-  "conclusion": "Markdown: conclusión técnica y recomendación prioritaria (1-2 párrafos)"
+  "conclusion": "Markdown: 1-2 párrafos priorizando la acción principal"
 }
 
 IMPORTANTE:
-- El campo "resumenEjecutivo" debe ser descriptivo y profesional: analiza causas probables, impacto (cantidad/ej: unidades) y prioriza acciones concretas.
-- En "anomalias_top10", ordena por prioridad (ya calculada por el sistema). Usa prioridad: alta / media / baja.
-- En "analisisProductividad" incluye el mini-comentario sobre la serie de reconteos por día (sube/baja/tendencia) usando los datos en reconteos_per_day.
+- El campo "resumenEjecutivo" debe mencionar **números exactos** (ej: \"Se detectaron 24 reconteos que afectan 18 ubicaciones, representando 60% de las ubicaciones analizadas\").
+- En "anomalias_top10" NO recomiendes otro reconteo; recomienda \"Verificar discrepancia encontrada para confirmar stock final\" o \"Validar físicamente\".
+- El "trend_comment" debe usar la serie reconteos_per_day y decir si está 'Aumentando', 'Disminuyendo' o 'Estable', con valores numéricos si aplica.
 `.trim();
 };
+
 
 /* ------------------ calculateStats (mejorada) ------------------ */
 
@@ -293,13 +287,14 @@ IMPORTANTE:
  *   - operatorsReconTop (top por reconteos causados)
  *   - reconteosPerDay (serie para graficar)
  */
+// ---------- Reemplazar o actualizar calculateStats ----------
 const calculateStats = (data, namesMap) => {
   if (!data || data.length === 0) return {
     totalConteos: 0, totalUnidadesFisicas: 0, esfuerzoTotalItems: 0, ubicacionesUnicas: 0,
     ubicacionesFinalizadas: 0, avance: 0, reconteos: 0, tasaError: 0, velocidadPromedio: null,
     itemsPorHora: 0, topUsers: [], topZonas: [], topErrorZonas: [], topErrorPasillos: [],
     ubicacionesConflicto: [], anomaliesTop10: [], operatorsCorrectTop: [], operatorsReconTop: [],
-    reconteosPerDay: [], rawSamples: []
+    reconteosPerDay: [], confidenceScore: 0, reconteosTrend: null
   };
 
   const totalConteos = data.length;
@@ -312,93 +307,86 @@ const calculateStats = (data, namesMap) => {
   );
   const ubicacionesFinalizadas = ubicacionesFinalizadasSet.size;
 
-  // Esfuerzo total
+  // Esfuerzo total (suma de items contados en todas las pasadas)
   const esfuerzoTotalItems = data.reduce((acc, c) => acc + (Number(c.total_items || (c.conteo_items?.[0]?.count) || 0)), 0);
 
-  // Construir mapa por ubicación con historial de conteos
-  const locationMap = new Map(); // ubicacion_id => { records: [{qty, tipo, date, user}], last, prev, reconteoCount }
+  // Construir historial por ubicación
+  const locationMap = new Map(); // uid -> { records: [], reconteoCount }
   data.forEach(c => {
     const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
     const qty = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
     const date = new Date(c.created_at || c.createdAt || Date.now());
     const rec = { qty, tipo: c.tipo_conteo, date, userId: c.usuario_id, userName: c.usuario_nombre || c.correo_empleado || null, raw: c };
-
     if (!locationMap.has(uid)) locationMap.set(uid, { records: [], reconteoCount: 0 });
     locationMap.get(uid).records.push(rec);
     if (c.tipo_conteo === 3) locationMap.get(uid).reconteoCount++;
   });
 
-  // Calcular último y previo por ubicación y totalUnidadesFisicas
+  // Ordenar y extraer diffs
   let totalUnidadesFisicas = 0;
-  const anomalies = []; // temporal
+  const anomalies = [];
   for (const [uid, info] of locationMap.entries()) {
-    // ordenar por fecha asc
     info.records.sort((a,b) => a.date - b.date);
     const last = info.records[info.records.length - 1];
     const prev = info.records.length >= 2 ? info.records[info.records.length - 2] : null;
-    info.last = last;
-    info.prev = prev;
+    info.last = last; info.prev = prev;
     totalUnidadesFisicas += (last?.qty || 0);
 
-    // calcular diffs
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? null);
     const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
 
-    const locationLabel = (() => {
-      const u = last?.raw?.ubicacion || last?.raw?.ubicacion_id || uid;
-      const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
-      const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
-      return `${zona} > Pasillo ${pasillo} > Ubicación ${u}`;
-    })();
+    const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
+    const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
+    const ubicLabel = last?.raw?.ubicacion?.nombre || last?.raw?.ubicacion || uid;
 
     anomalies.push({
       ubicacion_id: uid,
-      ubicacion: locationLabel,
+      ubicacion: `${zona} > Pasillo ${pasillo} > Ubicación ${ubicLabel}`,
       reported_last: last?.qty ?? 0,
       reported_prev: prev?.qty ?? null,
       diff_abs: diffAbs,
       diff_percent: diffPercent,
-      reconteoCount: info.reconteoCount,
+      reconteos: info.reconteoCount,
       last_date: last?.date?.toISOString?.() ?? null,
       last_user: last?.userName ?? null
     });
   }
 
-  // Anomalías: ordenar por prioridad
-  const anomaliesSorted = anomalies
-    .sort((a,b) => {
-      if (b.reconteoCount !== a.reconteoCount) return b.reconteoCount - a.reconteoCount;
-      const aPct = Math.abs(a.diff_percent ?? 0), bPct = Math.abs(b.diff_percent ?? 0);
-      if (bPct !== aPct) return bPct - aPct;
-      return Math.abs(b.diff_abs ?? 0) - Math.abs(a.diff_abs ?? 0);
-    });
+  // Priorizar anomalías: reconteos desc, abs(diff%) desc, abs(diff_abs) desc
+  const anomaliesSorted = anomalies.sort((a,b) => {
+    if (b.reconteos !== a.reconteos) return b.reconteos - a.reconteos;
+    const aPct = Math.abs(a.diff_percent ?? 0), bPct = Math.abs(b.diff_percent ?? 0);
+    if (bPct !== aPct) return bPct - aPct;
+    return Math.abs(b.diff_abs ?? 0) - Math.abs(a.diff_abs ?? 0);
+  });
+  const anomaliesTop10 = anomaliesSorted.slice(0, 10).map(a => {
+    // prioridad heurística
+    const prioridad = a.reconteos >= 3 || Math.abs(a.diff_percent ?? 0) >= 50 ? 'alta'
+                    : Math.abs(a.diff_percent ?? 0) >= 20 ? 'media' : 'baja';
+    return { ...a, prioridad };
+  });
 
-  const anomaliesTop10 = anomaliesSorted.slice(0, 10);
-
-  // Reconteos total y reconteos unicos por ubicacion
+  // Reconteos (counts)
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
   const reconteosUnicosPorUbicacion = new Set(data.filter(c => c.tipo_conteo === 3).map(c => c.ubicacion_id)).size;
 
-  // Velocidad promedio (items/min & items/h)
+  // Velocidad (items/min and items/h)
   let totalMinutos = 0, conteosConTiempo = 0;
   data.forEach(c => {
     if (c.fecha_inicio && c.fecha_fin) {
-      const inicio = new Date(c.fecha_inicio);
-      const fin = new Date(c.fecha_fin);
-      const diffMinutos = (fin - inicio) / 1000 / 60;
+      const diffMinutos = (new Date(c.fecha_fin) - new Date(c.fecha_inicio)) / 1000 / 60;
       const itemsEnConteo = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
       const esZombie = diffMinutos > 30 && itemsEnConteo < 10;
       if (diffMinutos > 0.1 && diffMinutos < 240 && !esZombie) {
-        totalMinutos += diffMinutos;
-        conteosConTiempo++;
+        totalMinutos += diffMinutos; conteosConTiempo++;
       }
     }
   });
   const velocidadPromedio = (conteosConTiempo > 0 && totalMinutos > 0) ? Number((esfuerzoTotalItems / totalMinutos).toFixed(1)) : null;
   const itemsPorHora = (conteosConTiempo > 0 && totalMinutos > 0) ? Number(((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)) : 0;
 
-  // Top users: matches/comparisons + reconteos causados
-  const userStats = {}; // name => { items, comparisons, matches, reconteosCaused }
+  // Estadísticas por operador
+  const userStats = {};
   data.forEach(c => {
     const userId = c.usuario_id;
     const userEmail = (c.correo_empleado || '').toLowerCase();
@@ -410,19 +398,14 @@ const calculateStats = (data, namesMap) => {
       name = name.charAt(0).toUpperCase() + name.slice(1);
     }
     if (!userStats[name]) userStats[name] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
-
     const val = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
     userStats[name].items += val;
-
     if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && locationMap.has(c.ubicacion_id)) {
       userStats[name].comparisons++;
       const finalQty = locationMap.get(c.ubicacion_id).last?.qty ?? null;
       if (finalQty !== null && finalQty === val) userStats[name].matches++;
     }
-
-    if (c.tipo_conteo === 3) {
-      userStats[name].reconteosCaused++;
-    }
+    if (c.tipo_conteo === 3) userStats[name].reconteosCaused++;
   });
 
   const operatorsCorrectTop = Object.entries(userStats)
@@ -439,7 +422,7 @@ const calculateStats = (data, namesMap) => {
     .sort((a,b) => b.reconteosCaused - a.reconteosCaused)
     .slice(0, 5);
 
-  // Top zonas/activity and error zones/pasillos
+  // Top zonas / pasillos (actividad y errores)
   const zonaMap = {}; const errorZonaMap = {}; const errorPasilloMap = {};
   data.forEach(c => {
     const zonaNombre = c.ubicacion?.pasillo?.zona?.nombre || c.zona || 'Desconocida';
@@ -455,19 +438,42 @@ const calculateStats = (data, namesMap) => {
   const topErrorZonas = Object.entries(errorZonaMap).sort(([,a],[,b])=>b-a).slice(0,3).map(([n])=>n);
   const topErrorPasillos = Object.entries(errorPasilloMap).sort(([,a],[,b])=>b-a).slice(0,5).map(([k,v])=>`${k} (${v} errores)`);
 
-  // ubicaciones conflicto list (más completo)
+  // Ubicaciones conflicto list (texto)
   const ubicacionesConflicto = anomaliesSorted.map(a => `- ${a.ubicacion}`).slice(0, 100);
 
-  // reconteos per day (timeseries) for charting
+  // Reconteos por día
   const reconteosPerDayMap = {};
   data.filter(c => c.tipo_conteo === 3).forEach(c => {
     const d = new Date(c.created_at || c.createdAt || Date.now());
-    const key = d.toISOString().slice(0,10); // YYYY-MM-DD
+    const key = d.toISOString().slice(0,10);
     reconteosPerDayMap[key] = (reconteosPerDayMap[key] || 0) + 1;
   });
-  const reconteosPerDay = Object.keys(reconteosPerDayMap)
-    .sort()
-    .map(date => ({ date, count: reconteosPerDayMap[date] }));
+  const reconteosPerDay = Object.keys(reconteosPerDayMap).sort().map(date => ({ date, count: reconteosPerDayMap[date] }));
+
+  // --- Confidence score (simple heuristic) ---
+  // componentes: % ubicaciones con conteo final, % sesiones con tiempo válido, inverso de tasa de reconteos
+  const pctFinalizados = ubicacionesUnicas > 0 ? (ubicacionesFinalizadas / ubicacionesUnicas) : 0; // 0..1
+  const pctSessionsWithTime = totalConteos > 0 ? (data.filter(c => c.fecha_inicio && c.fecha_fin).length / totalConteos) : 0;
+  const reconteosFactor = reconteosUnicosPorUbicacion / Math.max(1, ubicacionesUnicas); // 0.. maybe >1
+  // normalizar reconteosFactor a 0..1 (cappear)
+  const reconteosNorm = Math.min(1, reconteosFactor * 1.5);
+  const confidenceScore = Math.round(((pctFinalizados * 0.5) + (pctSessionsWithTime * 0.3) + ((1 - reconteosNorm) * 0.2)) * 100);
+
+  // --- Trend comment for reconteos (simple slope over last 7 points)
+  let reconteosTrend = 'Insuficientes datos';
+  if (reconteosPerDay.length >= 3) {
+    // compute slope of counts over dates (simple linear regression on index)
+    const y = reconteosPerDay.map((r,i) => r.count);
+    const n = y.length;
+    const meanY = y.reduce((a,b) => a+b,0)/n;
+    const meanX = (n-1)/2;
+    let num = 0, den = 0;
+    for (let i=0;i<n;i++){ num += (i-meanX)*(y[i]-meanY); den += (i-meanX)*(i-meanX); }
+    const slope = den === 0 ? 0 : num/den;
+    if (slope > 0.2) reconteosTrend = 'Aumentando';
+    else if (slope < -0.2) reconteosTrend = 'Disminuyendo';
+    else reconteosTrend = 'Estable';
+  }
 
   return {
     totalConteos,
@@ -477,7 +483,7 @@ const calculateStats = (data, namesMap) => {
     ubicacionesFinalizadas,
     avance: Number(((ubicacionesFinalizadas / Math.max(1, ubicacionesUnicas)) * 100).toFixed(1)),
     reconteos,
-    reconteosUnicosPorUbicacion: reconteosUnicosPorUbicacion,
+    reconteosUnicosPorUbicacion,
     tasaError: Number(((reconteosUnicosPorUbicacion / Math.max(1, ubicacionesUnicas)) * 100).toFixed(1)),
     velocidadPromedio,
     itemsPorHora,
@@ -490,7 +496,9 @@ const calculateStats = (data, namesMap) => {
     operatorsCorrectTop,
     operatorsReconTop,
     reconteosPerDay,
-    rawSamples: data.slice(0, 20)
+    rawSamples: data.slice(0, 20),
+    confidenceScore,
+    reconteosTrend
   };
 };
 
