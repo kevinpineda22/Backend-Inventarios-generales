@@ -186,7 +186,6 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     operatorsCorrectTop: stats.operatorsCorrectTop || [],
     operatorsReconTop: stats.operatorsReconTop || [],
     reconteosPerDay: stats.reconteosPerDay || [],
-    productosSinCoincidencia: stats.productosSinCoincidencia || [],
     confidenceScore: stats.confidenceScore ?? null,
     reconteosTrend: stats.reconteosTrend ?? 'N/D'
   };
@@ -218,12 +217,6 @@ ESTADÍSTICAS CLAVE:
 - confidenceScore: ${s.confidenceScore}
 - reconteosTrend: ${s.reconteosTrend}
 
-PRODUCTOS SIN COINCIDENCIA (Casos Críticos donde ningún conteo coincide):
-Total: ${s.productosSinCoincidencia.length}
-${s.productosSinCoincidencia.length > 0 
-  ? s.productosSinCoincidencia.slice(0, 10).map(p => `- ${p.ubicacion}: ${p.producto} [Valores: ${p.conteos}]`).join('\n')
-  : '- Ninguno -'}
-
 MUESTRAS (máx 10):
 ${sampleLines || '- No hay muestras -'}
 
@@ -254,12 +247,6 @@ Genera exactamente un objeto JSON con la estructura (rellena datos y textos en M
     "Hallazgo 1 (quantificado)",
     "Hallazgo 2"
   ],
-  "productos_sin_coincidencia": {
-      "total": ${s.productosSinCoincidencia.length},
-      "lista": [
-          { "ubicacion": "Zona > Pasillo > Ub", "producto": "Nombre", "detalle": "10 vs 12 vs 15" }
-      ]
-  },
   "anomalias": [
     {
       "ubicacion": "Zona > Pasillo > Ub",
@@ -362,8 +349,6 @@ const calculateStats = (data, namesMap) => {
   let totalUnidadesFisicas = 0;
   let totalSKUsFisicos = 0;
   const anomalies = [];
-  const productosSinCoincidencia = [];
-
   for (const [uid, info] of locationMap.entries()) {
     // Ordenar por fecha y luego por tipo de conteo para asegurar orden lógico (1 -> 2 -> 3)
     info.records.sort((a,b) => (a.date - b.date) || (a.tipo - b.tipo));
@@ -376,29 +361,6 @@ const calculateStats = (data, namesMap) => {
     // Calcular SKUs (filas) del último conteo
     const lastRows = last?.raw?.conteo_items?.length || (last?.raw?.total_items ? 1 : 0);
     totalSKUsFisicos += lastRows;
-
-    // Detectar productos sin coincidencia (Ningún conteo coincide con otro)
-    if (info.records.length >= 2) {
-      const quantities = info.records.map(r => r.qty);
-      const unique = new Set(quantities);
-      // Si todos son diferentes (size == length), no hubo coincidencia
-      if (unique.size === quantities.length) {
-        const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
-        const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
-        const ubicLabel = last?.raw?.ubicacion?.nombre || last?.raw?.ubicacion?.numero || 'S/N';
-        
-        const firstItem = last?.raw?.conteo_items?.[0]?.item?.descripcion || 'Producto desconocido';
-        const totalItemsInLoc = last?.raw?.conteo_items?.length || 0;
-        const producto = totalItemsInLoc > 1 ? `${firstItem} (+${totalItemsInLoc - 1} otros)` : firstItem;
-
-        productosSinCoincidencia.push({
-            ubicacion: `${zona} > Pasillo ${pasillo} > Ub ${ubicLabel}`,
-            producto,
-            conteos: quantities.join(' vs '),
-            num_conteos: info.records.length
-        });
-      }
-    }
 
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? null);
     const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
