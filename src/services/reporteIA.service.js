@@ -307,13 +307,23 @@ const calculateStats = (data, namesMap) => {
   const ubicacionesFinalizadas = ubicacionesFinalizadasSet.size;
 
   // Esfuerzo total (suma de items contados en todas las pasadas)
-  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0)), 0);
+  // Priorizamos la suma de conteo_items. Si no existe, usamos total_items (pero con cuidado)
+  const getQty = (c) => {
+      if (c.conteo_items && c.conteo_items.length > 0) {
+          return c.conteo_items.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+      }
+      // Si total_items es muy pequeño (< 10) y no hay items, sospechamos que es row count.
+      // Pero si no tenemos otra info, lo usamos.
+      return Number(c.total_items || 0);
+  };
+
+  const esfuerzoTotalItems = data.reduce((acc, c) => acc + getQty(c), 0);
 
   // Construir historial por ubicación
   const locationMap = new Map(); // uid -> { records: [], reconteoCount }
   data.forEach(c => {
     const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
-    const qty = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
+    const qty = getQty(c);
     const date = new Date(c.created_at || c.createdAt || Date.now());
     const rec = { qty, tipo: c.tipo_conteo, date, userId: c.usuario_id, userName: c.usuario_nombre || c.correo_empleado || null, raw: c };
     if (!locationMap.has(uid)) locationMap.set(uid, { records: [], reconteoCount: 0 });
@@ -333,6 +343,9 @@ const calculateStats = (data, namesMap) => {
 
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? null);
     const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
+
+    // Filtrar anomalías: Si la diferencia es 0 y hay pocos reconteos, no es anomalía crítica
+    if (diffAbs === 0 && info.reconteoCount < 2) continue;
 
     const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
     const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
@@ -414,14 +427,14 @@ const calculateStats = (data, namesMap) => {
       const accuracyPct = s.comparisons > 0 ? Number(((s.matches / s.comparisons) * 100).toFixed(0)) : null;
       return { name, items: s.items, comparisons: s.comparisons, matches: s.matches, accuracyPct, reconteosCaused: s.reconteosCaused };
     })
-    .filter(u => u.comparisons > 0)
+    // .filter(u => u.comparisons > 0) // Eliminamos filtro estricto para mostrar más operadores si hay pocos datos
     .sort((a,b) => (b.matches - a.matches) || (b.accuracyPct - a.accuracyPct))
-    .slice(0, 5);
+    .slice(0, 10); // Aumentamos slice a 10
 
   const operatorsReconTop = Object.entries(userStats)
     .map(([name, s]) => ({ name, reconteosCaused: s.reconteosCaused, items: s.items }))
     .sort((a,b) => b.reconteosCaused - a.reconteosCaused)
-    .slice(0, 5);
+    .slice(0, 10); // Aumentamos slice a 10
 
   // Top zonas / pasillos (actividad y errores)
   const zonaMap = {}; const errorZonaMap = {}; const errorPasilloMap = {};
