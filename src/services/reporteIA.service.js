@@ -205,14 +205,13 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
 Analiza exhaustivamente los datos de la bodega "${bodegaNombre}" y entrega UN SOLO OBJETO JSON válido con los campos requeridos. Usa únicamente los datos entregados.
 
 ESTADÍSTICAS CLAVE:
-- totalConteos: ${s.totalConteos}
-- totalUnidadesFisicas (Suma de Cantidades): ${s.totalUnidadesFisicas}
-- totalSKUsFisicos (Conteo de Registros/Items únicos): ${s.totalSKUsFisicos}
-- esfuerzoTotalItems (Suma de Cantidades contadas): ${s.esfuerzoTotalItems}
-- esfuerzoTotalRows (Suma de Registros escaneados): ${s.esfuerzoTotalRows}
+- totalConteos (Sesiones): ${s.totalConteos}
+- totalUnidadesFisicas (Volumen Total de Unidades): ${s.totalUnidadesFisicas}
+- totalItemsContados (Referencias/SKUs Escaneados): ${s.totalSKUsFisicos}
+- esfuerzoOperativo (Total de líneas/registros procesados): ${s.esfuerzoTotalRows}
 - ubicacionesUnicas: ${s.ubicacionesUnicas}
 - avance: ${s.avance} %
-- itemsPorHora (Registros/Hora): ${s.itemsPorHora}
+- velocidadPromedio: ${s.itemsPorHora} registros/hora
 - reconteos totales: ${s.reconteos}
 - tasaDiscrepancia: ${s.tasaDiscrepancia} %
 - confidenceScore: ${s.confidenceScore}
@@ -237,7 +236,7 @@ Genera exactamente un objeto JSON con la estructura (rellena datos y textos en M
   "resumenEjecutivo": "Markdown: 4-6 párrafos. Debe ser descriptivo: (1) descripción del estado actual (cifras clave) (2) causas probables (ej: falta conteo final, ubicaciones sin ID, sesiones abiertas) (3) impacto (unidades y tiempo) (4) prioridades (qué auditar primero).",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
-    "totalRegistros": ${s.totalSKUsFisicos},
+    "totalItems": ${s.totalSKUsFisicos},
     "esfuerzoOperativo": ${s.esfuerzoTotalRows},
     "tasaDiscrepancia": ${s.tasaDiscrepancia},
     "velocidad": ${s.itemsPorHora},
@@ -278,7 +277,7 @@ IMPORTANTE:
 - En "anomalias_top10" NO recomiendes otro reconteo; recomienda \"Verificar discrepancia encontrada para confirmar stock final\" o \"Validar físicamente\".
 - En "operators", incluye la lista COMPLETA de operadores disponibles en los datos (hasta 50), no los resumas.
 - El "trend_comment" debe usar la serie reconteos_per_day y decir si está 'Aumentando', 'Disminuyendo' o 'Estable', con valores numéricos si aplica.
-- Usa 'totalSKUsFisicos' como 'Items Contados' si el usuario busca conteo de registros, y 'totalUnidadesFisicas' como 'Total Unidades'.
+- Usa 'totalItemsContados' (SKUs) como 'Items Contados' en el texto, y 'totalUnidadesFisicas' como 'Total Unidades'.
 `.trim();
 };
 
