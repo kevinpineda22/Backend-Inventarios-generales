@@ -500,10 +500,23 @@ const calculateStats = (data, namesMap) => {
         userStats[name2].reconteosCaused++; // T2 falló
       } else if (q3 === q2 && q3 !== q1) {
         userStats[name1].reconteosCaused++; // T1 falló
-      } else if (q3 !== q1 && q3 !== q2) {
-        // Ambos fallaron respecto al reconteo final
-        userStats[name1].reconteosCaused++;
-        userStats[name2].reconteosCaused++;
+      } else {
+        // Ninguno coincidió exactamente con el reconteo.
+        // Asignamos la culpa al que estuvo MÁS LEJOS del valor real (q3).
+        const diff1 = Math.abs(q3 - q1);
+        const diff2 = Math.abs(q3 - q2);
+
+        if (diff1 < diff2) {
+          // T1 estuvo más cerca, culpamos a T2
+          userStats[name2].reconteosCaused++;
+        } else if (diff2 < diff1) {
+          // T2 estuvo más cerca, culpamos a T1
+          userStats[name1].reconteosCaused++;
+        } else {
+          // Ambos estuvieron igual de lejos (o igual de mal), culpamos a ambos
+          userStats[name1].reconteosCaused++;
+          userStats[name2].reconteosCaused++;
+        }
       }
     }
   }
