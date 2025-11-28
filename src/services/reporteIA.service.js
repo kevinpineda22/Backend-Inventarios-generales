@@ -174,7 +174,9 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
   const s = {
     totalConteos: stats.totalConteos ?? 0,
     totalUnidadesFisicas: stats.totalUnidadesFisicas ?? 0,
+    totalSKUsFisicos: stats.totalSKUsFisicos ?? 0,
     esfuerzoTotalItems: stats.esfuerzoTotalItems ?? 0,
+    esfuerzoTotalRows: stats.esfuerzoTotalRows ?? 0,
     ubicacionesUnicas: stats.ubicacionesUnicas ?? 0,
     avance: stats.avance ?? 0,
     itemsPorHora: stats.itemsPorHora ?? 0,
@@ -204,8 +206,10 @@ Analiza exhaustivamente los datos de la bodega "${bodegaNombre}" y entrega UN SO
 
 ESTADÍSTICAS CLAVE:
 - totalConteos: ${s.totalConteos}
-- totalUnidadesFisicas: ${s.totalUnidadesFisicas}
-- esfuerzoTotalItems: ${s.esfuerzoTotalItems}
+- totalUnidadesFisicas (Suma de Cantidades): ${s.totalUnidadesFisicas}
+- totalSKUsFisicos (Conteo de Registros/Items únicos): ${s.totalSKUsFisicos}
+- esfuerzoTotalItems (Suma de Cantidades contadas): ${s.esfuerzoTotalItems}
+- esfuerzoTotalRows (Suma de Registros escaneados): ${s.esfuerzoTotalRows}
 - ubicacionesUnicas: ${s.ubicacionesUnicas}
 - avance: ${s.avance} %
 - itemsPorHora: ${s.itemsPorHora}
@@ -233,7 +237,8 @@ Genera exactamente un objeto JSON con la estructura (rellena datos y textos en M
   "resumenEjecutivo": "Markdown: 4-6 párrafos. Debe ser descriptivo: (1) descripción del estado actual (cifras clave) (2) causas probables (ej: falta conteo final, ubicaciones sin ID, sesiones abiertas) (3) impacto (unidades y tiempo) (4) prioridades (qué auditar primero).",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
-    "esfuerzoOperativo": ${s.esfuerzoTotalItems},
+    "totalRegistros": ${s.totalSKUsFisicos},
+    "esfuerzoOperativo": ${s.esfuerzoTotalRows},
     "tasaDiscrepancia": ${s.tasaDiscrepancia},
     "velocidad": ${s.itemsPorHora},
     "confidenceScore": ${s.confidenceScore}
@@ -273,6 +278,7 @@ IMPORTANTE:
 - En "anomalias_top10" NO recomiendes otro reconteo; recomienda \"Verificar discrepancia encontrada para confirmar stock final\" o \"Validar físicamente\".
 - En "operators", incluye la lista COMPLETA de operadores disponibles en los datos (hasta 50), no los resumas.
 - El "trend_comment" debe usar la serie reconteos_per_day y decir si está 'Aumentando', 'Disminuyendo' o 'Estable', con valores numéricos si aplica.
+- Usa 'totalSKUsFisicos' como 'Items Contados' si el usuario busca conteo de registros, y 'totalUnidadesFisicas' como 'Total Unidades'.
 `.trim();
 };
 
@@ -318,7 +324,15 @@ const calculateStats = (data, namesMap) => {
       return Number(c.total_items || 0);
   };
 
+  const getRows = (c) => {
+      if (c.conteo_items && c.conteo_items.length > 0) {
+          return c.conteo_items.length;
+      }
+      return c.total_items ? 1 : 0;
+  };
+
   const esfuerzoTotalItems = data.reduce((acc, c) => acc + getQty(c), 0);
+  const esfuerzoTotalRows = data.reduce((acc, c) => acc + getRows(c), 0);
 
   // Construir historial por ubicación
   const locationMap = new Map(); // uid -> { records: [], reconteoCount }
@@ -334,6 +348,7 @@ const calculateStats = (data, namesMap) => {
 
   // Ordenar y extraer diffs
   let totalUnidadesFisicas = 0;
+  let totalSKUsFisicos = 0;
   const anomalies = [];
   for (const [uid, info] of locationMap.entries()) {
     info.records.sort((a,b) => a.date - b.date);
@@ -341,6 +356,10 @@ const calculateStats = (data, namesMap) => {
     const prev = info.records.length >= 2 ? info.records[info.records.length - 2] : null;
     info.last = last; info.prev = prev;
     totalUnidadesFisicas += (last?.qty || 0);
+    
+    // Calcular SKUs (filas) del último conteo
+    const lastRows = last?.raw?.conteo_items?.length || (last?.raw?.total_items ? 1 : 0);
+    totalSKUsFisicos += lastRows;
 
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? null);
     const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
@@ -493,7 +512,9 @@ const calculateStats = (data, namesMap) => {
   return {
     totalConteos,
     totalUnidadesFisicas,
+    totalSKUsFisicos,
     esfuerzoTotalItems,
+    esfuerzoTotalRows,
     ubicacionesUnicas,
     ubicacionesFinalizadas,
     avance: Number(((ubicacionesFinalizadas / Math.max(1, ubicacionesUnicas)) * 100).toFixed(1)),
