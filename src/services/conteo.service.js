@@ -493,7 +493,10 @@ class ConteoService {
           fecha_fin: c.fecha_fin,
           usuario_nombre: displayName, // Usar nombre real si existe
           estado: c.estado,
-          total_items: c.conteo_items && c.conteo_items[0] ? c.conteo_items[0].count : 0
+          // Corregido: Calcular total sumando las cantidades de los items, o usar el total_items de la BD si no hay items cargados
+          total_items: c.conteo_items && c.conteo_items.length > 0 
+            ? c.conteo_items.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0) 
+            : (c.total_items || 0)
         };
       });
 
