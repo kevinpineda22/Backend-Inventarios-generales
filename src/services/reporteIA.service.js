@@ -366,10 +366,16 @@ const calculateStats = (data, namesMap) => {
     // Filtrar anomalías: Si la diferencia es 0, NO es una anomalía activa (ya se estabilizó o coincidió)
     if (diffAbs === 0) continue;
 
+    // Si la ubicación ya fue finalizada, no la reportamos como anomalía pendiente
+    if (ubicacionesFinalizadasSet.has(uid)) continue;
+
     const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
     const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
     const ubicLabel = last?.raw?.ubicacion?.nombre || last?.raw?.ubicacion?.numero || 'S/N';
-    const producto = last?.raw?.conteo_items?.[0]?.item?.descripcion || 'Producto desconocido';
+    
+    const firstItem = last?.raw?.conteo_items?.[0]?.item?.descripcion || 'Producto desconocido';
+    const totalItemsInLoc = last?.raw?.conteo_items?.length || 0;
+    const producto = totalItemsInLoc > 1 ? `${firstItem} (+${totalItemsInLoc - 1} otros)` : firstItem;
 
     anomalies.push({
       ubicacion_id: uid,
