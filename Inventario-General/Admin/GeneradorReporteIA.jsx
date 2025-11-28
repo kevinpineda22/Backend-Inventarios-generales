@@ -435,8 +435,21 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                       <div className="ia-card-grid">
                         {currentAnomalies.map((anomalia, idx) => (
                           <div key={idx} className="ia-anomaly-card">
-                            <div className="ia-anomaly-header">
+                            <div className="ia-anomaly-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                               <span>{anomalia.ubicacion}</span>
+                              {anomalia.prioridad && (
+                                <span style={{
+                                  fontSize: '0.7rem', 
+                                  padding: '2px 6px', 
+                                  borderRadius: '4px', 
+                                  background: anomalia.prioridad === 'alta' ? '#fee2e2' : '#fef3c7',
+                                  color: anomalia.prioridad === 'alta' ? '#b91c1c' : '#b45309',
+                                  textTransform: 'uppercase',
+                                  fontWeight: 'bold'
+                                }}>
+                                  {anomalia.prioridad}
+                                </span>
+                              )}
                             </div>
                             {anomalia.producto && (
                               <div className="ia-anomaly-product" style={{fontSize: '0.85rem', color: '#6366f1', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px'}}>
@@ -493,6 +506,64 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* OPERADORES DESTACADOS (NUEVO) */}
+                  {reportData.operators && (
+                    <div className="ia-section">
+                      <h3 className="ia-section-title"><Users size={18} /> Desempeño de Operadores</h3>
+                      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
+                        {/* Top Precisión */}
+                        <div className="ia-operator-card" style={{background: '#f0fdf4', padding: '1rem', borderRadius: '8px'}}>
+                          <h4 style={{margin: '0 0 0.5rem 0', color: '#15803d', fontSize: '0.95rem'}}>🏆 Top Precisión</h4>
+                          <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
+                            {reportData.operators.top_correct?.map((op, i) => (
+                              <li key={i} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px', borderBottom: '1px solid #dcfce7', paddingBottom: '4px'}}>
+                                <span>{op.name}</span>
+                                <span style={{fontWeight: 'bold'}}>{op.accuracyPct}% ({op.matches} ok)</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        {/* Top Reconteos */}
+                        <div className="ia-operator-card" style={{background: '#fef2f2', padding: '1rem', borderRadius: '8px'}}>
+                          <h4 style={{margin: '0 0 0.5rem 0', color: '#b91c1c', fontSize: '0.95rem'}}>⚠️ Generadores de Reconteos</h4>
+                          <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
+                            {reportData.operators.top_reconteos?.map((op, i) => (
+                              <li key={i} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px', borderBottom: '1px solid #fee2e2', paddingBottom: '4px'}}>
+                                <span>{op.name}</span>
+                                <span style={{fontWeight: 'bold'}}>{op.reconteosCaused} reconteos</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TENDENCIA DIARIA (NUEVO) */}
+                  {reportData.reconteos_per_day?.length > 0 && (
+                    <div className="ia-section">
+                      <h3 className="ia-section-title"><BarChart3 size={18} /> Tendencia de Reconteos</h3>
+                      <div style={{display: 'flex', alignItems: 'flex-end', height: '100px', gap: '8px', padding: '10px 0'}}>
+                        {reportData.reconteos_per_day.map((d, i) => {
+                          const max = Math.max(...reportData.reconteos_per_day.map(x => x.count));
+                          const height = (d.count / max) * 80 + 10; // Min 10% height
+                          return (
+                            <div key={i} style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'}}>
+                              <div style={{width: '100%', height: `${height}%`, background: '#6366f1', borderRadius: '4px 4px 0 0', opacity: 0.8}}></div>
+                              <span style={{fontSize: '0.7rem', color: '#64748b'}}>{d.date.slice(5)}</span>
+                              <span style={{fontSize: '0.7rem', fontWeight: 'bold'}}>{d.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {reportData.trend_comment && (
+                        <p style={{fontSize: '0.85rem', color: '#64748b', marginTop: '0.5rem', fontStyle: 'italic'}}>
+                          Tendencia: {reportData.trend_comment}
+                        </p>
+                      )}
                     </div>
                   )}
 

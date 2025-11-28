@@ -242,19 +242,17 @@ Genera exactamente un objeto JSON con la estructura (rellena datos y textos en M
     "Hallazgo 1 (quantificado)",
     "Hallazgo 2"
   ],
-  "acciones": [
-    { "actor": "Nombre", "accion": "Qué hacer", "prioridad": "alta/media/baja", "deadline": "YYYY-MM-DD", "evidencia_requerida": "foto/form" }
-  ],
-  "anomalias_top10": [
+  "anomalias": [
     {
       "ubicacion": "Zona > Pasillo > Ub",
-      "reported_last": 0,
-      "reported_prev": 12,
-      "diff_percent": -100,
-      "reconteos": 4,
-      "prioridad": "alta",
-      "accion": "Verificar discrepancia encontrada para confirmar stock final"
+      "producto": "Nombre del producto (si disponible)",
+      "situacion": "Descripción breve (ej: 'Diferencia de -12 u. tras 4 reconteos')",
+      "accion": "Verificar discrepancia encontrada para confirmar stock final",
+      "prioridad": "alta"
     }
+  ],
+  "acciones": [
+    { "actor": "Nombre", "accion": "Qué hacer", "impacto": "Impacto esperado (ej: 'Recuperar 500 unidades')", "prioridad": "alta" }
   ],
   "operators": {
     "top_correct": [{ "name":"X", "items":420, "comparisons":50, "matches":49, "accuracyPct":98 }],
