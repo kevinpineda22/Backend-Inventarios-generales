@@ -197,7 +197,8 @@ IMPORTANTE:
 1. En "resumenEjecutivo", explica claramente la diferencia entre "Esfuerzo Operativo" (Total de conteos/scans realizados) y "Unidades Físicas" (Cantidad real final). Si el esfuerzo es mucho mayor, explica que esto implica ineficiencia por múltiples reconteos.
 2. En "hallazgos", usa siempre el término "Reconteos" en lugar de "errores" y menciona que el objetivo es minimizarlos.
 3. En "analisisProductividad", menciona explícitamente cuántos items contó cada operador destacado (ej: "Juan (500 items)").
-4. En "anomalias", genera una tarjeta para CADA una de las ubicaciones listadas en "UBICACIONES CONFLICTIVAS DETECTADAS". No omitas ninguna. Si la lista es larga, inclúyelas todas.
+4. En "anomalias", genera una tarjeta para CADA una de las ubicaciones listadas en "UBICACIONES CONFLICTIVAS DETECTADAS". No omitas ninguna.
+   - IMPORTANTE: NO recomiendes "hacer un tercer conteo" o "reconteo". La recomendación debe ser "Verificar discrepancia encontrada para confirmar stock final" o "Validar físicamente la diferencia".
 5. El contenido de los campos de texto (resumenEjecutivo, analisisProductividad) debe usar formato Markdown para negritas y listas.
 6. Sé profesional y constructivo.
 `.trim();
@@ -306,8 +307,9 @@ const calculateStats = (data, namesMap) => {
     ? ((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)
     : "0";
 
-  // 4. Top Users con Nombres Reales (Búsqueda Dual)
-  const userMap = {};
+  // 4. Top Users con Nombres Reales (Búsqueda Dual) y Precisión
+  const userStats = {}; // { name: { items: 0, matches: 0, comparisons: 0 } }
+
   data.forEach(c => {
     // Normalizar claves de búsqueda
     const userId = c.usuario_id;
@@ -321,20 +323,32 @@ const calculateStats = (data, namesMap) => {
     
     if (!name) {
        const rawName = c.usuario_nombre || c.correo_empleado || c.usuario_id || 'Desconocido';
-       // Si parece un email, lo cortamos. Si no, lo dejamos tal cual
        name = rawName.includes('@') ? rawName.split('@')[0] : rawName;
-       // Capitalizar primera letra
        name = name.charAt(0).toUpperCase() + name.slice(1);
     }
     
-    if (!userMap[name]) userMap[name] = 0;
-    userMap[name] += (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 1);
+    if (!userStats[name]) userStats[name] = { items: 0, matches: 0, comparisons: 0 };
+    
+    const countVal = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
+    userStats[name].items += countVal;
+
+    // Accuracy Check (Only for Type 1 and 2)
+    if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && ubicacionMap.has(c.ubicacion_id)) {
+        userStats[name].comparisons++;
+        // Check if their count matches the final determined stock
+        if (ubicacionMap.get(c.ubicacion_id).cantidad === countVal) {
+            userStats[name].matches++;
+        }
+    }
   });
 
-  const topUsers = Object.entries(userMap)
-    .sort(([,a], [,b]) => b - a)
+  const topUsers = Object.entries(userStats)
+    .sort(([,a], [,b]) => b.matches - a.matches) // Sort by number of correct matches
     .slice(0, 3)
-    .map(([name, items]) => ({ name, items }));
+    .map(([name, s]) => {
+        const acc = s.comparisons > 0 ? ((s.matches / s.comparisons) * 100).toFixed(0) : 0;
+        return { name, items: `${s.items} items, ${acc}% Acierto (${s.matches} ok)` };
+    });
 
   // Top Zonas (Actividad)
   const zonaMap = {};
