@@ -120,6 +120,8 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     reconteos: stats.reconteos ?? 0,
     tasaDiscrepancia: stats.tasaError ?? 0,
     topUsers: (stats.topUsers || []).map(u => `${u.name} (${u.items})`),
+    topErrorUsers: (stats.topErrorUsers || []).map(u => `${u.name} (${u.info})`),
+    dailyRecounts: stats.dailyRecounts || [],
     topZonasReconteo: stats.topErrorZonas || [],
     topPasillosReconteo: stats.topErrorPasillos || []
   };
@@ -154,7 +156,9 @@ MÉTRICAS GLOBALES:
 - Velocidad Promedio: ${s.itemsPorHora} items/h (aprox ${s.velocidadPromedio} items/min)
 - Total Discrepancias (Reconteos generados): ${s.reconteos}
 - Tasa de Discrepancia: ${s.tasaDiscrepancia} % (Porcentaje de ubicaciones que requirieron 3er conteo por no coincidir C1 vs C2)
-- Top Operadores: ${s.topUsers.join(', ') || 'N/A'}
+- Top Operadores (Precisión): ${s.topUsers.join(', ') || 'N/A'}
+- Top Operadores (Generadores de Reconteos): ${s.topErrorUsers.join(', ') || 'Ninguno'}
+- Tendencia de Reconteos (Día a día): ${s.dailyRecounts.join(', ') || 'Sin datos'}
 - Zonas con más Discrepancias: ${s.topZonasReconteo.join(', ') || 'Ninguna'}
 - Pasillos con más Discrepancias: ${s.topPasillosReconteo.join(', ') || 'Ninguno'}
 
@@ -190,17 +194,23 @@ Genera un objeto JSON con la siguiente estructura exacta:
       "accion": "Recomendación..."
     }
   ],
+  "datosTendencia": { "YYYY-MM-DD": 0 },
   "conclusion": "Texto breve de conclusión..."
 }
 
 IMPORTANTE:
-1. En "resumenEjecutivo", explica claramente la diferencia entre "Esfuerzo Operativo" (Total de conteos/scans realizados) y "Unidades Físicas" (Cantidad real final). Si el esfuerzo es mucho mayor, explica que esto implica ineficiencia por múltiples reconteos.
+1. En "resumenEjecutivo", sé muy descriptivo y profesional. Analiza la eficiencia global, comparando el esfuerzo operativo vs el resultado real.
 2. En "hallazgos", usa siempre el término "Reconteos" en lugar de "errores" y menciona que el objetivo es minimizarlos.
-3. En "analisisProductividad", menciona explícitamente cuántos items contó cada operador destacado (ej: "Juan (500 items)").
-4. En "anomalias", genera una tarjeta para CADA una de las ubicaciones listadas en "UBICACIONES CONFLICTIVAS DETECTADAS". No omitas ninguna.
+3. En "analisisProductividad":
+   - Destaca a los operadores con MAYOR PRECISIÓN (Items correctos sin discrepancia).
+   - Menciona a los operadores que han causado más reconteos (discrepancias).
+   - Incluye un comentario sobre la "Tendencia de Reconteos" día a día (si subió o bajó).
+4. En "anomalias", genera una TABLA "Top 10 Anomalías Prioritarias".
+   - Ordena por importancia (si puedes inferirla) o simplemente lista las 10 primeras.
    - IMPORTANTE: NO recomiendes "hacer un tercer conteo" o "reconteo". La recomendación debe ser "Verificar discrepancia encontrada para confirmar stock final" o "Validar físicamente la diferencia".
-5. El contenido de los campos de texto (resumenEjecutivo, analisisProductividad) debe usar formato Markdown para negritas y listas.
-6. Sé profesional y constructivo.
+5. En "datosTendencia", devuelve el objeto con las fechas y conteos de reconteos diarios tal cual se recibieron.
+6. El contenido de los campos de texto (resumenEjecutivo, analisisProductividad) debe usar formato Markdown para negritas y listas.
+7. Sé profesional y constructivo.
 `.trim();
 };
 
@@ -350,6 +360,25 @@ const calculateStats = (data, namesMap) => {
         return { name, items: `${s.items} items, ${acc}% Acierto (${s.matches} ok)` };
     });
 
+  // Calculate Top Error Users (Most mismatches)
+  const topErrorUsers = Object.entries(userStats)
+    .sort(([,a], [,b]) => (b.comparisons - b.matches) - (a.comparisons - a.matches))
+    .slice(0, 3)
+    .map(([name, s]) => {
+        const errors = s.comparisons - s.matches;
+        return { name, info: `${errors} discrepancias` };
+    });
+
+  // Calculate Daily Recounts
+  const dailyRecountsMap = {};
+  data.filter(c => c.tipo_conteo === 3).forEach(c => {
+      const date = new Date(c.created_at).toISOString().split('T')[0];
+      dailyRecountsMap[date] = (dailyRecountsMap[date] || 0) + 1;
+  });
+  const dailyRecounts = Object.entries(dailyRecountsMap)
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([date, count]) => `${date}: ${count}`);
+
   // Top Zonas (Actividad)
   const zonaMap = {};
   data.forEach(c => {
@@ -412,6 +441,8 @@ const calculateStats = (data, namesMap) => {
     velocidadPromedio,
     itemsPorHora,
     topUsers,
+    topErrorUsers,
+    dailyRecounts,
     topZonas,
     topErrorZonas,
     topErrorPasillos,
