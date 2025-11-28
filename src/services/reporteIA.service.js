@@ -6,6 +6,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+/**
+ * generateInventoryReport
+ * ----------------------
+ * Genera un reporte de inventario (intenta devolver JSON estructurado).
+ * Reemplaza la lógica existente en tu archivo por esta función completa
+ * (incluye helpers: buildInventoryPrompt, calculateStats, parseJSONFromText).
+ */
 export const generateInventoryReport = async (params) => {
   try {
     // Si se proporcionan datos de análisis pre-calculados (ej: reporte de operador desde frontend)
@@ -15,8 +22,8 @@ export const generateInventoryReport = async (params) => {
 
     // Flujo normal: Reporte de Bodega (Backend fetch)
     // Extraemos 'profiles' si viene del frontend, el resto son filtros
-    const { profiles: frontendProfiles, ...filters } = params; 
-    
+    const { profiles: frontendProfiles, ...filters } = params;
+
     // 1. Obtener datos de la base de datos
     const conteos = await ConteoModel.findAll(filters);
 
@@ -26,7 +33,7 @@ export const generateInventoryReport = async (params) => {
 
     // 2. Obtener mapa de nombres reales (Estrategia Robusta: Frontend + Backend Backup)
     let allProfiles = frontendProfiles || [];
-    
+
     // Si no vinieron del frontend, intentamos cargar desde backend
     if (!allProfiles.length) {
       // A. Intentar tabla 'profiles' (Public)
@@ -46,7 +53,7 @@ export const generateInventoryReport = async (params) => {
             allProfiles = users.map(u => ({
               id: u.id,
               correo: u.email,
-              nombre: u.user_metadata?.nombre || u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0]
+              nombre: u.user_metadata?.nombre || u.user_metadata?.full_name || u.user_metadata?.name || (u.email ? u.email.split('@')[0] : u.id)
             }));
           }
         } catch (err) {
@@ -54,18 +61,15 @@ export const generateInventoryReport = async (params) => {
         }
       }
     }
-    
+
     const namesMap = new Map();
     if (allProfiles && allProfiles.length > 0) {
       allProfiles.forEach(p => {
         if (p.nombre) {
-          // Mapa por ID (Soporte para user_id o id)
           const uid = p.user_id || p.id;
           if (uid) namesMap.set(uid, p.nombre);
-          // Mapa por Correo
           if (p.correo) {
-            namesMap.set(p.correo.toLowerCase(), p.nombre); // Normalizar a minúsculas
-            // Mapa por "Username" (parte antes del @) para coincidir con logins cortos
+            namesMap.set(p.correo.toLowerCase(), p.nombre);
             const username = p.correo.split('@')[0].toLowerCase();
             namesMap.set(username, p.nombre);
           }
@@ -81,23 +85,33 @@ export const generateInventoryReport = async (params) => {
     const prompt = buildInventoryPrompt({
       bodegaNombre,
       stats,
-      sampleConteos: conteos, // Enviamos todos, la función recortará
-      ubicacionesConflicto: stats.ubicacionesConflicto // Pasamos los conflictos detectados previamente
+      sampleConteos: conteos,
+      ubicacionesConflicto: stats.ubicacionesConflicto
     });
 
-    // 5. Llamar a OpenAI
+    // 5. Llamar a OpenAI (pedimos JSON estricto desde system message y temperature 0.0)
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: "Eres un Auditor Senior de Inventarios. Tu salida debe ser EXCLUSIVAMENTE un objeto JSON válido. No incluyas markdown ```json``` ni texto adicional antes o después." },
+        {
+          role: "system",
+          content:
+            "Eres un Auditor Senior de Inventarios. TU SALIDA DEBE SER EXCLUSIVAMENTE UN JSON VALIDO (UN SOLO OBJETO). No incluyas texto adicional, ni markdown, ni explicaciones. Usa sólo los datos proporcionados."
+        },
         { role: "user", content: prompt }
       ],
       model: "gpt-3.5-turbo",
-      temperature: 0.5,
-      max_tokens: 3000,
-      response_format: { type: "json_object" } // Forzar modo JSON si usas modelos recientes, si no, el prompt basta
+      temperature: 0.0,
+      max_tokens: 3500,
     });
 
-    return completion.choices[0].message.content;
+    const raw = completion.choices?.[0]?.message?.content;
+    // Intentar parseo seguro
+    const parsed = parseJSONFromText(raw);
+    if (parsed) return parsed;
+
+    // Si no pudimos parsear, devolvemos el raw para debugging (o lanzar error)
+    // Pero preferimos devolver un objeto con raw para que frontend no rompa
+    return { __raw: raw, warning: 'No se pudo parsear JSON. Revisa respuesta del modelo.' };
 
   } catch (error) {
     console.error('Error generating AI report:', error);
@@ -105,329 +119,355 @@ export const generateInventoryReport = async (params) => {
   }
 };
 
-// --- NUEVA FUNCIÓN DE PROMPT AVANZADO ---
+/* ------------------ HELPERS & PROMPT BUILDERS ------------------ */
+
+/**
+ * parseJSONFromText
+ * - Intenta parsear un texto que puede tener JSON puro o un bloque delimitado <<<JSON>>>...<<<ENDJSON>>>
+ * - Devuelve null si no pudo parsear.
+ */
+const parseJSONFromText = (text) => {
+  if (!text || typeof text !== 'string') return null;
+
+  // 1) Intento directo
+  try {
+    const obj = JSON.parse(text);
+    if (obj && typeof obj === 'object') return obj;
+  } catch (e) {
+    // continue
+  }
+
+  // 2) Buscar bloque delimitado <<<JSON>>> ... <<<ENDJSON>>>
+  const delimMatch = text.match(/<<<JSON>>>([\s\S]*?)<<<ENDJSON>>>/);
+  if (delimMatch) {
+    try {
+      const obj = JSON.parse(delimMatch[1]);
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {
+      // continue
+    }
+  }
+
+  // 3) Buscar primer "{" y último "}" y intentar parsear esa porción (protección básica)
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) {
+    const maybe = text.slice(first, last + 1);
+    try {
+      const obj = JSON.parse(maybe);
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {
+      // no parseable
+    }
+  }
+
+  return null;
+};
+
+/**
+ * buildInventoryPrompt
+ * - Construye el prompt que se enviará al modelo solicitando el JSON con la estructura
+ *   y pidiendo el resumen ejecutivo más descriptivo y profesional.
+ */
 const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleConteos = [], ubicacionesConflicto = [] }) => {
-  // Normaliza campos de stats
   const s = {
     totalConteos: stats.totalConteos ?? 0,
-    totalUnidadesFisicas: stats.totalUnidadesFisicas ?? 0, // Total Unidades Físicas
+    totalUnidadesFisicas: stats.totalUnidadesFisicas ?? 0,
     esfuerzoTotalItems: stats.esfuerzoTotalItems ?? 0,
     ubicacionesUnicas: stats.ubicacionesUnicas ?? 0,
     ubicacionesFinalizadas: stats.ubicacionesFinalizadas ?? 0,
     avance: stats.avance ?? 0,
     velocidadPromedio: stats.velocidadPromedio ?? "N/A",
-    itemsPorHora: stats.itemsPorHora ?? "0",
+    itemsPorHora: stats.itemsPorHora ?? 0,
     reconteos: stats.reconteos ?? 0,
     tasaDiscrepancia: stats.tasaError ?? 0,
-    topUsers: (stats.topUsers || []).map(u => `${u.name} (${u.items})`),
-    topErrorUsers: (stats.topErrorUsers || []).map(u => `${u.name} (${u.info})`),
-    dailyRecounts: stats.dailyRecounts || [],
-    topZonasReconteo: stats.topErrorZonas || [],
-    topPasillosReconteo: stats.topErrorPasillos || []
+    anomaliesTop10: stats.anomaliesTop10 || [],
+    operatorsCorrectTop: stats.operatorsCorrectTop || [],
+    operatorsReconTop: stats.operatorsReconTop || [],
+    reconteosPerDay: stats.reconteosPerDay || []
   };
 
-  // Formatea hasta 10 filas de muestra como objetos legibles para la IA
-  // Seleccionamos preferiblemente filas con problemas (tipo_conteo 3) para que la IA vea ejemplos de errores
-  const errorSamples = sampleConteos.filter(c => c.tipo_conteo === 3).slice(0, 5);
-  const normalSamples = sampleConteos.filter(c => c.tipo_conteo !== 3).slice(0, 5);
-  const mixedSamples = [...errorSamples, ...normalSamples];
+  const mixedSamples = [
+    ...sampleConteos.filter(c => c.tipo_conteo === 3).slice(0, 6),
+    ...sampleConteos.filter(c => c.tipo_conteo !== 3).slice(0, 4)
+  ].slice(0, 10);
 
   const sampleLines = mixedSamples.map(c => {
     const pasillo = c.ubicacion?.pasillo?.numero ?? c.pasillo ?? 'N/A';
     const zona = c.ubicacion?.pasillo?.zona?.nombre ?? c.zona ?? 'N/A';
-    const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? 'N/A';
+    const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? c.ubicacion_id ?? 'N/A';
     const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.count ?? 0);
-    const usuario = c.usuario_nombre || c.correo_empleado || 'Anon';
-    const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Requiere Reconteo)' : 'Conteo Normal';
-    
-    return `- { Zona: "${zona}", Pasillo: "${pasillo}", Ubicacion: "${ubicacion}", Cantidad_Registrada: ${itemsCount}, Tipo: "${tipoTexto}", Usuario: "${usuario}" }`;
+    const usuario = c.usuario_nombre || c.correo_empleado || 'N/D';
+    const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Reconteo)' : 'Conteo Normal';
+    return `- { zona: "${zona}", pasillo: "${pasillo}", ubicacion: "${ubicacion}", items: ${itemsCount}, tipo: "${tipoTexto}", usuario: "${usuario}", fecha: "${c.created_at ?? c.createdAt ?? ''}" }`;
   }).join('\n');
 
   return `
-Analiza los datos del inventario de la bodega "${bodegaNombre}".
-A continuación recibes métricas resumidas y una muestra de registros reales.
+Analiza los datos de la bodega "${bodegaNombre}" y genera UN SOLO OBJETO JSON con los campos requeridos (ver esquema abajo). Usa únicamente los datos entregados. No inventes nombres ni ubicaciones.
 
-MÉTRICAS GLOBALES:
-- Sesiones Totales: ${s.totalConteos}
-- 📦 TOTAL UNIDADES FÍSICAS (Inventario Real): ${s.totalUnidadesFisicas}
-- Esfuerzo Operativo (total items contados en todas las pasadas): ${s.esfuerzoTotalItems}
-- Ubicaciones Únicas: ${s.ubicacionesUnicas} (Finalizadas: ${s.ubicacionesFinalizadas})
-- Avance Global: ${s.avance} %
-- Velocidad Promedio: ${s.itemsPorHora} items/h (aprox ${s.velocidadPromedio} items/min)
-- Total Discrepancias (Reconteos generados): ${s.reconteos}
-- Tasa de Discrepancia: ${s.tasaDiscrepancia} % (Porcentaje de ubicaciones que requirieron 3er conteo por no coincidir C1 vs C2)
-- Top Operadores (Precisión): ${s.topUsers.join(', ') || 'N/A'}
-- Top Operadores (Generadores de Reconteos): ${s.topErrorUsers.join(', ') || 'Ninguno'}
-- Tendencia de Reconteos (Día a día): ${s.dailyRecounts.join(', ') || 'Sin datos'}
-- Zonas con más Discrepancias: ${s.topZonasReconteo.join(', ') || 'Ninguna'}
-- Pasillos con más Discrepancias: ${s.topPasillosReconteo.join(', ') || 'Ninguno'}
+RESUMEN DE ESTADÍSTICAS:
+- totalConteos: ${s.totalConteos}
+- totalUnidadesFisicas: ${s.totalUnidadesFisicas}
+- esfuerzoTotalItems: ${s.esfuerzoTotalItems}
+- ubicacionesUnicas: ${s.ubicacionesUnicas}
+- avance: ${s.avance} %
+- itemsPorHora: ${s.itemsPorHora}
+- reconteos (totales): ${s.reconteos}
+- tasaDiscrepancia: ${s.tasaDiscrepancia} %
 
-UBICACIONES CONFLICTIVAS DETECTADAS (Lista Completa):
-${ubicacionesConflicto.length > 0 ? ubicacionesConflicto.join('\n') : 'Ninguna reportada.'}
+MUESTRAS (máx 10):
+${sampleLines || '- No hay muestras -'}
 
-REGISTROS DE MUESTRA (Estructura real de datos):
-${sampleLines || '- No hay filas de muestra -'}
+ANOMALIES_TOP10 (pasadas detectadas por el sistema):
+${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | last:${a.reported_last} | prev:${a.reported_prev} | diff%:${a.diff_percent} | reconteos:${a.reconteoCount}`).join('\n')}
 
-INSTRUCCIONES DE SALIDA (FORMATO JSON):
-Genera un objeto JSON con la siguiente estructura exacta:
+OPERADORES (Top correctos):
+${(s.operatorsCorrectTop || []).map(o => `- ${o.name}: ${o.matches}/${o.comparisons} ok (${o.accuracyPct ?? 'N/D'}%)`).join('\n')}
+
+OPERADORES (Top por reconteos causados):
+${(s.operatorsReconTop || []).map(o => `- ${o.name}: ${o.reconteosCaused} reconteos`).join('\n')}
+
+RECONTEOS POR DÍA (serie): ${JSON.stringify(s.reconteosPerDay)}
+
+--- SALIDA REQUERIDA (UN SOLO JSON) ---
+Genera exactamente un único JSON válido con esta estructura (rellena con datos y textos en Markdown donde corresponde):
+
 {
-  "resumenEjecutivo": "Texto en markdown del resumen ejecutivo...",
+  "resumenEjecutivo": "Markdown: resumen ejecutivo descriptivo y profesional (3-6 párrafos). Debe analizar causas posibles, impacto y prioridad de acción.",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
     "esfuerzoOperativo": ${s.esfuerzoTotalItems},
     "tasaDiscrepancia": ${s.tasaDiscrepancia},
-    "velocidad": ${s.itemsPorHora}
+    "velocidad": ${s.itemsPorHora},
+    "confidence_score": null
   },
-  "analisisProductividad": "Texto en markdown del análisis de productividad...",
+  "analisisProductividad": "Markdown: análisis de productividad. Debe listar operadores destacados y sus métricas exactas (items, matches/comparisons, % acierto).",
   "hallazgos": [
-    "Hallazgo 1...",
-    "Hallazgo 2..."
+    "Listado de hallazgos cuantificados (use cifras: reconteos= X, ubicaciones conflictivas = Y, top zona = Z)"
   ],
   "acciones": [
-    { "actor": "Nombre", "accion": "Acción...", "impacto": "Impacto esperado..." }
+    { "actor": "Nombre", "accion": "Acción concreta", "evidencia_requerida": "foto, formulario", "prioridad": "alta/media/baja", "deadline": "YYYY-MM-DD" }
   ],
-  "anomalias": [
+  "anomalias_top10": [
     {
-      "ubicacion": "Zona > Pasillo > Ubic",
-      "situacion": "Descripción...",
-      "cantidad": 0,
-      "accion": "Recomendación..."
+      "ubicacion": "Zona > Pasillo > Ub",
+      "reported_last": 0,
+      "reported_prev": 12,
+      "diff_percent": -100,
+      "reconteos": 4,
+      "prioridad": "alta",
+      "accion": "Verificar discrepancia encontrada para confirmar stock final"
     }
   ],
-  "datosTendencia": { "YYYY-MM-DD": 0 },
-  "conclusion": "Texto breve de conclusión..."
+  "operators": {
+    "top_correct": [
+      { "name":"X", "items": 420, "comparisons": 50, "matches": 49, "accuracyPct": 98 }
+    ],
+    "top_reconteos": [
+      { "name":"Y", "reconteosCaused": 12 }
+    ]
+  },
+  "reconteos_per_day": ${JSON.stringify(s.reconteosPerDay)},
+  "sql_checks": [
+    "SELECT ... top reconteos ...",
+    "SELECT ... últimos 2 conteos por ubicación ...",
+    "SELECT ... comparar contra snapshot ..."
+  ],
+  "conclusion": "Markdown: conclusión técnica y recomendación prioritaria (1-2 párrafos)"
 }
 
 IMPORTANTE:
-1. En "resumenEjecutivo", sé muy descriptivo y profesional. Analiza la eficiencia global, comparando el esfuerzo operativo vs el resultado real.
-2. En "hallazgos", usa siempre el término "Reconteos" en lugar de "errores" y menciona que el objetivo es minimizarlos.
-3. En "analisisProductividad":
-   - Destaca a los operadores con MAYOR PRECISIÓN (Items correctos sin discrepancia).
-   - Menciona a los operadores que han causado más reconteos (discrepancias).
-   - Incluye un comentario sobre la "Tendencia de Reconteos" día a día (si subió o bajó).
-4. En "anomalias", genera una TABLA "Top 10 Anomalías Prioritarias".
-   - Ordena por importancia (si puedes inferirla) o simplemente lista las 10 primeras.
-   - IMPORTANTE: NO recomiendes "hacer un tercer conteo" o "reconteo". La recomendación debe ser "Verificar discrepancia encontrada para confirmar stock final" o "Validar físicamente la diferencia".
-5. En "datosTendencia", devuelve el objeto con las fechas y conteos de reconteos diarios tal cual se recibieron.
-6. El contenido de los campos de texto (resumenEjecutivo, analisisProductividad) debe usar formato Markdown para negritas y listas.
-7. Sé profesional y constructivo.
+- El campo "resumenEjecutivo" debe ser descriptivo y profesional: analiza causas probables, impacto (cantidad/ej: unidades) y prioriza acciones concretas.
+- En "anomalias_top10", ordena por prioridad (ya calculada por el sistema). Usa prioridad: alta / media / baja.
+- En "analisisProductividad" incluye el mini-comentario sobre la serie de reconteos por día (sube/baja/tendencia) usando los datos en reconteos_per_day.
 `.trim();
 };
 
+/* ------------------ calculateStats (mejorada) ------------------ */
+
+/**
+ * calculateStats
+ * - Analiza los conteos y devuelve un objeto con métricas extendidas:
+ *   - anomaliesTop10 (prioritizadas)
+ *   - operatorsCorrectTop (top por matches con conteo final)
+ *   - operatorsReconTop (top por reconteos causados)
+ *   - reconteosPerDay (serie para graficar)
+ */
 const calculateStats = (data, namesMap) => {
-  if (!data || data.length === 0) return { totalConteos: 0, totalItems: 0, avance: 0, reconteos: 0, tasaError: 0, topUsers: [], topZonas: [], topErrorZonas: [], itemsPorHora: 0 };
+  if (!data || data.length === 0) return {
+    totalConteos: 0, totalUnidadesFisicas: 0, esfuerzoTotalItems: 0, ubicacionesUnicas: 0,
+    ubicacionesFinalizadas: 0, avance: 0, reconteos: 0, tasaError: 0, velocidadPromedio: null,
+    itemsPorHora: 0, topUsers: [], topZonas: [], topErrorZonas: [], topErrorPasillos: [],
+    ubicacionesConflicto: [], anomaliesTop10: [], operatorsCorrectTop: [], operatorsReconTop: [],
+    reconteosPerDay: [], rawSamples: []
+  };
 
   const totalConteos = data.length;
-  
-  // Calcular ubicaciones únicas
+
+  // Ubicaciones únicas y finalizadas
   const ubicacionesSet = new Set(data.map(c => c.ubicacion_id));
   const ubicacionesUnicas = ubicacionesSet.size;
-
-  // Ubicaciones finalizadas
   const ubicacionesFinalizadasSet = new Set(
     data.filter(c => c.estado === 'finalizado').map(c => c.ubicacion_id)
   );
   const ubicacionesFinalizadas = ubicacionesFinalizadasSet.size;
 
-  // Total items
-  // const totalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
-  
-  // --- NUEVAS MÉTRICAS AVANZADAS ---
+  // Esfuerzo total
+  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (Number(c.total_items || (c.conteo_items?.[0]?.count) || 0)), 0);
 
-  // 1. Stock Real vs Esfuerzo Operativo
-  // Esfuerzo: Todo lo que se contó (incluyendo errores y reconteos)
-  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0), 0);
-  
-  // Stock: Lo que realmente hay (Último estado válido de cada ubicación)
-  const ubicacionMap = new Map();
+  // Construir mapa por ubicación con historial de conteos
+  const locationMap = new Map(); // ubicacion_id => { records: [{qty, tipo, date, user}], last, prev, reconteoCount }
   data.forEach(c => {
-      // Si es conteo final (4) tiene prioridad absoluta. Si no, usamos el más reciente.
-      const current = ubicacionMap.get(c.ubicacion_id);
-      const cantidad = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
-      
-      if (!current) {
-          ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
-      } else {
-          // Si el actual ya es final (4), no lo sobreescribimos a menos que este tambien sea 4 y mas nuevo (raro)
-          if (current.tipo === 4) return;
-          
-          // Si este es 4, sobreescribimos
-          if (c.tipo_conteo === 4) {
-              ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
-          } 
-          // Si ninguno es 4, nos quedamos con el más reciente
-          else if (new Date(c.created_at) > current.fecha) {
-              ubicacionMap.set(c.ubicacion_id, { tipo: c.tipo_conteo, cantidad, fecha: new Date(c.created_at) });
-          }
-      }
+    const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
+    const qty = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
+    const date = new Date(c.created_at || c.createdAt || Date.now());
+    const rec = { qty, tipo: c.tipo_conteo, date, userId: c.usuario_id, userName: c.usuario_nombre || c.correo_empleado || null, raw: c };
+
+    if (!locationMap.has(uid)) locationMap.set(uid, { records: [], reconteoCount: 0 });
+    locationMap.get(uid).records.push(rec);
+    if (c.tipo_conteo === 3) locationMap.get(uid).reconteoCount++;
   });
-  
-  // Suma total de items (unidades físicas)
-  const totalUnidadesFisicas = Array.from(ubicacionMap.values()).reduce((acc, val) => acc + val.cantidad, 0);
 
-  // Suma total de productos únicos (SKUs distintos contados)
-  // Nota: Esto requiere que 'data' traiga información de items. 
-  // Si 'data' es solo conteos, necesitamos iterar sobre los items dentro de cada conteo si estuvieran disponibles.
-  // Como 'findAll' trae 'conteo_items(count)', solo sabemos la cantidad de filas (SKUs distintos por conteo).
-  // Para un estimado rápido de "Referencias Únicas", sumamos el 'count' de conteo_items de los conteos válidos.
-  const referenciasUnicasEstimadas = Array.from(ubicacionMap.values()).reduce((acc, val) => {
-      // Aquí asumimos que 'cantidad' es unidades totales. 
-      // Si queremos SKUs distintos, necesitamos acceder al conteo original.
-      // Como simplificación, usaremos el dato que ya tenemos o lo dejaremos como métrica separada si el backend lo soporta.
-      return acc; // Placeholder si no tenemos el dato exacto de SKUs únicos globales
-  }, 0);
-  
-  // Mejor aproximación con los datos actuales:
-  // Si queremos saber "Total Unidades Físicas" -> stockEstimadoItems (Ya lo tenemos)
-  // Si queremos saber "Total Referencias (SKUs)" -> Necesitamos extraer todos los item_id distintos.
-  
-  // Vamos a recolectar todos los items de los conteos seleccionados como "válidos" en el mapa
-  // (Esto es costoso si no tenemos los items cargados, pero intentaremos con lo que hay)
-  
-  // 2. Clasificación de Diferencias (Solo en reconteos/ajustes)
+  // Calcular último y previo por ubicación y totalUnidadesFisicas
+  let totalUnidadesFisicas = 0;
+  const anomalies = []; // temporal
+  for (const [uid, info] of locationMap.entries()) {
+    // ordenar por fecha asc
+    info.records.sort((a,b) => a.date - b.date);
+    const last = info.records[info.records.length - 1];
+    const prev = info.records.length >= 2 ? info.records[info.records.length - 2] : null;
+    info.last = last;
+    info.prev = prev;
+    totalUnidadesFisicas += (last?.qty || 0);
+
+    // calcular diffs
+    const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? null);
+    const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
+
+    const locationLabel = (() => {
+      const u = last?.raw?.ubicacion || last?.raw?.ubicacion_id || uid;
+      const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
+      const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
+      return `${zona} > Pasillo ${pasillo} > Ubicación ${u}`;
+    })();
+
+    anomalies.push({
+      ubicacion_id: uid,
+      ubicacion: locationLabel,
+      reported_last: last?.qty ?? 0,
+      reported_prev: prev?.qty ?? null,
+      diff_abs: diffAbs,
+      diff_percent: diffPercent,
+      reconteoCount: info.reconteoCount,
+      last_date: last?.date?.toISOString?.() ?? null,
+      last_user: last?.userName ?? null
+    });
+  }
+
+  // Anomalías: ordenar por prioridad
+  const anomaliesSorted = anomalies
+    .sort((a,b) => {
+      if (b.reconteoCount !== a.reconteoCount) return b.reconteoCount - a.reconteoCount;
+      const aPct = Math.abs(a.diff_percent ?? 0), bPct = Math.abs(b.diff_percent ?? 0);
+      if (bPct !== aPct) return bPct - aPct;
+      return Math.abs(b.diff_abs ?? 0) - Math.abs(a.diff_abs ?? 0);
+    });
+
+  const anomaliesTop10 = anomaliesSorted.slice(0, 10);
+
+  // Reconteos total y reconteos unicos por ubicacion
   const reconteos = data.filter(c => c.tipo_conteo === 3).length;
+  const reconteosUnicosPorUbicacion = new Set(data.filter(c => c.tipo_conteo === 3).map(c => c.ubicacion_id)).size;
 
-  // 3. Velocidad Promedio (Items / Minuto y Hora)
-  let totalMinutos = 0;
-  let conteosConTiempo = 0;
-
+  // Velocidad promedio (items/min & items/h)
+  let totalMinutos = 0, conteosConTiempo = 0;
   data.forEach(c => {
     if (c.fecha_inicio && c.fecha_fin) {
       const inicio = new Date(c.fecha_inicio);
       const fin = new Date(c.fecha_fin);
       const diffMinutos = (fin - inicio) / 1000 / 60;
-      const itemsEnConteo = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
-      
-      // Filtramos tiempos absurdos Y sesiones "zombies" (mucho tiempo, pocos items)
-      // Regla: Si duró más de 30 min y se contaron menos de 10 items, probablemente se dejó abierta.
+      const itemsEnConteo = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
       const esZombie = diffMinutos > 30 && itemsEnConteo < 10;
-
       if (diffMinutos > 0.1 && diffMinutos < 240 && !esZombie) {
         totalMinutos += diffMinutos;
         conteosConTiempo++;
       }
     }
   });
-  
-  const velocidadPromedio = conteosConTiempo > 0 && totalMinutos > 0
-    ? (esfuerzoTotalItems / totalMinutos).toFixed(1) 
-    : "N/A";
+  const velocidadPromedio = (conteosConTiempo > 0 && totalMinutos > 0) ? Number((esfuerzoTotalItems / totalMinutos).toFixed(1)) : null;
+  const itemsPorHora = (conteosConTiempo > 0 && totalMinutos > 0) ? Number(((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)) : 0;
 
-  const itemsPorHora = conteosConTiempo > 0 && totalMinutos > 0
-    ? ((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)
-    : "0";
-
-  // 4. Top Users con Nombres Reales (Búsqueda Dual) y Precisión
-  const userStats = {}; // { name: { items: 0, matches: 0, comparisons: 0 } }
-
+  // Top users: matches/comparisons + reconteos causados
+  const userStats = {}; // name => { items, comparisons, matches, reconteosCaused }
   data.forEach(c => {
-    // Normalizar claves de búsqueda
     const userId = c.usuario_id;
     const userEmail = (c.correo_empleado || '').toLowerCase();
-    const userName = (c.usuario_nombre || '').toLowerCase();
-
-    // Intentar buscar por ID, luego por Correo, luego por Username
-    let name = namesMap.get(userId) || 
-               namesMap.get(userEmail) || 
-               namesMap.get(userName);
-    
+    const userNameKey = (c.usuario_nombre || '').toLowerCase();
+    let name = namesMap.get(userId) || namesMap.get(userEmail) || namesMap.get(userNameKey);
     if (!name) {
-       const rawName = c.usuario_nombre || c.correo_empleado || c.usuario_id || 'Desconocido';
-       name = rawName.includes('@') ? rawName.split('@')[0] : rawName;
-       name = name.charAt(0).toUpperCase() + name.slice(1);
+      const raw = c.usuario_nombre || c.correo_empleado || c.usuario_id || 'Desconocido';
+      name = raw.includes('@') ? raw.split('@')[0] : raw;
+      name = name.charAt(0).toUpperCase() + name.slice(1);
     }
-    
-    if (!userStats[name]) userStats[name] = { items: 0, matches: 0, comparisons: 0 };
-    
-    const countVal = (c.total_items || (c.conteo_items ? c.conteo_items[0]?.count : 0) || 0);
-    userStats[name].items += countVal;
+    if (!userStats[name]) userStats[name] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
 
-    // Accuracy Check (Only for Type 1 and 2)
-    if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && ubicacionMap.has(c.ubicacion_id)) {
-        userStats[name].comparisons++;
-        // Check if their count matches the final determined stock
-        if (ubicacionMap.get(c.ubicacion_id).cantidad === countVal) {
-            userStats[name].matches++;
-        }
+    const val = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
+    userStats[name].items += val;
+
+    if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && locationMap.has(c.ubicacion_id)) {
+      userStats[name].comparisons++;
+      const finalQty = locationMap.get(c.ubicacion_id).last?.qty ?? null;
+      if (finalQty !== null && finalQty === val) userStats[name].matches++;
+    }
+
+    if (c.tipo_conteo === 3) {
+      userStats[name].reconteosCaused++;
     }
   });
 
-  const topUsers = Object.entries(userStats)
-    .sort(([,a], [,b]) => b.matches - a.matches) // Sort by number of correct matches
-    .slice(0, 3)
+  const operatorsCorrectTop = Object.entries(userStats)
     .map(([name, s]) => {
-        const acc = s.comparisons > 0 ? ((s.matches / s.comparisons) * 100).toFixed(0) : 0;
-        return { name, items: `${s.items} items, ${acc}% Acierto (${s.matches} ok)` };
-    });
+      const accuracyPct = s.comparisons > 0 ? Number(((s.matches / s.comparisons) * 100).toFixed(0)) : null;
+      return { name, items: s.items, comparisons: s.comparisons, matches: s.matches, accuracyPct, reconteosCaused: s.reconteosCaused };
+    })
+    .filter(u => u.comparisons > 0)
+    .sort((a,b) => (b.matches - a.matches) || (b.accuracyPct - a.accuracyPct))
+    .slice(0, 5);
 
-  // Calculate Top Error Users (Most mismatches)
-  const topErrorUsers = Object.entries(userStats)
-    .sort(([,a], [,b]) => (b.comparisons - b.matches) - (a.comparisons - a.matches))
-    .slice(0, 3)
-    .map(([name, s]) => {
-        const errors = s.comparisons - s.matches;
-        return { name, info: `${errors} discrepancias` };
-    });
+  const operatorsReconTop = Object.entries(userStats)
+    .map(([name, s]) => ({ name, reconteosCaused: s.reconteosCaused, items: s.items }))
+    .sort((a,b) => b.reconteosCaused - a.reconteosCaused)
+    .slice(0, 5);
 
-  // Calculate Daily Recounts
-  const dailyRecountsMap = {};
-  data.filter(c => c.tipo_conteo === 3).forEach(c => {
-      const date = new Date(c.created_at).toISOString().split('T')[0];
-      dailyRecountsMap[date] = (dailyRecountsMap[date] || 0) + 1;
-  });
-  const dailyRecounts = Object.entries(dailyRecountsMap)
-      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-      .map(([date, count]) => `${date}: ${count}`);
-
-  // Top Zonas (Actividad)
-  const zonaMap = {};
+  // Top zonas/activity and error zones/pasillos
+  const zonaMap = {}; const errorZonaMap = {}; const errorPasilloMap = {};
   data.forEach(c => {
     const zonaNombre = c.ubicacion?.pasillo?.zona?.nombre || c.zona || 'Desconocida';
-    if (!zonaMap[zonaNombre]) zonaMap[zonaNombre] = 0;
-    zonaMap[zonaNombre]++;
-  });
-  const topZonas = Object.entries(zonaMap)
-    .sort(([,a], [,b]) => b - a)
-    .slice(0, 3)
-    .map(([name]) => name);
-
-  // Top Zonas de Error (Donde hubo reconteos)
-  const errorZonaMap = {};
-  data.filter(c => c.tipo_conteo === 3).forEach(c => {
-    const zonaNombre = c.ubicacion?.pasillo?.zona?.nombre || 'Desconocida';
-    if (!errorZonaMap[zonaNombre]) errorZonaMap[zonaNombre] = 0;
-    errorZonaMap[zonaNombre]++;
-  });
-  const topErrorZonas = Object.entries(errorZonaMap)
-    .sort(([,a], [,b]) => b - a)
-    .slice(0, 3)
-    .map(([name]) => name);
-
-  // Analisis de Errores por Pasillo (Más granular que Zona)
-  const errorPasilloMap = {};
-  data.filter(c => c.tipo_conteo === 3).forEach(c => {
+    zonaMap[zonaNombre] = (zonaMap[zonaNombre]||0) + 1;
+    if (c.tipo_conteo === 3) {
+      errorZonaMap[zonaNombre] = (errorZonaMap[zonaNombre]||0) + 1;
       const pasillo = c.ubicacion?.pasillo?.numero || c.pasillo || 'Desconocido';
-      const zona = c.ubicacion?.pasillo?.zona?.nombre || 'Desconocida';
-      const key = `${zona} - Pasillo ${pasillo}`;
-      if (!errorPasilloMap[key]) errorPasilloMap[key] = 0;
-      errorPasilloMap[key]++;
+      const key = `${zonaNombre} - Pasillo ${pasillo}`;
+      errorPasilloMap[key] = (errorPasilloMap[key]||0) + 1;
+    }
   });
-  const topErrorPasillos = Object.entries(errorPasilloMap)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 5)
-      .map(([k, v]) => `${k} (${v} errores)`);
+  const topZonas = Object.entries(zonaMap).sort(([,a],[,b]) => b-a).slice(0,3).map(([n])=>n);
+  const topErrorZonas = Object.entries(errorZonaMap).sort(([,a],[,b])=>b-a).slice(0,3).map(([n])=>n);
+  const topErrorPasillos = Object.entries(errorPasilloMap).sort(([,a],[,b])=>b-a).slice(0,5).map(([k,v])=>`${k} (${v} errores)`);
 
-  // Lista detallada de ubicaciones con conflicto
-  const ubicacionesConflicto = data
-    .filter(c => c.tipo_conteo === 3)
-    .map(c => {
-       const u = c.ubicacion;
-       const zona = u?.pasillo?.zona?.nombre || c.zona || 'Zona ?';
-       const pasillo = u?.pasillo?.numero || c.pasillo || '?';
-       const ubic = u?.nombre || u?.numero || c.ubicacion || '?';
-       return `- ${zona} > Pasillo ${pasillo} > Ubicación ${ubic}`;
-    })
-    .slice(0, 100); // Aumentado a 100 para incluir más detalles
+  // ubicaciones conflicto list (más completo)
+  const ubicacionesConflicto = anomaliesSorted.map(a => `- ${a.ubicacion}`).slice(0, 100);
+
+  // reconteos per day (timeseries) for charting
+  const reconteosPerDayMap = {};
+  data.filter(c => c.tipo_conteo === 3).forEach(c => {
+    const d = new Date(c.created_at || c.createdAt || Date.now());
+    const key = d.toISOString().slice(0,10); // YYYY-MM-DD
+    reconteosPerDayMap[key] = (reconteosPerDayMap[key] || 0) + 1;
+  });
+  const reconteosPerDay = Object.keys(reconteosPerDayMap)
+    .sort()
+    .map(date => ({ date, count: reconteosPerDayMap[date] }));
 
   return {
     totalConteos,
@@ -435,23 +475,27 @@ const calculateStats = (data, namesMap) => {
     esfuerzoTotalItems,
     ubicacionesUnicas,
     ubicacionesFinalizadas,
-    avance: ubicacionesUnicas > 0 ? ((ubicacionesFinalizadas / ubicacionesUnicas) * 100).toFixed(1) : 0,
+    avance: Number(((ubicacionesFinalizadas / Math.max(1, ubicacionesUnicas)) * 100).toFixed(1)),
     reconteos,
-    tasaError: ubicacionesUnicas > 0 ? ((reconteos / ubicacionesUnicas) * 100).toFixed(1) : 0,
+    reconteosUnicosPorUbicacion: reconteosUnicosPorUbicacion,
+    tasaError: Number(((reconteosUnicosPorUbicacion / Math.max(1, ubicacionesUnicas)) * 100).toFixed(1)),
     velocidadPromedio,
     itemsPorHora,
-    topUsers,
-    topErrorUsers,
-    dailyRecounts,
+    topUsers: operatorsCorrectTop,
     topZonas,
     topErrorZonas,
     topErrorPasillos,
-    ubicacionesConflicto // Nueva lista detallada
+    ubicacionesConflicto,
+    anomaliesTop10,
+    operatorsCorrectTop,
+    operatorsReconTop,
+    reconteosPerDay,
+    rawSamples: data.slice(0, 20)
   };
 };
 
-
-const generateOperatorReport = async (data) => {
+/* ------------------ generateOperatorReport (mantener) ------------------ */
+export const generateOperatorReport = async (data) => {
   const { operatorName, totalLocations, accuracyRate, errorLocations, totalItemsCounted } = data;
 
   const prompt = `
@@ -479,6 +523,7 @@ const generateOperatorReport = async (data) => {
     messages: [{ role: "user", content: prompt }],
     model: "gpt-3.5-turbo",
     temperature: 0.7,
+    max_tokens: 1200
   });
 
   return completion.choices[0].message.content;
