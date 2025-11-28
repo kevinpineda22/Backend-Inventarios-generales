@@ -493,7 +493,7 @@ class ConteoService {
           fecha_fin: c.fecha_fin,
           usuario_nombre: displayName, // Usar nombre real si existe
           estado: c.estado,
-          total_items: c.conteo_items ? c.conteo_items.length : 0
+          total_items: c.conteo_items && c.conteo_items[0] ? c.conteo_items[0].count : 0
         };
       });
 
