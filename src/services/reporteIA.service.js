@@ -212,7 +212,7 @@ ESTADÍSTICAS CLAVE:
 - esfuerzoTotalRows (Suma de Registros escaneados): ${s.esfuerzoTotalRows}
 - ubicacionesUnicas: ${s.ubicacionesUnicas}
 - avance: ${s.avance} %
-- itemsPorHora: ${s.itemsPorHora}
+- itemsPorHora (Registros/Hora): ${s.itemsPorHora}
 - reconteos totales: ${s.reconteos}
 - tasaDiscrepancia: ${s.tasaDiscrepancia} %
 - confidenceScore: ${s.confidenceScore}
@@ -405,19 +405,30 @@ const calculateStats = (data, namesMap) => {
   const reconteosUnicosPorUbicacion = new Set(data.filter(c => c.tipo_conteo === 3).map(c => c.ubicacion_id)).size;
 
   // Velocidad (items/min and items/h)
+  // CORRECCIÓN: Usar 'rows' (registros escaneados) para velocidad, no unidades totales.
+  // Y sumar solo los items de los conteos que tienen tiempo válido.
   let totalMinutos = 0, conteosConTiempo = 0;
+  let rowsForSpeed = 0;
+
   data.forEach(c => {
     if (c.fecha_inicio && c.fecha_fin) {
       const diffMinutos = (new Date(c.fecha_fin) - new Date(c.fecha_inicio)) / 1000 / 60;
-      const itemsEnConteo = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
-      const esZombie = diffMinutos > 30 && itemsEnConteo < 10;
-      if (diffMinutos > 0.1 && diffMinutos < 240 && !esZombie) {
-        totalMinutos += diffMinutos; conteosConTiempo++;
+      const rowsEnConteo = getRows(c);
+      
+      // Filtrar tiempos absurdos o zombies (ej: > 30 min para < 5 items)
+      const esZombie = diffMinutos > 30 && rowsEnConteo < 5;
+      
+      if (diffMinutos > 0.1 && diffMinutos < 300 && !esZombie) {
+        totalMinutos += diffMinutos; 
+        conteosConTiempo++;
+        rowsForSpeed += rowsEnConteo;
       }
     }
   });
-  const velocidadPromedio = (conteosConTiempo > 0 && totalMinutos > 0) ? Number((esfuerzoTotalItems / totalMinutos).toFixed(1)) : null;
-  const itemsPorHora = (conteosConTiempo > 0 && totalMinutos > 0) ? Number(((esfuerzoTotalItems / totalMinutos) * 60).toFixed(0)) : 0;
+
+  // Velocidad en Registros por Minuto/Hora
+  const velocidadPromedio = (conteosConTiempo > 0 && totalMinutos > 0) ? Number((rowsForSpeed / totalMinutos).toFixed(1)) : null;
+  const itemsPorHora = (conteosConTiempo > 0 && totalMinutos > 0) ? Number(((rowsForSpeed / totalMinutos) * 60).toFixed(0)) : 0;
 
   // Estadísticas por operador
   const userStats = {};
