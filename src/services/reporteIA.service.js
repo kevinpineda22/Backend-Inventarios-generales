@@ -457,7 +457,11 @@ const calculateStats = (data, namesMap) => {
   data.forEach(c => {
     const name = getNormalizedName(c);
     if (!userStats[name]) userStats[name] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
-    const val = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
+    
+    // USAR LA MISMA LÓGICA QUE getQty PARA EVITAR DISCREPANCIAS
+    // Si total_items ahora guarda "filas" y conteo_items guarda "cantidades", debemos sumar cantidades.
+    const val = getQty(c);
+    
     userStats[name].items += val;
     if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && locationMap.has(c.ubicacion_id)) {
       userStats[name].comparisons++;
