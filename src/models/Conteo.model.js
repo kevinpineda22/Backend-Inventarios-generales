@@ -286,7 +286,10 @@ export class ConteoModel {
               )
             )
           ),
-          conteo_items:inv_general_conteo_items(count)
+          conteo_items:inv_general_conteo_items(
+            count,
+            item:inv_general_items(descripcion, codigo)
+          )
         `)
         .order('created_at', { ascending: false });
 

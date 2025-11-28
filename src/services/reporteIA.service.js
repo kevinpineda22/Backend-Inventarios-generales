@@ -193,9 +193,10 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     const zona = c.ubicacion?.pasillo?.zona?.nombre ?? c.zona ?? 'N/A';
     const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? c.ubicacion_id ?? 'N/A';
     const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.count ?? 0);
+    const itemName = c.conteo_items?.[0]?.item?.descripcion || 'N/D';
     const usuario = c.usuario_nombre || c.correo_empleado || 'N/D';
     const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Reconteo)' : 'Conteo Normal';
-    return `- { zona: "${zona}", pasillo: "${pasillo}", ubicacion: "${ubicacion}", items: ${itemsCount}, tipo: "${tipoTexto}", usuario: "${usuario}", fecha: "${c.created_at ?? c.createdAt ?? ''}" }`;
+    return `- { zona: "${zona}", pasillo: "${pasillo}", ubicacion: "${ubicacion}", producto: "${itemName}", items: ${itemsCount}, tipo: "${tipoTexto}", usuario: "${usuario}", fecha: "${c.created_at ?? c.createdAt ?? ''}" }`;
   }).join('\n');
 
   return `
@@ -217,7 +218,7 @@ MUESTRAS (máx 10):
 ${sampleLines || '- No hay muestras -'}
 
 ANOMALIES_TOP10 (ya priorizadas por el sistema):
-${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | last:${a.reported_last} | prev:${a.reported_prev} | diff%:${a.diff_percent} | reconteos:${a.reconteos} | prioridad:${a.prioridad}`).join('\n')}
+${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | Producto: ${a.producto} | last:${a.reported_last} | prev:${a.reported_prev} | diff%:${a.diff_percent} | reconteos:${a.reconteos} | prioridad:${a.prioridad}`).join('\n')}
 
 OPERADORES (Top precisión y Top reconteos):
 ${(s.operatorsCorrectTop || []).map(o => `- ${o.name}: ${o.matches}/${o.comparisons} ok (${o.accuracyPct ?? 'N/D'}%)`).join('\n')}
@@ -335,11 +336,13 @@ const calculateStats = (data, namesMap) => {
 
     const zona = last?.raw?.ubicacion?.pasillo?.zona?.nombre || last?.raw?.zona || 'Zona ?';
     const pasillo = last?.raw?.ubicacion?.pasillo?.numero || last?.raw?.pasillo || '?';
-    const ubicLabel = last?.raw?.ubicacion?.nombre || last?.raw?.ubicacion || uid;
+    const ubicLabel = last?.raw?.ubicacion?.nombre || last?.raw?.ubicacion?.numero || 'S/N';
+    const producto = last?.raw?.conteo_items?.[0]?.item?.descripcion || 'Producto desconocido';
 
     anomalies.push({
       ubicacion_id: uid,
       ubicacion: `${zona} > Pasillo ${pasillo} > Ubicación ${ubicLabel}`,
+      producto,
       reported_last: last?.qty ?? 0,
       reported_prev: prev?.qty ?? null,
       diff_abs: diffAbs,
