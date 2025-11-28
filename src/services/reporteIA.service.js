@@ -192,7 +192,7 @@ const buildInventoryPrompt = ({ bodegaNombre = 'General', stats = {}, sampleCont
     const pasillo = c.ubicacion?.pasillo?.numero ?? c.pasillo ?? 'N/A';
     const zona = c.ubicacion?.pasillo?.zona?.nombre ?? c.zona ?? 'N/A';
     const ubicacion = c.ubicacion?.nombre ?? c.ubicacion?.numero ?? c.ubicacion_id ?? 'N/A';
-    const itemsCount = c.total_items ?? (c.conteo_items?.[0]?.count ?? 0);
+    const itemsCount = c.total_items ?? c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) ?? 0;
     const itemName = c.conteo_items?.[0]?.item?.descripcion || 'N/D';
     const usuario = c.usuario_nombre || c.correo_empleado || 'N/D';
     const tipoTexto = c.tipo_conteo === 3 ? 'Discrepancia (Reconteo)' : 'Conteo Normal';
@@ -307,13 +307,13 @@ const calculateStats = (data, namesMap) => {
   const ubicacionesFinalizadas = ubicacionesFinalizadasSet.size;
 
   // Esfuerzo total (suma de items contados en todas las pasadas)
-  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (Number(c.total_items || (c.conteo_items?.[0]?.count) || 0)), 0);
+  const esfuerzoTotalItems = data.reduce((acc, c) => acc + (Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0)), 0);
 
   // Construir historial por ubicación
   const locationMap = new Map(); // uid -> { records: [], reconteoCount }
   data.forEach(c => {
     const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
-    const qty = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
+    const qty = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
     const date = new Date(c.created_at || c.createdAt || Date.now());
     const rec = { qty, tipo: c.tipo_conteo, date, userId: c.usuario_id, userName: c.usuario_nombre || c.correo_empleado || null, raw: c };
     if (!locationMap.has(uid)) locationMap.set(uid, { records: [], reconteoCount: 0 });
@@ -376,7 +376,7 @@ const calculateStats = (data, namesMap) => {
   data.forEach(c => {
     if (c.fecha_inicio && c.fecha_fin) {
       const diffMinutos = (new Date(c.fecha_fin) - new Date(c.fecha_inicio)) / 1000 / 60;
-      const itemsEnConteo = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
+      const itemsEnConteo = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
       const esZombie = diffMinutos > 30 && itemsEnConteo < 10;
       if (diffMinutos > 0.1 && diffMinutos < 240 && !esZombie) {
         totalMinutos += diffMinutos; conteosConTiempo++;
@@ -399,7 +399,7 @@ const calculateStats = (data, namesMap) => {
       name = name.charAt(0).toUpperCase() + name.slice(1);
     }
     if (!userStats[name]) userStats[name] = { items: 0, comparisons: 0, matches: 0, reconteosCaused: 0 };
-    const val = Number(c.total_items || (c.conteo_items?.[0]?.count) || 0);
+    const val = Number(c.total_items || c.conteo_items?.reduce((a, b) => a + (Number(b.cantidad) || 0), 0) || 0);
     userStats[name].items += val;
     if ((c.tipo_conteo === 1 || c.tipo_conteo === 2) && locationMap.has(c.ubicacion_id)) {
       userStats[name].comparisons++;
