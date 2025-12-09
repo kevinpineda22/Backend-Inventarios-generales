@@ -424,7 +424,8 @@ const calculateStats = (data, namesMap) => {
 
     // Anomalías
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? 0);
-    if (diffAbs !== 0 && !ubicacionesFinalizadasSet.has(uid)) {
+    // Se eliminó el filtro !ubicacionesFinalizadasSet.has(uid) para mostrar diferencias incluso en bodegas cerradas
+    if (diffAbs !== 0) {
         const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
         anomalies.push({
             ubicacion: `${info.zona} > Ub ${last?.raw?.ubicacion?.nombre || 'S/N'}`,
