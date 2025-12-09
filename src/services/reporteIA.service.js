@@ -220,11 +220,11 @@ Debes generar un JSON con contenido analítico real y detallado.
 2. "analisisProductividad": Analiza el desempeño de los colaboradores basándote en las tablas proporcionadas.
 3. "conclusion": Escribe una conclusión técnica sólida.
 
-IMPORTANTE: Los campos de texto NO pueden estar vacíos.
+IMPORTANTE: Los campos de texto NO pueden estar vacíos. NO uses los textos de ejemplo, genera tu propio análisis.
 
 --- SALIDA REQUERIDA: JSON único ---
 {
-  "resumenEjecutivo": "Escribe aquí el resumen ejecutivo...",
+  "resumenEjecutivo": "",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
     "totalItems": ${s.totalSKUsFisicos},
@@ -242,7 +242,7 @@ IMPORTANTE: Los campos de texto NO pueden estar vacíos.
     "colaboradores": ${JSON.stringify(s.collaboratorTable)},
     "zonas": ${JSON.stringify(s.zoneTable)}
   },
-  "analisisProductividad": "Escribe aquí el análisis de productividad...",
+  "analisisProductividad": "",
   "hallazgos": [
     "Hallazgo 1",
     "Hallazgo 2"
@@ -265,7 +265,7 @@ IMPORTANTE: Los campos de texto NO pueden estar vacíos.
   },
   "reconteos_per_day": ${JSON.stringify(s.reconteosPerDay)},
   "trend_comment": "${s.reconteosTrend}",
-  "conclusion": "Escribe aquí la conclusión técnica..."
+  "conclusion": ""
 }
 `.trim();
 };
