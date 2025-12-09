@@ -100,7 +100,7 @@ export const generateInventoryReport = async (params) => {
         { role: "user", content: prompt }
       ],
       model: "gpt-3.5-turbo",
-      temperature: 0.0,
+      temperature: 0.4,
       max_tokens: 3500,
     });
 
@@ -215,15 +215,16 @@ ANOMALIES_TOP10 (Priorizadas):
 ${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | Prod: ${a.producto} | Diff: ${a.diff_abs} | Reconteos: ${a.reconteos}`).join('\n')}
 
 --- INSTRUCCIONES DE GENERACIÓN ---
-Debes generar un JSON con contenido analítico real.
-1. "resumenEjecutivo": Escribe 4-6 párrafos en Markdown describiendo el estado actual, causas de diferencias, impacto y prioridades. NO copies las instrucciones, genera el texto.
-2. "analisisProductividad": Analiza quiénes son los colaboradores más efectivos y quiénes generan más reconteos.
-3. "anomalias": Selecciona las anomalías más críticas de la lista proporcionada y sugiera acción.
-4. "acciones": Propón 3 acciones correctivas inmediatas.
+Debes generar un JSON con contenido analítico real y detallado.
+1. "resumenEjecutivo": Genera 4-6 párrafos en Markdown. Analiza las cifras clave, causas probables de diferencias y prioridades.
+2. "analisisProductividad": Analiza el desempeño de los colaboradores basándote en las tablas proporcionadas.
+3. "conclusion": Escribe una conclusión técnica sólida.
+
+IMPORTANTE: Los campos de texto NO pueden estar vacíos.
 
 --- SALIDA REQUERIDA: JSON único ---
 {
-  "resumenEjecutivo": "TEXTO_GENERADO_AQUI",
+  "resumenEjecutivo": "Escribe aquí el resumen ejecutivo...",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
     "totalItems": ${s.totalSKUsFisicos},
@@ -241,7 +242,7 @@ Debes generar un JSON con contenido analítico real.
     "colaboradores": ${JSON.stringify(s.collaboratorTable)},
     "zonas": ${JSON.stringify(s.zoneTable)}
   },
-  "analisisProductividad": "TEXTO_GENERADO_AQUI",
+  "analisisProductividad": "Escribe aquí el análisis de productividad...",
   "hallazgos": [
     "Hallazgo 1",
     "Hallazgo 2"
@@ -258,7 +259,13 @@ Debes generar un JSON con contenido analítico real.
   "acciones": [
     { "actor": "Nombre", "accion": "Acción", "impacto": "Impacto", "prioridad": "alta" }
   ],
-  "conclusion": "TEXTO_GENERADO_AQUI"
+  "operators": {
+    "top_correct": ${JSON.stringify(s.operatorsCorrectTop)},
+    "top_reconteos": ${JSON.stringify(s.operatorsReconTop)}
+  },
+  "reconteos_per_day": ${JSON.stringify(s.reconteosPerDay)},
+  "trend_comment": "${s.reconteosTrend}",
+  "conclusion": "Escribe aquí la conclusión técnica..."
 }
 `.trim();
 };
