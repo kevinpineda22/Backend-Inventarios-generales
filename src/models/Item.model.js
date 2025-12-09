@@ -101,12 +101,18 @@ export class ItemModel {
    */
   static async search(term, companiaId) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from(TABLES.ITEMS)
-        .select('id, codigo, descripcion, codigo_barra')
-        .eq('compania_id', companiaId)
-        .or(`descripcion.ilike.%${term}%,codigo.ilike.%${term}%,codigo_barra.ilike.%${term}%`)
+        .select('id, codigo, descripcion, codigo_barra');
+        
+      if (companiaId) {
+        query = query.eq('compania_id', companiaId);
+      }
+        
+      query = query.or(`descripcion.ilike.%${term}%,codigo.ilike.%${term}%,codigo_barra.ilike.%${term}%`)
         .limit(10); // Limitar resultados para sugerencias
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data;
