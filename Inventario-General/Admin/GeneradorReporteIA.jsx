@@ -448,9 +448,6 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                     <div className="ia-section">
                       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
                         <h3 className="ia-section-title" style={{color: '#ef4444', margin: 0}}><AlertTriangle size={18} /> Anomalías Detectadas</h3>
-                        <button onClick={handleExportAnomalies} className="ia-btn-export" title="Descargar CSV">
-                          <Download size={16} /> Exportar
-                        </button>
                       </div>
                       
                       <div className="ia-card-grid">

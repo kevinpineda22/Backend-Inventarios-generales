@@ -397,16 +397,28 @@ const calculateStats = (data, namesMap) => {
         if (diff > 0) locationsWithDiff++;
     }
 
-    // Análisis de Reconteos (T3 vs T1/T2)
+    // Análisis de Reconteos (T3/T4 vs T1/T2)
     if (info.reconteoCount > 0) {
         const t1 = info.records.find(r => r.tipo === 1);
         const t2 = info.records.find(r => r.tipo === 2);
-        const t3 = info.records.find(r => r.tipo === 3); // El reconteo oficial
-
-        if (t1 && t2 && t3) {
+        
+        // Buscar la "Verdad": Preferir Tipo 4 (Final), sino el último Tipo 3 (Reconteo)
+        // Como info.records está ordenado por fecha (asc), iteramos desde el final.
+        let finalTruth = null;
+        for (let i = info.records.length - 1; i >= 0; i--) {
+            const r = info.records[i];
+            if (r.tipo === 4 || r.tipo === 3) {
+                finalTruth = r;
+                break;
+            }
+        }
+        
+        if (finalTruth && (t1 || t2)) {
             totalRecountsAnalyzed++;
-            if (t3.qty === t1.qty) recountMatchesT1++;
-            if (t3.qty === t2.qty) recountMatchesT2++;
+            const truthQty = Number(finalTruth.qty);
+            
+            if (t1 && Number(t1.qty) === truthQty) recountMatchesT1++;
+            if (t2 && Number(t2.qty) === truthQty) recountMatchesT2++;
         }
     }
 
