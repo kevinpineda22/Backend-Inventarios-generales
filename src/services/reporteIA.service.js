@@ -390,10 +390,10 @@ const calculateStats = (data, namesMap) => {
     totalUnidadesFisicas += (last?.qty || 0);
     totalSKUsFisicos += (last?.raw?.conteo_items?.length || (last?.raw?.total_items ? 1 : 0));
 
-    // Diferencias
+    // Diferencias & Anomalías
+    let productsWithDiff = 0;
     if (prev) {
         // Nueva lógica: Contar cuántos PRODUCTOS (SKUs) tienen diferencia, no unidades totales
-        let productsWithDiff = 0;
         const itemsLast = last.raw.conteo_items || [];
         const itemsPrev = prev.raw.conteo_items || [];
 
@@ -443,15 +443,20 @@ const calculateStats = (data, namesMap) => {
 
     // Anomalías
     const diffAbs = (last?.qty ?? 0) - (prev?.qty ?? 0);
-    if (diffAbs !== 0 && !ubicacionesFinalizadasSet.has(uid)) {
+    // Usar productsWithDiff para detectar anomalías incluso si la diferencia neta es 0 (cruce de referencias)
+    if (productsWithDiff > 0 || diffAbs !== 0) {
         const diffPercent = (prev && prev.qty !== 0) ? Number(((diffAbs / prev.qty) * 100).toFixed(1)) : null;
         anomalies.push({
             ubicacion: `${info.zona} > Ub ${last?.raw?.ubicacion?.nombre || 'S/N'}`,
             producto: last?.raw?.conteo_items?.[0]?.item?.descripcion || 'Varios',
-            diff_abs: diffAbs,
+            diff_abs: diffAbs, // Mantenemos diff neta para referencia
+            products_diff: productsWithDiff, // Nuevo campo
             diff_percent: diffPercent,
             reconteos: info.reconteoCount,
-            prioridad: Math.abs(diffAbs) > 10 ? 'alta' : 'media'
+            prioridad: (Math.abs(diffAbs) > 10 || productsWithDiff > 2) ? 'alta' : 'media',
+            situacion: productsWithDiff > 0 
+              ? `Diferencias en ${productsWithDiff} productos (Neto: ${diffAbs} uds).`
+              : `Diferencia de ${diffAbs} unidades.`
         });
     }
   }
