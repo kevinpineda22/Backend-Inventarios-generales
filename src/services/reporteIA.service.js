@@ -81,7 +81,43 @@ export const generateInventoryReport = async (params) => {
     const stats = calculateStats(conteos, namesMap);
     const bodegaNombre = filters.bodega || 'General';
 
-    // 4. Construir Prompt Avanzado
+    // --- ESTRATEGIA HÍBRIDA: Datos Estáticos + Análisis IA ---
+    // Construimos el objeto base con los datos duros calculados (garantiza que los números siempre estén)
+    const staticReportData = {
+      kpis: {
+        totalUnidades: stats.totalUnidadesFisicas,
+        totalItems: stats.totalSKUsFisicos,
+        esfuerzoOperativo: stats.esfuerzoTotalRows,
+        tasaDiscrepancia: stats.errorRate,
+        promedioDiferencias: stats.avgDiffPerLocation,
+        tasaError: stats.errorRate,
+        efectividadConteo1: stats.pctMatchT1,
+        efectividadConteo2: stats.pctMatchT2,
+        totalReconteos: stats.reconteos,
+        velocidad: stats.itemsPorHora,
+        confidenceScore: stats.confidenceScore
+      },
+      tablas: {
+        colaboradores: stats.collaboratorTable,
+        zonas: stats.zoneTable
+      },
+      operators: {
+        top_correct: stats.operatorsCorrectTop,
+        top_reconteos: stats.operatorsReconTop
+      },
+      reconteos_per_day: stats.reconteosPerDay,
+      trend_comment: stats.reconteosTrend,
+      // Anomalías base (sin texto enriquecido aún)
+      anomalias: stats.anomaliesTop10.map(a => ({
+        ubicacion: a.ubicacion,
+        producto: a.producto,
+        prioridad: a.prioridad,
+        situacion: `Diferencia de ${a.diff_abs} unidades (${a.diff_percent}%) tras ${a.reconteos} reconteos.`,
+        accion: "Verificar físicamente."
+      }))
+    };
+
+    // 4. Construir Prompt Avanzado (Solo pedimos el análisis cualitativo)
     const prompt = buildInventoryPrompt({
       bodegaNombre,
       stats,
@@ -89,29 +125,38 @@ export const generateInventoryReport = async (params) => {
       ubicacionesConflicto: stats.ubicacionesConflicto
     });
 
-    // 5. Llamar a OpenAI (pedimos JSON estricto desde system message y temperature 0.0)
+    // 5. Llamar a OpenAI
     const completion = await openai.chat.completions.create({
       messages: [
         {
           role: "system",
           content:
-            "Eres un Auditor Senior de Inventarios. TU SALIDA DEBE SER EXCLUSIVAMENTE UN JSON VALIDO (UN SOLO OBJETO). No incluyas texto adicional, ni markdown, ni explicaciones. Usa sólo los datos proporcionados."
+            "Eres un Auditor Senior de Inventarios. TU SALIDA DEBE SER EXCLUSIVAMENTE UN JSON VALIDO (UN SOLO OBJETO). No incluyas texto adicional. Genera análisis detallados y profesionales."
         },
         { role: "user", content: prompt }
       ],
       model: "gpt-3.5-turbo",
-      temperature: 0.4,
-      max_tokens: 3500,
+      temperature: 0.5, // Un poco más creativo para el texto
+      max_tokens: 2500,
     });
 
     const raw = completion.choices?.[0]?.message?.content;
-    // Intentar parseo seguro
-    const parsed = parseJSONFromText(raw);
-    if (parsed) return parsed;
+    const aiResponse = parseJSONFromText(raw) || {};
 
-    // Si no pudimos parsear, devolvemos el raw para debugging (o lanzar error)
-    // Pero preferimos devolver un objeto con raw para que frontend no rompa
-    return { __raw: raw, warning: 'No se pudo parsear JSON. Revisa respuesta del modelo.' };
+    // 6. Fusionar Datos Estáticos con Análisis IA
+    // Priorizamos los datos estáticos para los números, y usamos la IA para textos y listas enriquecidas
+    const finalReport = {
+      ...staticReportData,
+      resumenEjecutivo: aiResponse.resumenEjecutivo || "No se pudo generar el resumen ejecutivo.",
+      analisisProductividad: aiResponse.analisisProductividad || "No se pudo generar el análisis de productividad.",
+      conclusion: aiResponse.conclusion || "No se pudo generar la conclusión.",
+      hallazgos: aiResponse.hallazgos || [],
+      acciones: aiResponse.acciones || [],
+      // Si la IA devolvió anomalías enriquecidas, intentamos usarlas, si no, nos quedamos con las estáticas
+      anomalias: (aiResponse.anomalias && aiResponse.anomalias.length > 0) ? aiResponse.anomalias : staticReportData.anomalias
+    };
+
+    return finalReport;
 
   } catch (error) {
     console.error('Error generating AI report:', error);
@@ -219,29 +264,13 @@ Debes generar un JSON con contenido analítico real y detallado.
 1. "resumenEjecutivo": Genera 4-6 párrafos en Markdown. Analiza las cifras clave, causas probables de diferencias y prioridades.
 2. "analisisProductividad": Analiza el desempeño de los colaboradores basándote en las tablas proporcionadas.
 3. "conclusion": Escribe una conclusión técnica sólida.
+4. "anomalias": Genera una lista de anomalías enriquecida con "situacion" y "accion" basada en la lista de "ANOMALIES_TOP10" proporcionada arriba.
 
 IMPORTANTE: Los campos de texto NO pueden estar vacíos. NO uses los textos de ejemplo, genera tu propio análisis.
 
 --- SALIDA REQUERIDA: JSON único ---
 {
   "resumenEjecutivo": "",
-  "kpis": {
-    "totalUnidades": ${s.totalUnidadesFisicas},
-    "totalItems": ${s.totalSKUsFisicos},
-    "esfuerzoOperativo": ${s.esfuerzoTotalRows},
-    "tasaDiscrepancia": ${s.errorRate},
-    "promedioDiferencias": ${s.avgDiffPerLocation},
-    "tasaError": ${s.errorRate},
-    "efectividadConteo1": ${s.pctMatchT1},
-    "efectividadConteo2": ${s.pctMatchT2},
-    "totalReconteos": ${s.reconteos},
-    "velocidad": ${s.itemsPorHora},
-    "confidenceScore": ${s.confidenceScore}
-  },
-  "tablas": {
-    "colaboradores": ${JSON.stringify(s.collaboratorTable)},
-    "zonas": ${JSON.stringify(s.zoneTable)}
-  },
   "analisisProductividad": "",
   "hallazgos": [
     "Hallazgo 1",
@@ -251,20 +280,14 @@ IMPORTANTE: Los campos de texto NO pueden estar vacíos. NO uses los textos de e
     {
       "ubicacion": "Zona...",
       "producto": "Nombre...",
-      "situacion": "Descripción...",
-      "accion": "Acción...",
-      "prioridad": "alta"
+      "prioridad": "alta",
+      "situacion": "Descripción detallada del problema...",
+      "accion": "Acción correctiva recomendada..."
     }
   ],
   "acciones": [
     { "actor": "Nombre", "accion": "Acción", "impacto": "Impacto", "prioridad": "alta" }
   ],
-  "operators": {
-    "top_correct": ${JSON.stringify(s.operatorsCorrectTop)},
-    "top_reconteos": ${JSON.stringify(s.operatorsReconTop)}
-  },
-  "reconteos_per_day": ${JSON.stringify(s.reconteosPerDay)},
-  "trend_comment": "${s.reconteosTrend}",
   "conclusion": ""
 }
 `.trim();
