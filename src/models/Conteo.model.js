@@ -272,9 +272,7 @@ export class ConteoModel {
    */
   static async findAll(filters = {}) {
     try {
-      let query = supabase
-        .from(TABLES.CONTEOS)
-        .select(`
+      let selectQuery = `
           *,
           ubicacion:inv_general_ubicaciones!inner(
             *,
@@ -285,12 +283,19 @@ export class ConteoModel {
                 bodega:inv_general_bodegas!inner(*)
               )
             )
-          ),
-          conteo_items:inv_general_conteo_items(
-            *,
-            item:inv_general_items(descripcion, codigo)
           )
-        `)
+      `;
+
+      // Si hay filtro de producto, necesitamos hacer inner join con items para filtrar
+      if (filters.producto) {
+        selectQuery += `, conteo_items:inv_general_conteo_items!inner(*, item:inv_general_items!inner(descripcion, codigo))`;
+      } else {
+        selectQuery += `, conteo_items:inv_general_conteo_items(*, item:inv_general_items(descripcion, codigo))`;
+      }
+
+      let query = supabase
+        .from(TABLES.CONTEOS)
+        .select(selectQuery)
         .order('created_at', { ascending: false });
 
       // Aplicar filtros
@@ -298,16 +303,21 @@ export class ConteoModel {
         query = query.eq('ubicacion.pasillo.zona.bodega.compania_id', filters.companiaId);
       }
       if (filters.bodega) {
-        query = query.ilike('ubicacion.pasillo.zona.bodega.nombre', `%${filters.bodega}%`);
+        query = query.eq('ubicacion.pasillo.zona.bodega.nombre', filters.bodega);
       }
       if (filters.zona) {
         query = query.ilike('ubicacion.pasillo.zona.nombre', `%${filters.zona}%`);
       }
       if (filters.pasillo) {
-        query = query.ilike('ubicacion.pasillo.numero', `%${filters.pasillo}%`);
+        query = query.eq('ubicacion.pasillo.numero', filters.pasillo);
       }
-      if (filters.tipoConteo && filters.tipoConteo !== 'todos') {
-        query = query.eq('tipo_conteo', filters.tipoConteo);
+      if (filters.producto) {
+        // Filtro por producto (descripcion o codigo)
+        // Nota: Supabase no soporta OR entre columnas de tablas relacionadas facilmente en un solo paso
+        // Pero podemos usar el filtro en la tabla relacionada 'item'
+        const term = `%${filters.producto}%`;
+        // Esto filtra los items que coinciden, y como usamos !inner, solo trae los conteos que tienen esos items
+        query = query.or(`descripcion.ilike.${term},codigo.ilike.${term}`, { foreignTable: 'conteo_items.item' });
       }
 
       const { data, error } = await query;

@@ -12,6 +12,9 @@ const router = express.Router();
 // Obtener items por compañía
 router.get('/:companiaId', ItemController.getByCompany);
 
+// Buscar items (Sugerencias)
+router.get('/search/query', ItemController.search);
+
 // Buscar item por código de barras
 router.get('/barcode/:codigoBarra/:companiaId', ItemController.getByBarcode);
 

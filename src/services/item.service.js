@@ -60,6 +60,22 @@ export class ItemService {
   }
 
   /**
+   * Buscar items por término (sugerencias)
+   */
+  static async search(term, companiaId) {
+    try {
+      const items = await ItemModel.search(term, companiaId);
+      
+      return {
+        success: true,
+        data: items
+      };
+    } catch (error) {
+      throw new Error(`Error al buscar items: ${error.message}`);
+    }
+  }
+
+  /**
    * Obtener item por ID
    */
   static async getById(id) {

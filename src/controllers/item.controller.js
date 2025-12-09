@@ -50,6 +50,26 @@ export class ItemController {
   }
 
   /**
+   * Buscar items por término (sugerencias)
+   * GET /api/items/search
+   */
+  static async search(req, res) {
+    try {
+      const { q, companiaId } = req.query;
+
+      if (!q || q.length < 2) {
+        return successResponse(res, [], 'Término de búsqueda muy corto');
+      }
+
+      const result = await ItemService.search(q, companiaId);
+
+      return successResponse(res, result.data, 'Items encontrados');
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
    * Obtener item por ID
    * GET /api/items/:id
    */
