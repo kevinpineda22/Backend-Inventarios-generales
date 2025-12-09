@@ -428,7 +428,7 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                     <div className="ia-kpi-card">
                       <span className="ia-kpi-label"><AlertTriangle size={14} /> Prom. Diferencia</span>
                       <span className="ia-kpi-value">{reportData.kpis?.promedioDiferencias}</span>
-                      <span className="ia-kpi-sub">Unidades por ubicación</span>
+                      <span className="ia-kpi-sub">Productos con diferencia / Ubicación</span>
                     </div>
                     <div className="ia-kpi-card">
                       <span className="ia-kpi-label"><Activity size={14} /> Confidence Score</span>

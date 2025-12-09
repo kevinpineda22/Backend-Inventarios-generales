@@ -392,9 +392,28 @@ const calculateStats = (data, namesMap) => {
 
     // Diferencias
     if (prev) {
-        const diff = Math.abs((last.qty || 0) - (prev.qty || 0));
-        totalDiffAbs += diff;
-        if (diff > 0) locationsWithDiff++;
+        // Nueva lógica: Contar cuántos PRODUCTOS (SKUs) tienen diferencia, no unidades totales
+        let productsWithDiff = 0;
+        const itemsLast = last.raw.conteo_items || [];
+        const itemsPrev = prev.raw.conteo_items || [];
+
+        if (itemsLast.length === 0 && itemsPrev.length === 0) {
+             // Fallback: si no hay detalle, comparamos total
+             if ((last.qty || 0) !== (prev.qty || 0)) productsWithDiff = 1;
+        } else {
+             const mapLast = new Map();
+             itemsLast.forEach(i => mapLast.set(String(i.item_id || i.codigo || 'unk'), Number(i.cantidad)));
+             const mapPrev = new Map();
+             itemsPrev.forEach(i => mapPrev.set(String(i.item_id || i.codigo || 'unk'), Number(i.cantidad)));
+             
+             const allKeys = new Set([...mapLast.keys(), ...mapPrev.keys()]);
+             for (const key of allKeys) {
+                 if ((mapLast.get(key) || 0) !== (mapPrev.get(key) || 0)) productsWithDiff++;
+             }
+        }
+
+        totalDiffAbs += productsWithDiff;
+        if (productsWithDiff > 0) locationsWithDiff++;
     }
 
     // Análisis de Reconteos (T3/T4 vs T1/T2)
