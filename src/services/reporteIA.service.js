@@ -214,14 +214,21 @@ ESTADÍSTICAS GENERALES:
 ANOMALIES_TOP10 (Priorizadas):
 ${(s.anomaliesTop10 || []).map(a => `- ${a.ubicacion} | Prod: ${a.producto} | Diff: ${a.diff_abs} | Reconteos: ${a.reconteos}`).join('\n')}
 
---- SALIDA REQUERIDA: JSON único ---
-Genera exactamente un objeto JSON con la estructura (rellena datos y textos en Markdown donde corresponda):
+--- INSTRUCCIONES DE GENERACIÓN ---
+Debes generar un JSON con contenido analítico real.
+1. "resumenEjecutivo": Escribe 4-6 párrafos en Markdown describiendo el estado actual, causas de diferencias, impacto y prioridades. NO copies las instrucciones, genera el texto.
+2. "analisisProductividad": Analiza quiénes son los colaboradores más efectivos y quiénes generan más reconteos.
+3. "anomalias": Selecciona las anomalías más críticas de la lista proporcionada y sugiera acción.
+4. "acciones": Propón 3 acciones correctivas inmediatas.
 
+--- SALIDA REQUERIDA: JSON único ---
 {
-  "resumenEjecutivo": "Markdown: 4-6 párrafos. Debe ser descriptivo: (1) descripción del estado actual (cifras clave) (2) causas probables (ej: falta conteo final, ubicaciones sin ID, sesiones abiertas) (3) impacto (unidades y tiempo) (4) prioridades (qué auditar primero).",
+  "resumenEjecutivo": "TEXTO_GENERADO_AQUI",
   "kpis": {
     "totalUnidades": ${s.totalUnidadesFisicas},
     "totalItems": ${s.totalSKUsFisicos},
+    "esfuerzoOperativo": ${s.esfuerzoTotalRows},
+    "tasaDiscrepancia": ${s.errorRate},
     "promedioDiferencias": ${s.avgDiffPerLocation},
     "tasaError": ${s.errorRate},
     "efectividadConteo1": ${s.pctMatchT1},
@@ -234,24 +241,24 @@ Genera exactamente un objeto JSON con la estructura (rellena datos y textos en M
     "colaboradores": ${JSON.stringify(s.collaboratorTable)},
     "zonas": ${JSON.stringify(s.zoneTable)}
   },
-  "analisisProductividad": "Markdown: Analiza la tabla de colaboradores. ¿Quién tiene mayor participación? ¿Quién es más efectivo (Conteo 1 vs 2)?",
+  "analisisProductividad": "TEXTO_GENERADO_AQUI",
   "hallazgos": [
-    "Hallazgo 1 (quantificado)",
+    "Hallazgo 1",
     "Hallazgo 2"
   ],
   "anomalias": [
     {
-      "ubicacion": "Zona > Pasillo > Ub",
-      "producto": "Nombre",
-      "situacion": "Descripción",
-      "accion": "Acción recomendada",
+      "ubicacion": "Zona...",
+      "producto": "Nombre...",
+      "situacion": "Descripción...",
+      "accion": "Acción...",
       "prioridad": "alta"
     }
   ],
   "acciones": [
-    { "actor": "Nombre", "accion": "Qué hacer", "impacto": "Impacto esperado (ej: 'Recuperar 500 unidades')", "prioridad": "alta" }
+    { "actor": "Nombre", "accion": "Acción", "impacto": "Impacto", "prioridad": "alta" }
   ],
-  "conclusion": "Markdown: Conclusión técnica basada en la efectividad de los conteos y la participación."
+  "conclusion": "TEXTO_GENERADO_AQUI"
 }
 `.trim();
 };
