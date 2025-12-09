@@ -457,7 +457,7 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                           <thead>
                             <tr style={{background: '#f8fafc', borderBottom: '2px solid #e2e8f0'}}>
                               <th style={{padding: '8px', textAlign: 'left', color: '#64748b'}}>Colaborador</th>
-                              <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Items Contados</th>
+                              <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Productos (SKUs)</th>
                               <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Participación</th>
                               <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Precisión</th>
                             </tr>

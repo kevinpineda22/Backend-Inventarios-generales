@@ -481,15 +481,37 @@ const calculateStats = (data, namesMap) => {
   // 6. Estadísticas por Colaborador (Precisión y Participación)
   const collabStats = {};
   
-  // Primera pasada: Recolectar datos básicos
+  // Helper para obtener mapa de items (SKU -> Cantidad)
+  const getItemMap = (c) => {
+      const map = new Map();
+      if (c.raw && c.raw.conteo_items && c.raw.conteo_items.length > 0) {
+          c.raw.conteo_items.forEach(i => {
+              // Usar item_id o codigo como clave única
+              const key = String(i.item_id || i.codigo || i.descripcion || 'unk');
+              map.set(key, Number(i.cantidad));
+          });
+      } else {
+          // Fallback si no hay detalle: Usar "TOTAL" como único item
+          map.set('__TOTAL__', Number(c.qty));
+      }
+      return map;
+  };
+
+  // Primera pasada: Recolectar datos básicos (Volumen en SKUs)
   data.forEach(c => {
       const name = c.usuario_nombre || c.correo_empleado || 'Desconocido';
-      if (!collabStats[name]) collabStats[name] = { ubicaciones: new Set(), items: 0, hits: 0, totalEvaluated: 0 };
+      if (!collabStats[name]) collabStats[name] = { 
+          ubicaciones: new Set(), 
+          items: 0, // Ahora representa SKUs/Registros
+          verifiedSkus: 0, 
+          correctSkus: 0 
+      };
       collabStats[name].ubicaciones.add(c.ubicacion_id);
-      collabStats[name].items += getQty(c);
+      // Cambiado: Sumar filas (SKUs) en lugar de cantidades (Unidades)
+      collabStats[name].items += getRows(c);
   });
 
-  // Segunda pasada: Calcular precisión (Hits) usando locationMap
+  // Segunda pasada: Calcular precisión (SKU Match Rate) usando locationMap
   for (const [uid, info] of locationMap.entries()) {
       // Determinar la verdad final de esta ubicación
       let finalTruth = null;
@@ -502,17 +524,28 @@ const calculateStats = (data, namesMap) => {
       }
 
       if (finalTruth) {
-          const truthQty = Number(finalTruth.qty);
-          // Evaluar a todos los que contaron en esta ubicación (excepto el que hizo el conteo final si es el mismo)
+          const truthMap = getItemMap(finalTruth);
+          
+          // Evaluar a todos los que contaron en esta ubicación
           info.records.forEach(r => {
-              // Solo evaluamos T1 y T2 contra la verdad final (T3/T4)
+              // Solo evaluamos T1 y T2 contra la verdad final
               if (r.tipo === 1 || r.tipo === 2) {
                   const name = r.userName || 'Desconocido';
                   if (collabStats[name]) {
-                      collabStats[name].totalEvaluated++;
-                      if (Number(r.qty) === truthQty) {
-                          collabStats[name].hits++;
+                      const userMap = getItemMap(r);
+                      
+                      // Iterar sobre lo que contó el usuario
+                      for (const [sku, qty] of userMap.entries()) {
+                          collabStats[name].verifiedSkus++;
+                          // Verificar si coincide con la verdad
+                          if (truthMap.has(sku) && truthMap.get(sku) === qty) {
+                              collabStats[name].correctSkus++;
+                          }
                       }
+                      
+                      // Penalización por omisión: Si la verdad tiene items que el usuario NO contó
+                      // (Opcional: Esto bajaría la precisión si ignoraron items. 
+                      //  Por ahora, nos enfocamos en "lo que contaron, ¿estaba bien?")
                   }
               }
           });
@@ -522,11 +555,12 @@ const calculateStats = (data, namesMap) => {
   const collaboratorTable = Object.entries(collabStats).map(([name, s]) => ({
       colaborador: name,
       ubicaciones: s.ubicaciones.size,
-      items: s.items,
+      items: s.items, // Total SKUs contados
       participacion: ubicacionesUnicas > 0 ? Number(((s.ubicaciones.size / ubicacionesUnicas) * 100).toFixed(1)) : 0,
-      precision: s.totalEvaluated > 0 ? Number(((s.hits / s.totalEvaluated) * 100).toFixed(1)) : 0,
-      evaluados: s.totalEvaluated
-  })).sort((a,b) => b.items - a.items); // Ordenar por items contados (volumen)
+      // Precisión basada en SKUs verificados
+      precision: s.verifiedSkus > 0 ? Number(((s.correctSkus / s.verifiedSkus) * 100).toFixed(1)) : 0,
+      evaluados: s.verifiedSkus
+  })).sort((a,b) => b.items - a.items); // Ordenar por volumen de SKUs
 
   const avgLocationsPerCollab = collaboratorTable.length > 0 
       ? Math.round(collaboratorTable.reduce((sum, c) => sum + c.ubicaciones, 0) / collaboratorTable.length) 
