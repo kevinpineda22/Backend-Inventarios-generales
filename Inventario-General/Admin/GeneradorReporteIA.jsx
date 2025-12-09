@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users, Download, ChevronLeft, ChevronRight, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './GeneradorReporteIA.css';
 import { inventarioGeneralService as inventarioService } from '../../services/inventarioGeneralService';
@@ -391,7 +391,7 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
               ) : (
                 <div className="ia-dashboard">
                   {/* KPI GRID */}
-                  <div className="ia-kpi-grid">
+                  <div className="ia-kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                     <div className="ia-kpi-card">
                       <span className="ia-kpi-label"><Package size={14} /> Total Unidades</span>
                       <span className="ia-kpi-value">{reportData.kpis?.totalUnidades}</span>
@@ -403,7 +403,7 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                       <span className="ia-kpi-sub">Items contados (incl. reconteos)</span>
                     </div>
                     <div className="ia-kpi-card">
-                      <span className="ia-kpi-label"><AlertTriangle size={14} /> Tasa de Reconteos</span>
+                      <span className="ia-kpi-label"><AlertTriangle size={14} /> Tasa de Error</span>
                       <span className="ia-kpi-value" style={{color: reportData.kpis?.tasaDiscrepancia > 10 ? '#ef4444' : '#10b981'}}>
                         {reportData.kpis?.tasaDiscrepancia}%
                       </span>
@@ -413,6 +413,27 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                       <span className="ia-kpi-label"><Clock size={14} /> Velocidad</span>
                       <span className="ia-kpi-value">{reportData.kpis?.velocidad}</span>
                       <span className="ia-kpi-sub">Items / Hora</span>
+                    </div>
+                    {/* NUEVOS KPIs */}
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><CheckCircle size={14} /> Efectividad T1</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.efectividadConteo1}%</span>
+                      <span className="ia-kpi-sub">Reconteos = Conteo 1</span>
+                    </div>
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><CheckCircle size={14} /> Efectividad T2</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.efectividadConteo2}%</span>
+                      <span className="ia-kpi-sub">Reconteos = Conteo 2</span>
+                    </div>
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><AlertTriangle size={14} /> Prom. Diferencia</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.promedioDiferencias}</span>
+                      <span className="ia-kpi-sub">Unidades por ubicación</span>
+                    </div>
+                    <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><Activity size={14} /> Confidence Score</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.confidenceScore}/100</span>
+                      <span className="ia-kpi-sub">Calidad del Inventario</span>
                     </div>
                   </div>
 
@@ -509,35 +530,28 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                     </div>
                   )}
 
-                  {/* OPERADORES DESTACADOS (NUEVO) */}
-                  {reportData.operators && (
+                  {/* ITEMS CON MAYOR RECONTEO (NUEVO) */}
+                  {reportData.topRecountedItems?.length > 0 && (
                     <div className="ia-section">
-                      <h3 className="ia-section-title"><Users size={18} /> Desempeño de Operadores</h3>
-                      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
-                        {/* Top Precisión */}
-                        <div className="ia-operator-card" style={{background: '#f0fdf4', padding: '1rem', borderRadius: '8px'}}>
-                          <h4 style={{margin: '0 0 0.5rem 0', color: '#15803d', fontSize: '0.95rem'}}>🏆 Top Precisión</h4>
-                          <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
-                            {reportData.operators.top_correct?.map((op, i) => (
-                              <li key={i} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px', borderBottom: '1px solid #dcfce7', paddingBottom: '4px'}}>
-                                <span>{op.name}</span>
-                                <span style={{fontWeight: 'bold'}}>{op.accuracyPct}% ({op.matches} ok)</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        {/* Top Reconteos */}
-                        <div className="ia-operator-card" style={{background: '#fef2f2', padding: '1rem', borderRadius: '8px'}}>
-                          <h4 style={{margin: '0 0 0.5rem 0', color: '#b91c1c', fontSize: '0.95rem'}}>⚠️ Generadores de Reconteos</h4>
-                          <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
-                            {reportData.operators.top_reconteos?.map((op, i) => (
-                              <li key={i} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px', borderBottom: '1px solid #fee2e2', paddingBottom: '4px'}}>
-                                <span>{op.name}</span>
-                                <span style={{fontWeight: 'bold'}}>{op.reconteosCaused} reconteos</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                      <h3 className="ia-section-title"><Package size={18} /> Items con Mayor Reconteo</h3>
+                      <div className="ia-card-grid">
+                        {reportData.topRecountedItems.map((item, idx) => (
+                          <div key={idx} className="ia-anomaly-card" style={{borderLeft: '4px solid #f59e0b'}}>
+                            <div className="ia-anomaly-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                              <span style={{fontWeight: 'bold', color: '#1e293b'}}>{item.name}</span>
+                              <span style={{
+                                fontSize: '0.8rem', 
+                                padding: '2px 8px', 
+                                borderRadius: '12px', 
+                                background: '#fef3c7',
+                                color: '#b45309',
+                                fontWeight: 'bold'
+                              }}>
+                                {item.count} reconteos
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

@@ -105,6 +105,7 @@ export const generateInventoryReport = async (params) => {
         top_correct: stats.operatorsCorrectTop,
         top_reconteos: stats.operatorsReconTop
       },
+      topRecountedItems: stats.topRecountedItems,
       reconteos_per_day: stats.reconteosPerDay,
       trend_comment: stats.reconteosTrend,
       // Anomalías base (sin texto enriquecido aún)
@@ -342,6 +343,8 @@ const calculateStats = (data, namesMap) => {
 
   // 3. Agrupación por Ubicación (Core Logic)
   const locationMap = new Map(); 
+  const itemRecountMap = {}; // Mapa para contar reconteos por item
+
   data.forEach(c => {
     const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
     const qty = getQty(c);
@@ -349,7 +352,24 @@ const calculateStats = (data, namesMap) => {
     const rec = { qty, tipo: c.tipo_conteo, date, userId: c.usuario_id, userName: c.usuario_nombre || c.correo_empleado || null, raw: c };
     if (!locationMap.has(uid)) locationMap.set(uid, { records: [], reconteoCount: 0, zona: c.zona || c.ubicacion?.pasillo?.zona?.nombre || 'General' });
     locationMap.get(uid).records.push(rec);
-    if (c.tipo_conteo === 3) locationMap.get(uid).reconteoCount++;
+    
+    if (c.tipo_conteo === 3) {
+      locationMap.get(uid).reconteoCount++;
+      
+      // Contar reconteos por item
+      if (c.conteo_items && c.conteo_items.length > 0) {
+        c.conteo_items.forEach(item => {
+          const itemName = item.item?.descripcion || item.descripcion || 'Item Desconocido';
+          if (!itemRecountMap[itemName]) itemRecountMap[itemName] = 0;
+          itemRecountMap[itemName]++;
+        });
+      } else {
+        // Fallback si no hay items detallados pero es un reconteo
+        const itemName = 'Item General / Sin Detalle';
+        if (!itemRecountMap[itemName]) itemRecountMap[itemName] = 0;
+        itemRecountMap[itemName]++;
+      }
+    }
   });
 
   // 4. Procesamiento de Ubicaciones (Diffs, Anomalies, Matches)
@@ -468,13 +488,25 @@ const calculateStats = (data, namesMap) => {
   // 9. Anomalies Top 10
   const anomaliesTop10 = anomalies.sort((a,b) => b.diff_abs - a.diff_abs).slice(0, 10);
 
-  // 10. Reconteos Trend (Dummy for now or same logic)
+  // Calcular Confidence Score dinámico
+  // Base 100, resta por tasa de error y baja efectividad
+  let calculatedScore = 100;
+  calculatedScore -= (errorRate * 0.5); // Si errorRate es 60%, resta 30 pts -> 70
+  if (effectivenessRatio < 50) calculatedScore -= 10; // Penalización por baja efectividad
+  if (avgDiffPerLocation > 100) calculatedScore -= 10; // Penalización por altas diferencias
+  const confidenceScore = Math.max(0, Math.round(calculatedScore));
   const reconteosPerDayMap = {};
   data.filter(c => c.tipo_conteo === 3).forEach(c => {
       const d = new Date(c.created_at || c.createdAt || Date.now()).toISOString().slice(0,10);
       reconteosPerDayMap[d] = (reconteosPerDayMap[d] || 0) + 1;
   });
   const reconteosPerDay = Object.keys(reconteosPerDayMap).sort().map(date => ({ date, count: reconteosPerDayMap[date] }));
+
+  // 11. Top Items Recounted
+  const topRecountedItems = Object.entries(itemRecountMap)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
   return {
     totalConteos,
@@ -485,7 +517,7 @@ const calculateStats = (data, namesMap) => {
     avance,
     reconteos: data.filter(c => c.tipo_conteo === 3).length,
     itemsPorHora,
-    confidenceScore: 85, // Placeholder or calc
+    confidenceScore,
     anomaliesTop10,
     reconteosPerDay,
     reconteosTrend: 'Estable',
@@ -498,7 +530,8 @@ const calculateStats = (data, namesMap) => {
     effectivenessRatio,
     totalDiffAbs,
     collaboratorTable,
-    zoneTable
+    zoneTable,
+    topRecountedItems
   };
 };
 
