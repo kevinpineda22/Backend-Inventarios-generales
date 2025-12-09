@@ -93,6 +93,7 @@ export const generateInventoryReport = async (params) => {
         tasaError: stats.errorRate,
         efectividadConteo1: stats.pctMatchT1,
         efectividadConteo2: stats.pctMatchT2,
+        coincidenciaT1T2: stats.pctMatchT1vsT2,
         totalReconteos: stats.reconteos,
         velocidad: stats.itemsPorHora,
         confidenceScore: stats.confidenceScore
@@ -314,7 +315,7 @@ const calculateStats = (data, namesMap) => {
     ubicacionesConflicto: [], anomaliesTop10: [], operatorsCorrectTop: [], operatorsReconTop: [],
     reconteosPerDay: [], confidenceScore: 0, reconteosTrend: null,
     // New defaults
-    avgLocationsPerCollab: 0, avgDiffPerLocation: 0, errorRate: 0, pctMatchT1: 0, pctMatchT2: 0,
+    avgLocationsPerCollab: 0, avgDiffPerLocation: 0, errorRate: 0, pctMatchT1: 0, pctMatchT2: 0, pctMatchT1vsT2: 0,
     effectivenessRatio: 0, totalDiffAbs: 0, collaboratorTable: [], zoneTable: []
   };
 
@@ -379,6 +380,8 @@ const calculateStats = (data, namesMap) => {
   let locationsWithDiff = 0;
   let recountMatchesT1 = 0;
   let recountMatchesT2 = 0;
+  let matchesT1T2 = 0; // Coincidencias directas T1 vs T2
+  let totalComparisonsT1T2 = 0;
   let totalRecountsAnalyzed = 0;
   const anomalies = [];
 
@@ -416,11 +419,17 @@ const calculateStats = (data, namesMap) => {
         if (productsWithDiff > 0) locationsWithDiff++;
     }
 
-    // Análisis de Reconteos (T3/T4 vs T1/T2)
+    // Análisis de Reconteos (T3/T4 vs T1/T2) y Coincidencia T1 vs T2
+    const t1 = info.records.find(r => r.tipo === 1);
+    const t2 = info.records.find(r => r.tipo === 2);
+
+    // Coincidencia T1 vs T2
+    if (t1 && t2) {
+        totalComparisonsT1T2++;
+        if (Number(t1.qty) === Number(t2.qty)) matchesT1T2++;
+    }
+
     if (info.reconteoCount > 0) {
-        const t1 = info.records.find(r => r.tipo === 1);
-        const t2 = info.records.find(r => r.tipo === 2);
-        
         // Buscar la "Verdad": Preferir Tipo 4 (Final), sino el último Tipo 3 (Reconteo)
         // Como info.records está ordenado por fecha (asc), iteramos desde el final.
         let finalTruth = null;
@@ -466,23 +475,58 @@ const calculateStats = (data, namesMap) => {
   const errorRate = ubicacionesUnicas > 0 ? Number(((locationsWithDiff / ubicacionesUnicas) * 100).toFixed(1)) : 0;
   const pctMatchT1 = totalRecountsAnalyzed > 0 ? Number(((recountMatchesT1 / totalRecountsAnalyzed) * 100).toFixed(1)) : 0;
   const pctMatchT2 = totalRecountsAnalyzed > 0 ? Number(((recountMatchesT2 / totalRecountsAnalyzed) * 100).toFixed(1)) : 0;
+  const pctMatchT1vsT2 = totalComparisonsT1T2 > 0 ? Number(((matchesT1T2 / totalComparisonsT1T2) * 100).toFixed(1)) : 0;
   const effectivenessRatio = pctMatchT2 > 0 ? Number((pctMatchT1 / pctMatchT2).toFixed(2)) : (pctMatchT1 > 0 ? 100 : 0);
 
-  // 6. Estadísticas por Colaborador
+  // 6. Estadísticas por Colaborador (Precisión y Participación)
   const collabStats = {};
+  
+  // Primera pasada: Recolectar datos básicos
   data.forEach(c => {
       const name = c.usuario_nombre || c.correo_empleado || 'Desconocido';
-      if (!collabStats[name]) collabStats[name] = { ubicaciones: new Set(), items: 0 };
+      if (!collabStats[name]) collabStats[name] = { ubicaciones: new Set(), items: 0, hits: 0, totalEvaluated: 0 };
       collabStats[name].ubicaciones.add(c.ubicacion_id);
       collabStats[name].items += getQty(c);
   });
+
+  // Segunda pasada: Calcular precisión (Hits) usando locationMap
+  for (const [uid, info] of locationMap.entries()) {
+      // Determinar la verdad final de esta ubicación
+      let finalTruth = null;
+      for (let i = info.records.length - 1; i >= 0; i--) {
+          const r = info.records[i];
+          if (r.tipo === 4 || r.tipo === 3) {
+              finalTruth = r;
+              break;
+          }
+      }
+
+      if (finalTruth) {
+          const truthQty = Number(finalTruth.qty);
+          // Evaluar a todos los que contaron en esta ubicación (excepto el que hizo el conteo final si es el mismo)
+          info.records.forEach(r => {
+              // Solo evaluamos T1 y T2 contra la verdad final (T3/T4)
+              if (r.tipo === 1 || r.tipo === 2) {
+                  const name = r.userName || 'Desconocido';
+                  if (collabStats[name]) {
+                      collabStats[name].totalEvaluated++;
+                      if (Number(r.qty) === truthQty) {
+                          collabStats[name].hits++;
+                      }
+                  }
+              }
+          });
+      }
+  }
 
   const collaboratorTable = Object.entries(collabStats).map(([name, s]) => ({
       colaborador: name,
       ubicaciones: s.ubicaciones.size,
       items: s.items,
-      participacion: ubicacionesUnicas > 0 ? Number(((s.ubicaciones.size / ubicacionesUnicas) * 100).toFixed(1)) : 0
-  })).sort((a,b) => b.ubicaciones - a.ubicaciones);
+      participacion: ubicacionesUnicas > 0 ? Number(((s.ubicaciones.size / ubicacionesUnicas) * 100).toFixed(1)) : 0,
+      precision: s.totalEvaluated > 0 ? Number(((s.hits / s.totalEvaluated) * 100).toFixed(1)) : 0,
+      evaluados: s.totalEvaluated
+  })).sort((a,b) => b.items - a.items); // Ordenar por items contados (volumen)
 
   const avgLocationsPerCollab = collaboratorTable.length > 0 
       ? Math.round(collaboratorTable.reduce((sum, c) => sum + c.ubicaciones, 0) / collaboratorTable.length) 
@@ -563,6 +607,7 @@ const calculateStats = (data, namesMap) => {
     errorRate,
     pctMatchT1,
     pctMatchT2,
+    pctMatchT1vsT2,
     effectivenessRatio,
     totalDiffAbs,
     collaboratorTable,

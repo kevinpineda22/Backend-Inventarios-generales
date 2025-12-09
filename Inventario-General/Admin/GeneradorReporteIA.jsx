@@ -426,6 +426,11 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                       <span className="ia-kpi-sub">Reconteos = Conteo 2</span>
                     </div>
                     <div className="ia-kpi-card">
+                      <span className="ia-kpi-label"><CheckCircle size={14} /> Coincidencia T1/T2</span>
+                      <span className="ia-kpi-value">{reportData.kpis?.coincidenciaT1T2}%</span>
+                      <span className="ia-kpi-sub">Conteo 1 = Conteo 2</span>
+                    </div>
+                    <div className="ia-kpi-card">
                       <span className="ia-kpi-label"><AlertTriangle size={14} /> Prom. Diferencia</span>
                       <span className="ia-kpi-value">{reportData.kpis?.promedioDiferencias}</span>
                       <span className="ia-kpi-sub">Productos con diferencia / Ubicación</span>
@@ -443,71 +448,50 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                     <ReactMarkdown>{reportData.resumenEjecutivo}</ReactMarkdown>
                   </div>
 
-                  {/* ANOMALIAS (GRID) */}
-                  {reportData.anomalias?.length > 0 && (
+                  {/* DESEMPEÑO DE COLABORADORES (NUEVO) */}
+                  {reportData.tablas?.colaboradores?.length > 0 && (
                     <div className="ia-section">
-                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
-                        <h3 className="ia-section-title" style={{color: '#ef4444', margin: 0}}><AlertTriangle size={18} /> Anomalías Detectadas</h3>
+                      <h3 className="ia-section-title"><Users size={18} /> Desempeño de Colaboradores</h3>
+                      <div style={{overflowX: 'auto'}}>
+                        <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
+                          <thead>
+                            <tr style={{background: '#f8fafc', borderBottom: '2px solid #e2e8f0'}}>
+                              <th style={{padding: '8px', textAlign: 'left', color: '#64748b'}}>Colaborador</th>
+                              <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Items Contados</th>
+                              <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Participación</th>
+                              <th style={{padding: '8px', textAlign: 'center', color: '#64748b'}}>Precisión</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportData.tablas.colaboradores.map((collab, idx) => (
+                              <tr key={idx} style={{borderBottom: '1px solid #f1f5f9'}}>
+                                <td style={{padding: '8px', fontWeight: '500'}}>{collab.colaborador}</td>
+                                <td style={{padding: '8px', textAlign: 'center'}}>{collab.items}</td>
+                                <td style={{padding: '8px', textAlign: 'center'}}>
+                                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'}}>
+                                    <div style={{width: '50px', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden'}}>
+                                      <div style={{width: `${collab.participacion}%`, height: '100%', background: '#6366f1'}}></div>
+                                    </div>
+                                    <span>{collab.participacion}%</span>
+                                  </div>
+                                </td>
+                                <td style={{padding: '8px', textAlign: 'center'}}>
+                                  <span style={{
+                                    padding: '2px 8px', 
+                                    borderRadius: '12px', 
+                                    background: collab.precision > 90 ? '#dcfce7' : (collab.precision > 70 ? '#fef9c3' : '#fee2e2'),
+                                    color: collab.precision > 90 ? '#166534' : (collab.precision > 70 ? '#854d0e' : '#991b1b'),
+                                    fontWeight: 'bold',
+                                    fontSize: '0.8rem'
+                                  }}>
+                                    {collab.precision}%
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                      
-                      <div className="ia-card-grid">
-                        {currentAnomalies.map((anomalia, idx) => (
-                          <div key={idx} className="ia-anomaly-card">
-                            <div className="ia-anomaly-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                              <span>{anomalia.ubicacion}</span>
-                              {anomalia.prioridad && (
-                                <span style={{
-                                  fontSize: '0.7rem', 
-                                  padding: '2px 6px', 
-                                  borderRadius: '4px', 
-                                  background: anomalia.prioridad === 'alta' ? '#fee2e2' : '#fef3c7',
-                                  color: anomalia.prioridad === 'alta' ? '#b91c1c' : '#b45309',
-                                  textTransform: 'uppercase',
-                                  fontWeight: 'bold'
-                                }}>
-                                  {anomalia.prioridad}
-                                </span>
-                              )}
-                            </div>
-                            {anomalia.producto && (
-                              <div className="ia-anomaly-product" style={{fontSize: '0.85rem', color: '#6366f1', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px'}}>
-                                <Package size={12} /> {anomalia.producto}
-                              </div>
-                            )}
-                            <div className="ia-anomaly-body">
-                              <strong>Situación:</strong> {anomalia.situacion}
-                            </div>
-                            <div className="ia-anomaly-action">
-                              Recomendación: {anomalia.accion}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Pagination Controls */}
-                      {totalPages > 1 && (
-                        <div className="ia-pagination" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '1.5rem'}}>
-                          <button 
-                            disabled={currentPage === 1} 
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            className="ia-page-btn"
-                            style={{background: 'white', border: '1px solid #e2e8f0', padding: '0.5rem', borderRadius: '8px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1}}
-                          >
-                            <ChevronLeft size={16} />
-                          </button>
-                          <span className="ia-page-info" style={{fontSize: '0.9rem', color: '#64748b'}}>
-                            Página {currentPage} de {totalPages}
-                          </span>
-                          <button 
-                            disabled={currentPage === totalPages} 
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            className="ia-page-btn"
-                            style={{background: 'white', border: '1px solid #e2e8f0', padding: '0.5rem', borderRadius: '8px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1}}
-                          >
-                            <ChevronRight size={16} />
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )}
 
