@@ -10,6 +10,53 @@ import CodigoModel from '../models/Codigo.model.js';
 
 class ConteoService {
   /**
+   * Obtener ubicaciones donde se encuentra un item
+   */
+  static async getItemLocations(itemId, companiaId) {
+    try {
+      const rawData = await ConteoItemModel.findLocationsByItem(itemId);
+      
+      // Filtrar por compañía y formatear
+      const locations = rawData
+        .filter(item => {
+          // Navegar con seguridad por si algo es null
+          const bodega = item.conteo?.ubicacion?.pasillo?.zona?.bodega;
+          return bodega && String(bodega.compania_id) === String(companiaId);
+        })
+        .map(item => {
+          const c = item.conteo;
+          const u = c.ubicacion;
+          const p = u.pasillo;
+          const z = p.zona;
+          const b = z.bodega;
+          
+          return {
+            bodega: b.nombre,
+            zona: z.nombre,
+            pasillo: p.numero,
+            ubicacion: u.numero,
+            cantidad: item.cantidad,
+            fecha: item.created_at,
+            tipo_conteo: c.tipo_conteo,
+            estado_conteo: c.estado,
+            // IDs para navegación
+            bodega_id: b.id,
+            zona_id: z.id,
+            pasillo_id: p.id,
+            ubicacion_id: u.id
+          };
+        });
+
+      return {
+        success: true,
+        data: locations
+      };
+    } catch (error) {
+      throw new Error(`Error al buscar ubicaciones del item: ${error.message}`);
+    }
+  }
+
+  /**
    * Iniciar un conteo
    */
   static async iniciarConteo(ubicacionId, usuarioId, tipoConteo, clave, usuarioEmail = null) {

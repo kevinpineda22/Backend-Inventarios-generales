@@ -7,6 +7,9 @@ import ConteoController from '../controllers/conteo.controller.js';
 
 const router = express.Router();
 
+// Obtener ubicaciones de un item (Nuevo endpoint)
+router.get('/item-locations/:itemId/:companiaId', ConteoController.getItemLocations);
+
 // Obtener historial de conteos (Admin)
 router.get('/historial', ConteoController.getHistorial);
 

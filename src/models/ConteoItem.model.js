@@ -46,6 +46,49 @@ export class ConteoItemModel {
   }
 
   /**
+   * Buscar en qué conteos/ubicaciones está un item
+   */
+  static async findLocationsByItem(itemId) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CONTEO_ITEMS)
+        .select(`
+          cantidad,
+          created_at,
+          conteo:inv_general_conteos (
+            id,
+            tipo_conteo,
+            estado,
+            ubicacion:inv_general_ubicaciones (
+              id,
+              numero,
+              pasillo:inv_general_pasillos (
+                id,
+                numero,
+                zona:inv_general_zonas (
+                  id,
+                  nombre,
+                  bodega:inv_general_bodegas (
+                    id,
+                    nombre,
+                    compania_id
+                  )
+                )
+              )
+            )
+          )
+        `)
+        .eq('item_id', itemId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
    * Agregar un item al conteo (INSERT siempre, para historial)
    */
   static async create(conteoItemData) {

@@ -11,6 +11,25 @@ import {
 
 export class ConteoController {
   /**
+   * Obtener ubicaciones de un item
+   * GET /api/conteos/item-locations/:itemId/:companiaId
+   */
+  static async getItemLocations(req, res) {
+    try {
+      const { itemId, companiaId } = req.params;
+      
+      if (!itemId || !companiaId) {
+        return errorResponse(res, 'Item ID y Company ID son requeridos', 400);
+      }
+
+      const result = await ConteoService.getItemLocations(itemId, companiaId);
+      return successResponse(res, result.data);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
    * Iniciar un conteo
    * POST /api/conteos/iniciar
    */
