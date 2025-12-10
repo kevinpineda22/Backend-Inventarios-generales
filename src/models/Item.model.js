@@ -103,13 +103,13 @@ export class ItemModel {
     try {
       let query = supabase
         .from(TABLES.ITEMS)
-        .select('id, codigo, descripcion, codigo_barra');
+        .select('id, codigo, descripcion');
         
       if (companiaId) {
         query = query.eq('compania_id', companiaId);
       }
         
-      query = query.or(`descripcion.ilike.%${term}%,codigo.ilike.%${term}%,codigo_barra.ilike.%${term}%`)
+      query = query.or(`descripcion.ilike.%${term}%,codigo.ilike.%${term}%`)
         .limit(10); // Limitar resultados para sugerencias
 
       const { data, error } = await query;
