@@ -395,11 +395,17 @@ export class ConteoModel {
       
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, nombre, correo')
-        .in('id', ids);
+        .select('user_id, nombre, correo')
+        .in('user_id', ids);
 
       if (error) throw error;
-      return data;
+      
+      // Mapear user_id a id para mantener compatibilidad con el resto del código que espera 'id'
+      return data.map(p => ({
+        id: p.user_id,
+        nombre: p.nombre,
+        correo: p.correo
+      }));
     } catch (error) {
       // Si falla (ej. tabla no existe), retornamos array vacío y no rompemos nada
       console.warn('Error al obtener nombres de usuarios:', error.message);
