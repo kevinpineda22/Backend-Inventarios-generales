@@ -613,12 +613,39 @@ const calculateStats = (data, namesMap) => {
   if (effectivenessRatio < 50) calculatedScore -= 10; // Penalización por baja efectividad
   if (avgDiffPerLocation > 100) calculatedScore -= 10; // Penalización por altas diferencias
   const confidenceScore = Math.max(0, Math.round(calculatedScore));
+  
+  // 10. Tendencia de Reconteos (Robust)
   const reconteosPerDayMap = {};
   data.filter(c => c.tipo_conteo === 3).forEach(c => {
-      const d = new Date(c.created_at || c.createdAt || Date.now()).toISOString().slice(0,10);
+      const rawDate = c.created_at || c.createdAt;
+      if (!rawDate) return;
+      const dateObj = new Date(rawDate);
+      if (isNaN(dateObj.getTime())) return;
+      
+      const d = dateObj.toISOString().slice(0,10);
       reconteosPerDayMap[d] = (reconteosPerDayMap[d] || 0) + 1;
   });
   const reconteosPerDay = Object.keys(reconteosPerDayMap).sort().map(date => ({ date, count: reconteosPerDayMap[date] }));
+
+  // Calcular Tendencia (Regresión Lineal Simple)
+  let reconteosTrend = 'Estable ➡️';
+  if (reconteosPerDay.length >= 2) {
+      const counts = reconteosPerDay.map(d => d.count);
+      const n = counts.length;
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+      for (let i = 0; i < n; i++) {
+          sumX += i;
+          sumY += counts[i];
+          sumXY += i * counts[i];
+          sumXX += i * i;
+      }
+      const denominator = (n * sumXX - sumX * sumX);
+      if (denominator !== 0) {
+        const slope = (n * sumXY - sumX * sumY) / denominator;
+        if (slope > 0.5) reconteosTrend = 'Creciente ⚠️';
+        else if (slope < -0.5) reconteosTrend = 'Decreciente ✅';
+      }
+  }
 
   // 11. Top Items Recounted
   const topRecountedItems = Object.entries(itemRecountMap)
@@ -638,7 +665,7 @@ const calculateStats = (data, namesMap) => {
     confidenceScore,
     anomaliesTop10,
     reconteosPerDay,
-    reconteosTrend: 'Estable',
+    reconteosTrend,
     // New KPIs
     avgLocationsPerCollab,
     avgDiffPerLocation,
