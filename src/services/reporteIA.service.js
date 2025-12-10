@@ -614,15 +614,35 @@ const calculateStats = (data, namesMap) => {
   if (avgDiffPerLocation > 100) calculatedScore -= 10; // Penalización por altas diferencias
   const confidenceScore = Math.max(0, Math.round(calculatedScore));
   
-  // 10. Tendencia de Reconteos (Robust)
+  // 10. Tendencia de Reconteos (Robust & Timezone Aware)
   const reconteosPerDayMap = {};
+  const processedRecountIds = new Set(); // Evitar duplicados si la data viene sucia
+
   data.filter(c => c.tipo_conteo === 3).forEach(c => {
+      // Validación de unicidad
+      if (c.id && processedRecountIds.has(c.id)) return;
+      if (c.id) processedRecountIds.add(c.id);
+
       const rawDate = c.created_at || c.createdAt;
       if (!rawDate) return;
       const dateObj = new Date(rawDate);
       if (isNaN(dateObj.getTime())) return;
       
-      const d = dateObj.toISOString().slice(0,10);
+      // Usar fecha local (Colombia/Perú UTC-5) para evitar que conteos de la noche pasen al día siguiente
+      // Si no se puede determinar, se usa ISO pero ajustado manualmente a -5h como fallback seguro para Latam
+      let d;
+      try {
+          d = dateObj.toLocaleDateString('es-CO', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' });
+          // Formato es-CO suele ser DD/MM/YYYY, lo invertimos a YYYY-MM-DD para ordenar
+          const parts = d.split('/');
+          if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          else d = dateObj.toISOString().slice(0,10);
+      } catch (e) {
+          // Fallback manual a UTC-5
+          const adjustedDate = new Date(dateObj.getTime() - (5 * 60 * 60 * 1000));
+          d = adjustedDate.toISOString().slice(0,10);
+      }
+
       reconteosPerDayMap[d] = (reconteosPerDayMap[d] || 0) + 1;
   });
   const reconteosPerDay = Object.keys(reconteosPerDayMap).sort().map(date => ({ date, count: reconteosPerDayMap[date] }));
