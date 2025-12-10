@@ -499,6 +499,10 @@ const calculateStats = (data, namesMap) => {
 
   // Primera pasada: Recolectar datos básicos (Volumen en SKUs)
   data.forEach(c => {
+      // EXCLUIR TIPO 4 (Ajustes/Finalizaciones) del conteo de participación
+      // Estos son roles administrativos, no de conteo físico primario.
+      if (c.tipo_conteo === 4) return;
+
       const name = c.usuario_nombre || c.correo_empleado || 'Desconocido';
       if (!collabStats[name]) collabStats[name] = { 
           ubicaciones: new Set(), 
@@ -528,9 +532,13 @@ const calculateStats = (data, namesMap) => {
           
           // Evaluar a todos los que contaron en esta ubicación
           info.records.forEach(r => {
-              // Solo evaluamos T1 y T2 contra la verdad final
-              if (r.tipo === 1 || r.tipo === 2) {
+              // Evaluamos T1, T2 y T3 (Reconteos) contra la verdad final
+              // Si el usuario hizo un reconteo (T3) y ese reconteo ES la verdad final,
+              // entonces su precisión es 100% (se compara consigo mismo, lo cual es correcto: su conteo prevaleció).
+              if (r.tipo === 1 || r.tipo === 2 || r.tipo === 3) {
                   const name = r.userName || 'Desconocido';
+                  
+                  // Solo procesar si el usuario existe en collabStats (es decir, no fue filtrado en la primera pasada)
                   if (collabStats[name]) {
                       const userMap = getItemMap(r);
                       
@@ -542,10 +550,6 @@ const calculateStats = (data, namesMap) => {
                               collabStats[name].correctSkus++;
                           }
                       }
-                      
-                      // Penalización por omisión: Si la verdad tiene items que el usuario NO contó
-                      // (Opcional: Esto bajaría la precisión si ignoraron items. 
-                      //  Por ahora, nos enfocamos en "lo que contaron, ¿estaba bien?")
                   }
               }
           });

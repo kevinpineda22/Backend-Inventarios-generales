@@ -22,6 +22,8 @@ const HistorialConteos = () => {
   const [filtros, setFiltros] = useState({
     zona: '',
     pasillo: '',
+    usuario: '',
+    producto: '',
   });
   
   // Estado para comparación
@@ -223,11 +225,19 @@ const HistorialConteos = () => {
     }
   };
 
+  // Estado para búsqueda avanzada de productos
+  // const [filteredLocations, setFilteredLocations] = useState(null); // Removed in favor of backend filter
+  // const [isSearching, setIsSearching] = useState(false); // Removed
+
   const cargarHistorial = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
       // Fetch ALL counts for the company to enable comparison
-      const data = await inventarioService.obtenerHistorialConteos(selectedCompany, {});
+      // Pass product filter to backend
+      const queryFilters = {};
+      if (filtros.producto) queryFilters.producto = filtros.producto;
+
+      const data = await inventarioService.obtenerHistorialConteos(selectedCompany, queryFilters);
       setConteos(data);
     } catch (error) {
       console.error('Error al cargar historial:', error);
@@ -236,6 +246,18 @@ const HistorialConteos = () => {
       if (showLoading) setLoading(false);
     }
   };
+
+  // Efecto para recargar cuando cambia el filtro de producto (Debounced)
+  useEffect(() => {
+      if (!selectedCompany) return;
+      
+      const timer = setTimeout(() => {
+          cargarHistorial(false);
+      }, 800);
+      
+      return () => clearTimeout(timer);
+  }, [filtros.producto]);
+
 
   // Extraer bodegas únicas
   const bodegas = [...new Set(conteos.map(c => c.bodega))].sort();
@@ -265,6 +287,8 @@ const HistorialConteos = () => {
       });
     }
 
+    // 1. Filtrar conteos por ubicación (Bodega, Zona, Pasillo)
+    // NO filtramos por usuario aquí para no perder el contexto de la ubicación completa
     const filtered = conteos.filter(c => 
       c.bodega === selectedBodega &&
       (!filtros.zona || c.zona.toLowerCase().includes(filtros.zona.toLowerCase())) &&
@@ -325,11 +349,31 @@ const HistorialConteos = () => {
       }
 
       zona.pasillos = pasillos.sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true })).map(pasillo => {
+        // AQUI APLICAMOS EL FILTRO DE USUARIO:
+        // Solo mostramos ubicaciones donde el usuario seleccionado participó en ALGUNO de los conteos
+        if (filtros.usuario) {
+            pasillo.ubicaciones = pasillo.ubicaciones.filter(loc => {
+                const user = filtros.usuario;
+                const inC1 = loc.c1 && (loc.c1.usuario_nombre === user || loc.c1.correo_empleado === user || loc.c1.usuario_id === user);
+                const inC2 = loc.c2 && (loc.c2.usuario_nombre === user || loc.c2.correo_empleado === user || loc.c2.usuario_id === user);
+                const inDiff = loc.diff && (loc.diff.usuario_nombre === user || loc.diff.correo_empleado === user || loc.diff.usuario_id === user);
+                const inFinal = loc.final && (loc.final.usuario_nombre === user || loc.final.correo_empleado === user || loc.final.usuario_id === user);
+                
+                return inC1 || inC2 || inDiff || inFinal;
+            });
+        }
+
         pasillo.ubicaciones.sort((a, b) => a.ubicacion.localeCompare(b.ubicacion, undefined, { numeric: true }));
         return pasillo;
       });
+      
+      // Limpiar pasillos que quedaron vacíos tras el filtro de usuario
+      if (filtros.usuario) {
+          zona.pasillos = zona.pasillos.filter(p => p.ubicaciones.length > 0);
+      }
+      
       return zona;
-    });
+    }).filter(z => z.pasillos.length > 0); // Limpiar zonas vacías
   };
 
   // Calcular estadísticas para el dashboard
@@ -585,6 +629,15 @@ const HistorialConteos = () => {
     return { label: '', class: '' };
   };
 
+  // Helper para calcular cantidad real de items (prioriza array conteo_items)
+  const getConteoQty = (conteo) => {
+    if (!conteo) return 0;
+    if (conteo.conteo_items && conteo.conteo_items.length > 0) {
+      return conteo.conteo_items.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+    }
+    return conteo.total_items || 0;
+  };
+
   const stats = getDashboardStats();
 
   return (
@@ -641,81 +694,88 @@ const HistorialConteos = () => {
           </div>
         ) : (
           <>
-            <div className="hc-main-header">
-              <div className="hc-header-title">
-                <h2>{selectedBodega}</h2>
-                <p className="hc-subtitle">Gestión integral de inventario y cierres</p>
+            <div className="hc-sticky-header-wrapper">
+              <div className="hc-main-header">
+                <div className="hc-header-title">
+                  <h2>{selectedBodega}</h2>
+                  <p className="hc-subtitle">Gestión integral de inventario y cierres</p>
+                </div>
+                
+                <div className="hc-header-actions">
+                  <button 
+                    className="hc-btn-toggle-view"
+                    onClick={() => setShowBitacora(true)}
+                    title="Ver Bitácora de Actividad"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0',
+                      background: 'white',
+                      cursor: 'pointer',
+                      marginRight: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      color: '#2563eb'
+                    }}
+                  >
+                    <ScrollText size={18} />
+                    Bitácora
+                  </button>
+
+                  <button 
+                    className={`hc-btn-toggle-view ${viewMode === 'dashboard' ? 'active' : ''}`}
+                    onClick={() => setViewMode(viewMode === 'list' ? 'dashboard' : 'list')}
+                    title={viewMode === 'list' ? "Ver Dashboard" : "Ver Lista"}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0',
+                      background: viewMode === 'dashboard' ? '#e2e8f0' : 'white',
+                      cursor: 'pointer',
+                      marginRight: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    {viewMode === 'list' ? '📊 Dashboard' : '📋 Lista'}
+                  </button>
+
+                  <button 
+                    onClick={() => cargarHistorial(true)} 
+                    className="hc-btn-refresh" 
+                    title="Actualizar datos"
+                  >
+                    ↻
+                  </button>
+
+                  <button 
+                    className={`hc-btn-close-level bodega ${hierarchyStatus?.bodega === 'cerrado' ? 'closed' : ''}`}
+                    onClick={() => {
+                      const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
+                      if (bodegaId) handleCerrarBodega(bodegaId);
+                    }}
+                    disabled={hierarchyStatus?.bodega === 'cerrado' || !hierarchyStatus}
+                    title="Cerrar Bodega completa"
+                  >
+                    {hierarchyStatus?.bodega === 'cerrado' ? '🔒 Bodega Cerrada' : '🔒 Cerrar Bodega'}
+                  </button>
+                </div>
               </div>
-              
-              <div className="hc-header-actions">
-                 <FiltrosInventarioGeneral 
-                   filtros={filtros} 
-                   setFiltros={setFiltros} 
-                   viewMode={viewMode}
-                   structure={hierarchyStatus?.estructura}
-                   conteos={conteos}
-                   selectedBodega={selectedBodega}
-                 />
 
-                <button 
-                  className="hc-btn-toggle-view"
-                  onClick={() => setShowBitacora(true)}
-                  title="Ver Bitácora de Actividad"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #e2e8f0',
-                    background: 'white',
-                    cursor: 'pointer',
-                    marginRight: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    color: '#2563eb'
-                  }}
-                >
-                  <ScrollText size={18} />
-                  Bitácora
-                </button>
-
-                <button 
-                  className={`hc-btn-toggle-view ${viewMode === 'dashboard' ? 'active' : ''}`}
-                  onClick={() => setViewMode(viewMode === 'list' ? 'dashboard' : 'list')}
-                  title={viewMode === 'list' ? "Ver Dashboard" : "Ver Lista"}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #e2e8f0',
-                    background: viewMode === 'dashboard' ? '#e2e8f0' : 'white',
-                    cursor: 'pointer',
-                    marginRight: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  {viewMode === 'list' ? '📊 Dashboard' : '📋 Lista'}
-                </button>
-
-                <button 
-                  onClick={() => cargarHistorial(true)} 
-                  className="hc-btn-refresh" 
-                  title="Actualizar datos"
-                >
-                  ↻
-                </button>
-
-                 <button 
-                  className={`hc-btn-close-level bodega ${hierarchyStatus?.bodega === 'cerrado' ? 'closed' : ''}`}
-                  onClick={() => {
-                    const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
-                    if (bodegaId) handleCerrarBodega(bodegaId);
-                  }}
-                  disabled={hierarchyStatus?.bodega === 'cerrado' || !hierarchyStatus}
-                  title="Cerrar Bodega completa"
-                >
-                  {hierarchyStatus?.bodega === 'cerrado' ? '🔒 Bodega Cerrada' : '🔒 Cerrar Bodega'}
-                </button>
+              {/* Barra de Filtros y Búsqueda (Nueva Ubicación) */}
+              <div className="hc-toolbar-container">
+                  <FiltrosInventarioGeneral 
+                    filtros={filtros} 
+                    setFiltros={setFiltros} 
+                    viewMode={viewMode}
+                    structure={hierarchyStatus?.estructura}
+                    conteos={conteos}
+                    selectedBodega={selectedBodega}
+                    selectedCompany={selectedCompany}
+                    userMap={userMap}
+                  />
               </div>
             </div>
 
@@ -751,7 +811,28 @@ const HistorialConteos = () => {
                 )}
 
                 <div className="hc-hierarchy-container">
-                  {getHierarchicalLocations().map(zona => {
+                  {loading ? (
+                      <div style={{padding: '2rem', textAlign: 'center', color: '#64748b'}}>
+                          <div className="hc-loading-spinner" style={{margin: '0 auto 1rem'}}></div>
+                          <p>Cargando datos...</p>
+                      </div>
+                  ) : getHierarchicalLocations().length === 0 ? (
+                    <div style={{
+                      padding: '3rem',
+                      textAlign: 'center',
+                      color: 'var(--hc-text-muted)',
+                      background: 'white',
+                      borderRadius: '12px',
+                      boxShadow: 'var(--hc-shadow-sm)',
+                      marginTop: '1rem'
+                    }}>
+                      <div style={{fontSize: '3rem', marginBottom: '1rem'}}>🔍</div>
+                      <h3>No se encontraron resultados</h3>
+                      <p>No hay conteos que coincidan con los filtros seleccionados.</p>
+                      {(filtros.usuario || filtros.producto) && <p style={{fontSize: '0.9rem', marginTop: '0.5rem'}}>Intenta cambiar los criterios de búsqueda.</p>}
+                    </div>
+                  ) : (
+                    getHierarchicalLocations().map(zona => {
                     const isZonaClosed = hierarchyStatus?.zonas?.[zona.id] === 'cerrado';
                     const allPasillosClosed = zona.pasillos.every(p => hierarchyStatus?.pasillos?.[p.id] === 'cerrado');
 
@@ -817,7 +898,7 @@ const HistorialConteos = () => {
                                                       className="hc-btn-items"
                                                       onClick={() => handleVerDetalleConteo(loc.c1, 1)}
                                                     >
-                                                      Ver Items ({loc.c1.total_items || 0})
+                                                      Ver Items ({getConteoQty(loc.c1)})
                                                     </button>
                                                   </>
                                                 ) : (
@@ -843,7 +924,7 @@ const HistorialConteos = () => {
                                                       className="hc-btn-items"
                                                       onClick={() => handleVerDetalleConteo(loc.c2, 2)}
                                                     >
-                                                      Ver Items ({loc.c2.total_items || 0})
+                                                      Ver Items ({getConteoQty(loc.c2)})
                                                     </button>
                                                   </>
                                                 ) : (
@@ -851,6 +932,27 @@ const HistorialConteos = () => {
                                                 )}
                                               </div>
                                             </div>
+
+                                            {loc.diff && (
+                                              <div className="hc-reconteo-info" style={{marginTop: '10px', padding: '8px', background: '#fff7ed', borderRadius: '6px', border: '1px solid #ffedd5'}}>
+                                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                                      <span style={{fontWeight:'bold', color:'#c2410c', fontSize:'0.85rem'}}>⚠️ Reconteo</span>
+                                                      <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
+                                                          <span className="hc-user-avatar" style={{fontSize:'0.8rem'}}>👤</span>
+                                                          <span className="hc-user-name" style={{fontSize:'0.8rem'}} title={loc.diff.usuario_nombre}>
+                                                              {userMap[loc.diff.usuario_nombre] || loc.diff.usuario_nombre?.split('@')[0]}
+                                                          </span>
+                                                          <button 
+                                                            className="hc-btn-items"
+                                                            style={{padding:'2px 6px', fontSize:'0.75rem', marginLeft:'5px'}}
+                                                            onClick={() => handleVerDetalleConteo(loc.diff, 3)}
+                                                          >
+                                                            Ver ({getConteoQty(loc.diff)})
+                                                          </button>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                            )}
                                           </div>
                                           
                                           <div className="hc-card-footer">
@@ -877,7 +979,8 @@ const HistorialConteos = () => {
                         </div>
                       </div>
                     );
-                  })}
+                  })
+                  )}
                 </div>
               </>
             )}

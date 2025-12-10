@@ -116,32 +116,23 @@
 }
 
 /* Header Flotante / Sticky */
-.hc-main-header {
+.hc-sticky-header-wrapper {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
+  background-color: white;
+  box-shadow: var(--hc-shadow-sm);
+}
+
+.hc-main-header {
+  position: static; /* Was sticky */
+  background: transparent; /* Let wrapper handle bg */
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--hc-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--hc-shadow-sm);
-}
-
-.hc-header-title h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--hc-text-main);
-  letter-spacing: -0.03em;
-}
-
-.hc-subtitle {
-  color: var(--hc-text-muted);
-  margin: 0.25rem 0 0 0;
-  font-size: 0.9rem;
+  box-shadow: none; /* Wrapper handles shadow */
 }
 
 /* Acciones del Header */
@@ -149,6 +140,76 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex-wrap: nowrap;
+}
+
+.hc-action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.hc-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.hc-action-btn:hover {
+  background-color: white;
+  color: #3b82f6;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.hc-action-btn.active {
+  background-color: white;
+  color: #2563eb;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.hc-btn-refresh-mini {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background-color: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1.1rem;
+}
+
+.hc-btn-refresh-mini:hover {
+  background-color: #e2e8f0;
+  color: #2563eb;
+  transform: rotate(180deg);
+}
+
+.hc-toolbar-container {
+  background-color: #ffffff;
+  padding: 12px 32px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  position: static; /* Was sticky */
+  z-index: auto;
+  box-shadow: none;
 }
 
 .hc-filters-row {
