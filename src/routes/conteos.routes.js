@@ -34,9 +34,6 @@ router.get('/pasillo/:pasilloId', ConteoController.getHistorialByPasillo);
 // Calcular diferencias
 router.get('/diferencias/:ubicacionId', ConteoController.calcularDiferencias);
 
-// Obtener comparativa detallada (Optimizado)
-router.get('/comparativa/:ubicacionId', ConteoController.getComparativa);
-
 // Obtener items de un conteo
 router.get('/:conteoId/items', ConteoController.getItems);
 

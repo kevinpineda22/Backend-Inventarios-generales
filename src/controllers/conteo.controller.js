@@ -95,20 +95,6 @@ export class ConteoController {
   }
 
   /**
-   * Obtener comparativa detallada
-   * GET /api/conteos/comparativa/:ubicacionId
-   */
-  static async getComparativa(req, res) {
-    try {
-      const { ubicacionId } = req.params;
-      const result = await ConteoService.getComparativaDetallada(ubicacionId);
-      return successResponse(res, result.data);
-    } catch (error) {
-      return errorResponse(res, error.message, 500, error);
-    }
-  }
-
-  /**
    * Eliminar item de un conteo
    * DELETE /api/conteos/item/:id
    */
