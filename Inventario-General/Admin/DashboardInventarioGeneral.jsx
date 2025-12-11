@@ -43,10 +43,12 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
 
     // Helper to get quantity (Units)
     const getQty = (c) => {
-      if (c.total_cantidad !== undefined) return Number(c.total_cantidad);
+      // Align exactly with AI Report logic:
+      // 1. Try to sum detailed items
       if (c.conteo_items && c.conteo_items.length > 0) {
         return c.conteo_items.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
       }
+      // 2. Fallback to row count (total_items)
       return Number(c.total_items || 0);
     };
 
@@ -74,6 +76,11 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
     // 1. Group by Location to find "Real Truth" & Calculate Metrics
     const locationMap = new Map();
     conteos.forEach(c => {
+      // EXCLUDE INVALID STATES for "Real Inventory"
+      // We exclude 'rechazado' (invalid) and 'en_progreso' (not yet verified/finalized).
+      // This ensures we only sum CONFIRMED inventory (Finalizado or Aprobado).
+      if (c.estado === 'rechazado' || c.estado === 'en_progreso') return;
+
       const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
       if (!locationMap.has(uid)) locationMap.set(uid, []);
       locationMap.get(uid).push(c);
@@ -85,11 +92,20 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
     let totalComparisonsT1T2 = 0;
 
     locationMap.forEach((records) => {
-      // Sort by date
+      // Sort by date, then by type (to match AI Report logic exactly)
+      // We capture 'now' once to ensure stability for records with missing dates
+      const now = new Date(); 
+      
       records.sort((a, b) => {
-        const da = new Date(a.created_at || a.createdAt || 0);
-        const db = new Date(b.created_at || b.createdAt || 0);
-        return da - db;
+        // Use the captured 'now' so all missing dates are treated as equal
+        const da = (a.created_at || a.createdAt) ? new Date(a.created_at || a.createdAt) : now;
+        const db = (b.created_at || b.createdAt) ? new Date(b.created_at || b.createdAt) : now;
+        
+        const timeDiff = da - db;
+        if (timeDiff !== 0) return timeDiff;
+        
+        // If dates are equal (or both missing), sort by Type
+        return (a.tipo_conteo || 0) - (b.tipo_conteo || 0);
       });
 
       const last = records[records.length - 1];
@@ -98,19 +114,20 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
       // Sum Real Inventory (Last valid count)
       totalUnidadesReal += getQty(last);
 
-      // Error Rate (Last vs Prev)
+      // Error Rate (Last vs Prev) - Uses STRICT comparison (SKU level)
       if (prev) {
         if (hasDifference(last, prev)) {
           locationsWithDiff++;
         }
       }
 
-      // T1 vs T2 Match
+      // T1 vs T2 Match - Uses LENIENT comparison (Total Qty only) to match AI Report
       const t1 = records.find(r => r.tipo_conteo === 1);
       const t2 = records.find(r => r.tipo_conteo === 2);
       if (t1 && t2) {
         totalComparisonsT1T2++;
-        if (!hasDifference(t1, t2)) {
+        // AI Report uses simple quantity comparison for this specific metric
+        if (getQty(t1) === getQty(t2)) {
           matchesT1T2++;
         }
       }

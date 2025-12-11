@@ -347,6 +347,9 @@ const calculateStats = (data, namesMap) => {
   const itemRecountMap = {}; // Mapa para contar reconteos por item
 
   data.forEach(c => {
+    // FILTER: Exclude invalid states to ensure "Real Inventory" is accurate and matches Dashboard
+    if (c.estado === 'rechazado' || c.estado === 'en_progreso') return;
+
     const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
     const qty = getQty(c);
     const date = new Date(c.created_at || c.createdAt || Date.now());
