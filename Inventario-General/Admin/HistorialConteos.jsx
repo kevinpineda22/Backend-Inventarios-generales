@@ -229,13 +229,22 @@ const HistorialConteos = () => {
   // const [filteredLocations, setFilteredLocations] = useState(null); // Removed in favor of backend filter
   // const [isSearching, setIsSearching] = useState(false); // Removed
 
+  // Efecto para recargar cuando cambia la bodega seleccionada (para obtener historial completo de esa bodega)
+  useEffect(() => {
+    if (selectedBodega) {
+      cargarHistorial(true);
+    }
+  }, [selectedBodega]);
+
   const cargarHistorial = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
-      // Fetch ALL counts for the company to enable comparison
-      // Pass product filter to backend
+      
       const queryFilters = {};
       if (filtros.producto) queryFilters.producto = filtros.producto;
+      // Si hay bodega seleccionada, filtramos por ella en el backend para asegurar que el límite de registros
+      // se aplique solo a esta bodega (trayendo más historia relevante)
+      if (selectedBodega) queryFilters.bodega = selectedBodega;
 
       const data = await inventarioService.obtenerHistorialConteos(selectedCompany, queryFilters);
       setConteos(data);

@@ -538,6 +538,7 @@ class ConteoService {
           tipo_conteo: c.tipo_conteo,
           fecha_inicio: c.fecha_inicio,
           fecha_fin: c.fecha_fin,
+          created_at: c.created_at, // CRITICAL: Required for correct sorting in Dashboard
           usuario_nombre: displayName, // Usar nombre real si existe
           estado: c.estado,
           // Corregido: Retornar la cantidad de registros (items únicos/filas), no la suma de cantidades
