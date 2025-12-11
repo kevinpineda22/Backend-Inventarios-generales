@@ -345,6 +345,9 @@ const calculateStats = (data, namesMap) => {
   // 3. Agrupación por Ubicación (Core Logic)
   const locationMap = new Map(); 
   const itemRecountMap = {}; // Mapa para contar reconteos por item
+  
+  // Capture 'now' once for stable sorting of records with missing dates
+  const now = new Date();
 
   data.forEach(c => {
     // FILTER: Exclude invalid states to ensure "Real Inventory" is accurate and matches Dashboard
@@ -352,7 +355,8 @@ const calculateStats = (data, namesMap) => {
 
     const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
     const qty = getQty(c);
-    const date = new Date(c.created_at || c.createdAt || Date.now());
+    // Use captured 'now' for stability
+    const date = new Date(c.created_at || c.createdAt || now);
     const rec = { qty, tipo: c.tipo_conteo, date, userId: c.usuario_id, userName: c.usuario_nombre || c.correo_empleado || null, raw: c };
     if (!locationMap.has(uid)) locationMap.set(uid, { records: [], reconteoCount: 0, zona: c.zona || c.ubicacion?.pasillo?.zona?.nombre || 'General' });
     locationMap.get(uid).records.push(rec);
