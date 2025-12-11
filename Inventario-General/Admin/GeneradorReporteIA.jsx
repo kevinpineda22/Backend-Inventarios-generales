@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users, Download, ChevronLeft, ChevronRight, Activity } from 'lucide-react';
+import { Sparkles, X, Bot, User, Warehouse, BarChart3, AlertTriangle, CheckCircle, TrendingUp, Package, Clock, Users, Download, ChevronLeft, ChevronRight, Activity, Info, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './GeneradorReporteIA.css';
 import { inventarioGeneralService as inventarioService } from '../../services/inventarioGeneralService';
@@ -19,6 +19,7 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
   const [selectedBodega, setSelectedBodega] = useState('');
   const [selectedOperator, setSelectedOperator] = useState('');
   const [showJson, setShowJson] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
   
   // Paginación de Anomalías
   const [currentPage, setCurrentPage] = useState(1);
@@ -571,6 +572,51 @@ const GeneradorReporteIA = ({ isOpen, onClose, conteos: initialConteos = [], bod
                   {/* CONCLUSION */}
                   <div className="ia-section" style={{marginTop: '1rem', padding: '1rem', background: '#f1f5f9', borderRadius: '8px'}}>
                     <strong>Conclusión Técnica:</strong> {reportData.conclusion}
+                  </div>
+
+                  {/* GLOSARIO TÉCNICO */}
+                  <div className="ia-section" style={{marginTop: '2rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem'}}>
+                    <button 
+                      onClick={() => setShowGlossary(!showGlossary)}
+                      style={{
+                        background: 'none', border: 'none', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                        cursor: 'pointer', padding: '10px', borderRadius: '8px', backgroundColor: '#f8fafc'
+                      }}
+                    >
+                      <span style={{display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#475569'}}>
+                        <Info size={18} /> ¿Cómo interpretar estos datos? (Glosario Técnico)
+                      </span>
+                      <ChevronDown size={18} style={{transform: showGlossary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s'}} />
+                    </button>
+                    
+                    {showGlossary && (
+                      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginTop: '1rem', fontSize: '0.85rem', color: '#64748b'}}>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Total Unidades:</strong> Suma final del inventario físico (basado en el último conteo válido de cada ubicación).
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Esfuerzo Operativo:</strong> Número total de conteos realizados (incluyendo reconteos y validaciones). Mide la carga de trabajo.
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Tasa de Error:</strong> Porcentaje de ubicaciones que presentaron diferencias entre conteos consecutivos.
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Velocidad:</strong> Promedio de items contados por hora de trabajo activo.
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Efectividad T1/T2:</strong> Porcentaje de veces que el Conteo 1 (o 2) fue correcto cuando hubo disputa (reconteo).
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Coincidencia T1/T2:</strong> Porcentaje de veces que el primer y segundo operador coincidieron exactamente (sin necesidad de reconteo).
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Prom. Diferencia:</strong> Cantidad promedio de productos (SKUs) con discrepancias por ubicación.
+                        </div>
+                        <div className="ia-glossary-item">
+                          <strong style={{color: '#334155'}}>Confidence Score:</strong> Calificación de 0 a 100 sobre la confiabilidad de los datos, penalizando errores y diferencias.
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                 </div>

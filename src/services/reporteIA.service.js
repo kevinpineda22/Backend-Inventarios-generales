@@ -356,20 +356,8 @@ const calculateStats = (data, namesMap) => {
     
     if (c.tipo_conteo === 3) {
       locationMap.get(uid).reconteoCount++;
-      
-      // Contar reconteos por item
-      if (c.conteo_items && c.conteo_items.length > 0) {
-        c.conteo_items.forEach(item => {
-          const itemName = item.item?.descripcion || item.descripcion || 'Item Desconocido';
-          if (!itemRecountMap[itemName]) itemRecountMap[itemName] = 0;
-          itemRecountMap[itemName]++;
-        });
-      } else {
-        // Fallback si no hay items detallados pero es un reconteo
-        const itemName = 'Item General / Sin Detalle';
-        if (!itemRecountMap[itemName]) itemRecountMap[itemName] = 0;
-        itemRecountMap[itemName]++;
-      }
+      // NOTA: El conteo de items por reconteo se mueve al loop principal (paso 4)
+      // para evitar duplicados y tener acceso al contexto de la ubicación.
     }
   });
 
@@ -392,6 +380,41 @@ const calculateStats = (data, namesMap) => {
     
     totalUnidadesFisicas += (last?.qty || 0);
     totalSKUsFisicos += (last?.raw?.conteo_items?.length || (last?.raw?.total_items ? 1 : 0));
+
+    // --- LÓGICA DE RECONTEOS POR ITEM (MEJORADA) ---
+    // Iterar sobre los registros de esta ubicación para encontrar reconteos (Tipo 3)
+    info.records.forEach(r => {
+        if (r.tipo === 3) {
+            const itemsInRecount = new Set(); // Para evitar contar el mismo item varias veces en un solo reconteo
+            
+            if (r.raw.conteo_items && r.raw.conteo_items.length > 0) {
+                r.raw.conteo_items.forEach(item => {
+                    const itemName = item.item?.descripcion || item.descripcion || 'Item Desconocido';
+                    itemsInRecount.add(itemName);
+                });
+            } else {
+                // Si el reconteo no tiene items (es solo total), intentamos inferir los items del conteo anterior (T1 o T2)
+                // Buscamos el registro anterior a este reconteo
+                const prevRecord = info.records.find(pr => pr.date < r.date && (pr.tipo === 1 || pr.tipo === 2));
+                if (prevRecord && prevRecord.raw.conteo_items && prevRecord.raw.conteo_items.length > 0) {
+                    prevRecord.raw.conteo_items.forEach(item => {
+                        const itemName = item.item?.descripcion || item.descripcion || 'Item Desconocido';
+                        itemsInRecount.add(itemName);
+                    });
+                } else {
+                    // Si no hay contexto previo, se marca como general
+                    itemsInRecount.add('Item General / Sin Detalle');
+                }
+            }
+
+            // Sumar al mapa global (solo una vez por reconteo)
+            itemsInRecount.forEach(itemName => {
+                if (!itemRecountMap[itemName]) itemRecountMap[itemName] = 0;
+                itemRecountMap[itemName]++;
+            });
+        }
+    });
+    // -----------------------------------------------
 
     // Diferencias & Anomalías
     let productsWithDiff = 0;
