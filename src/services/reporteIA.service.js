@@ -381,7 +381,12 @@ const calculateStats = (data, namesMap) => {
   const anomalies = [];
 
   for (const [uid, info] of locationMap.entries()) {
-    info.records.sort((a,b) => (a.date - b.date) || (a.tipo - b.tipo));
+    // Sort by date, then by type (Strict Number comparison)
+    info.records.sort((a,b) => {
+        const timeDiff = a.date - b.date;
+        if (timeDiff !== 0) return timeDiff;
+        return (Number(a.tipo) || 0) - (Number(b.tipo) || 0);
+    });
     const last = info.records[info.records.length - 1];
     const prev = info.records.length >= 2 ? info.records[info.records.length - 2] : null;
     

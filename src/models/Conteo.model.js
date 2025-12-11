@@ -296,7 +296,8 @@ export class ConteoModel {
       let query = supabase
         .from(TABLES.CONTEOS)
         .select(selectQuery)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000); // Increase limit to avoid truncated data in large reports
 
       // Aplicar filtros
       if (filters.companiaId) {
