@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import './HistorialConteos.css';
-import { inventarioGeneralService as inventarioService } from '../../services/inventarioGeneralService';
+import { inventarioGeneralService as inventarioService, API_URL } from '../../services/inventarioGeneralService';
 import { supabase } from '../../supabaseClient';
 import Swal from 'sweetalert2';
 import DashboardInventarioGeneral from './DashboardInventarioGeneral';
@@ -269,10 +269,10 @@ const HistorialConteos = () => {
 
 
   // Extraer bodegas únicas
-  const bodegas = [...new Set(conteos.map(c => c.bodega))].sort();
+  const bodegas = useMemo(() => [...new Set(conteos.map(c => c.bodega))].sort(), [conteos]);
 
   // Agrupar conteos por Jerarquía: Zona -> Pasillo -> Ubicaciones
-  const getHierarchicalLocations = () => {
+  const hierarchicalLocations = useMemo(() => {
     if (!selectedBodega) return [];
 
     // Si tenemos la estructura completa desde el backend, la usamos como base
@@ -383,7 +383,7 @@ const HistorialConteos = () => {
       
       return zona;
     }).filter(z => z.pasillos.length > 0); // Limpiar zonas vacías
-  };
+  }, [conteos, selectedBodega, hierarchyStatus, filtros]);
 
   // Calcular estadísticas para el dashboard
   const getDashboardStats = () => {
@@ -410,6 +410,47 @@ const HistorialConteos = () => {
   const handleCompare = async (locationGroup) => {
     try {
       setLoadingComparison(true);
+
+      // OPTIMIZACIÓN: Intentar usar endpoint de comparativa del backend
+      const ubicacionId = locationGroup.c1?.ubicacion_id || locationGroup.c2?.ubicacion_id || locationGroup.diff?.ubicacion_id;
+      
+      if (ubicacionId) {
+        try {
+          const result = await inventarioService.obtenerComparativa(ubicacionId);
+          if (result.success) {
+               const { location, items } = result.data;
+               
+               // Inicializar selecciones automáticas
+               const initialSelection = {};
+               const initialManualValues = {};
+
+               items.forEach(item => {
+                 if (location.c4) {
+                   initialSelection[item.codigo] = 'manual';
+                   initialManualValues[item.codigo] = item.c4;
+                 } else {
+                   const diff = item.c1 - item.c2;
+                   if (diff === 0) {
+                     initialSelection[item.codigo] = 'c1';
+                   } else {
+                     if (item.c3 > 0 && (item.c3 === item.c1 || item.c3 === item.c2)) {
+                       initialSelection[item.codigo] = 'c3';
+                     }
+                   }
+                 }
+               });
+
+               setFinalSelection(initialSelection);
+               setManualValues(initialManualValues);
+               setComparisonData({ location, items });
+               setLoadingComparison(false);
+               return;
+          }
+        } catch (e) {
+          console.warn("Fallo carga optimizada, usando fallback...", e);
+        }
+      }
+
       const c1Id = locationGroup.c1?.id;
       const c2Id = locationGroup.c2?.id;
       const c3Id = locationGroup.diff?.id; // ID del Reconteo (Conteo 3)
@@ -825,7 +866,7 @@ const HistorialConteos = () => {
                           <div className="hc-loading-spinner" style={{margin: '0 auto 1rem'}}></div>
                           <p>Cargando datos...</p>
                       </div>
-                  ) : getHierarchicalLocations().length === 0 ? (
+                  ) : hierarchicalLocations.length === 0 ? (
                     <div style={{
                       padding: '3rem',
                       textAlign: 'center',
@@ -841,7 +882,7 @@ const HistorialConteos = () => {
                       {(filtros.usuario || filtros.producto) && <p style={{fontSize: '0.9rem', marginTop: '0.5rem'}}>Intenta cambiar los criterios de búsqueda.</p>}
                     </div>
                   ) : (
-                    getHierarchicalLocations().map(zona => {
+                    hierarchicalLocations.map(zona => {
                     const isZonaClosed = hierarchyStatus?.zonas?.[zona.id] === 'cerrado';
                     const allPasillosClosed = zona.pasillos.every(p => hierarchyStatus?.pasillos?.[p.id] === 'cerrado');
 

@@ -288,9 +288,11 @@ export class ConteoModel {
 
       // Si hay filtro de producto, necesitamos hacer inner join con items para filtrar
       if (filters.producto) {
-        selectQuery += `, conteo_items:inv_general_conteo_items!inner(*, item:inv_general_items!inner(descripcion, codigo))`;
+        selectQuery += `, conteo_items:inv_general_conteo_items!inner(cantidad, item:inv_general_items!inner(descripcion, codigo))`;
       } else {
-        selectQuery += `, conteo_items:inv_general_conteo_items(*, item:inv_general_items(descripcion, codigo))`;
+        // OPTIMIZACIÓN: Solo traer cantidad para calcular totales en lista principal.
+        // No traer items completos para reducir payload masivo.
+        selectQuery += `, conteo_items:inv_general_conteo_items(cantidad)`;
       }
 
       let query = supabase
