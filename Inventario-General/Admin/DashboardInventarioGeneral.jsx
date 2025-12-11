@@ -41,49 +41,132 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
   const stats = useMemo(() => {
     if (!conteos || conteos.length === 0) return null;
 
-    // 1. General KPIs
-    const totalConteos = conteos.length;
+    // Helper to get quantity (Units)
+    const getQty = (c) => {
+      if (c.total_cantidad !== undefined) return Number(c.total_cantidad);
+      if (c.conteo_items && c.conteo_items.length > 0) {
+        return c.conteo_items.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+      }
+      return Number(c.total_items || 0);
+    };
+
+    // Helper for Strict SKU Comparison (Matches AI Report Logic)
+    const hasDifference = (c1, c2) => {
+      // 1. If detailed items are available, compare SKUs
+      if (c1.conteo_items && c2.conteo_items) {
+        const map1 = new Map();
+        c1.conteo_items.forEach(i => map1.set(String(i.item_id || i.codigo || 'unk'), Number(i.cantidad)));
+        
+        const map2 = new Map();
+        c2.conteo_items.forEach(i => map2.set(String(i.item_id || i.codigo || 'unk'), Number(i.cantidad)));
+
+        const allKeys = new Set([...map1.keys(), ...map2.keys()]);
+        for (const key of allKeys) {
+          if ((map1.get(key) || 0) !== (map2.get(key) || 0)) return true; // Diff found
+        }
+        return false; // Exact match
+      }
+      
+      // 2. Fallback: Compare totals
+      return getQty(c1) !== getQty(c2);
+    };
+
+    // 1. Group by Location to find "Real Truth" & Calculate Metrics
+    const locationMap = new Map();
+    conteos.forEach(c => {
+      const uid = c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`;
+      if (!locationMap.has(uid)) locationMap.set(uid, []);
+      locationMap.get(uid).push(c);
+    });
+
+    let totalUnidadesReal = 0;
+    let locationsWithDiff = 0;
+    let matchesT1T2 = 0;
+    let totalComparisonsT1T2 = 0;
+
+    locationMap.forEach((records) => {
+      // Sort by date
+      records.sort((a, b) => {
+        const da = new Date(a.created_at || a.createdAt || 0);
+        const db = new Date(b.created_at || b.createdAt || 0);
+        return da - db;
+      });
+
+      const last = records[records.length - 1];
+      const prev = records.length >= 2 ? records[records.length - 2] : null;
+
+      // Sum Real Inventory (Last valid count)
+      totalUnidadesReal += getQty(last);
+
+      // Error Rate (Last vs Prev)
+      if (prev) {
+        if (hasDifference(last, prev)) {
+          locationsWithDiff++;
+        }
+      }
+
+      // T1 vs T2 Match
+      const t1 = records.find(r => r.tipo_conteo === 1);
+      const t2 = records.find(r => r.tipo_conteo === 2);
+      if (t1 && t2) {
+        totalComparisonsT1T2++;
+        if (!hasDifference(t1, t2)) {
+          matchesT1T2++;
+        }
+      }
+    });
+
+    // 2. General KPIs
+    const totalConteos = conteos.length; // Esfuerzo Operativo
+    const totalUbicaciones = locationMap.size;
+    const tasaError = totalUbicaciones > 0 ? ((locationsWithDiff / totalUbicaciones) * 100).toFixed(1) : 0;
+    const coincidencia = totalComparisonsT1T2 > 0 ? ((matchesT1T2 / totalComparisonsT1T2) * 100).toFixed(1) : 0;
+    
     const conteosFinalizados = conteos.filter(c => c.estado === 'finalizado').length;
     const conteosEnProgreso = conteos.filter(c => c.estado === 'en_progreso').length;
-    
-    // Calculate differences (Type 3 is Reconteo, implying a diff existed)
-    // Or check if we have diff info. In the main list we might not have diff value directly unless we process it.
-    // But we know Type 3 exists.
     const conteosConDiferencia = conteos.filter(c => c.tipo_conteo === 3).length; 
-    
-    // Total Items Counted (Sum of total_items)
-    const totalItemsContados = conteos.reduce((acc, curr) => acc + (curr.total_items || 0), 0);
 
-    // 2. Progress by Zone
+    // 3. Progress by Zone
     const zonas = [...new Set(conteos.map(c => c.zona))];
     const progressByZona = zonas.map(zona => {
       const countsInZona = conteos.filter(c => c.zona === zona);
-      const finished = countsInZona.filter(c => c.estado === 'finalizado').length;
+      // Unique locations in this zone
+      const locsInZona = new Set(countsInZona.map(c => c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`));
+      const finishedLocs = new Set(countsInZona.filter(c => c.estado === 'finalizado').map(c => c.ubicacion_id || `${c.bodega}::${c.zona}::${c.pasillo}::${c.ubicacion}`));
+      
       return {
         zona,
-        total: countsInZona.length,
-        finished,
-        percentage: countsInZona.length ? (finished / countsInZona.length) * 100 : 0
+        total: locsInZona.size,
+        finished: finishedLocs.size,
+        percentage: locsInZona.size ? (finishedLocs.size / locsInZona.size) * 100 : 0
       };
-    }).sort((a, b) => b.percentage - a.percentage); // Sort by completion
+    }).sort((a, b) => b.percentage - a.percentage);
 
-    // 3. Operator Ranking
+    // 4. Operator Ranking (Excluding Type 4 - Adjustments)
     const operatorStats = {};
     conteos.forEach(c => {
+      if (c.tipo_conteo === 4) return; // Exclude adjustments
       if (!c.usuario_nombre) return;
-      const name = c.usuario_nombre.split('@')[0]; // Simple name
+      const name = c.usuario_nombre.split('@')[0];
       if (!operatorStats[name]) {
         operatorStats[name] = { name, counts: 0, items: 0 };
       }
       operatorStats[name].counts += 1;
-      operatorStats[name].items += (c.total_items || 0);
+      // Use getQty to sum UNITS, or c.total_items for SKUs?
+      // User asked for "Productos (SKUs)" in AI report, but Dashboard says "Total Items".
+      // If we want consistency with "Inventario Real" (Units), we should use getQty.
+      // But if we want consistency with AI Report Operator Table (SKUs), we use total_items.
+      // Given the discrepancy complaint was about "Inventario Real", I will fix that one primarily.
+      // For operators, I'll stick to SKUs (total_items) as requested before, but label it clearly if needed.
+      // Actually, let's use SKUs for operators as requested in the previous turn ("Productos (SKUs)").
+      operatorStats[name].items += (c.total_items || 0); 
     });
     
     const ranking = Object.values(operatorStats)
       .sort((a, b) => b.items - a.items)
-      .slice(0, 5); // Top 5
+      .slice(0, 5);
 
-    // 4. Global Progress (based on hierarchyStatus if available)
+    // 5. Global Progress
     let globalProgress = 0;
     if (hierarchyStatus?.estructura) {
       let totalPasillos = 0;
@@ -99,10 +182,12 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
 
     return {
       totalConteos,
+      totalUnidadesReal,
+      tasaError,
+      coincidencia,
       conteosFinalizados,
       conteosEnProgreso,
       conteosConDiferencia,
-      totalItemsContados,
       progressByZona,
       ranking,
       globalProgress
@@ -183,9 +268,9 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
             <LayoutDashboard size={24} />
           </div>
           <div className="dig-kpi-content">
-            <h3>Total Conteos</h3>
+            <h3>Esfuerzo Operativo</h3>
             <p className="value">{stats.totalConteos}</p>
-            <p className="subtext">Registros totales</p>
+            <p className="subtext">Total conteos realizados</p>
           </div>
         </div>
 
@@ -205,9 +290,31 @@ const DashboardInventarioGeneral = ({ conteos, hierarchyStatus }) => {
             <Package size={24} />
           </div>
           <div className="dig-kpi-content">
-            <h3>Items Contados</h3>
-            <p className="value">{stats.totalItemsContados.toLocaleString()}</p>
-            <p className="subtext">Unidades totales</p>
+            <h3>Inventario Real</h3>
+            <p className="value">{stats.totalUnidadesReal.toLocaleString()}</p>
+            <p className="subtext">Unidades Físicas (Último Conteo)</p>
+          </div>
+        </div>
+
+        <div className="dig-kpi-card">
+          <div className="dig-kpi-icon red">
+            <AlertTriangle size={24} />
+          </div>
+          <div className="dig-kpi-content">
+            <h3>Tasa de Error</h3>
+            <p className="value">{stats.tasaError}%</p>
+            <p className="subtext">Ubicaciones con diferencias</p>
+          </div>
+        </div>
+
+        <div className="dig-kpi-card">
+          <div className="dig-kpi-icon blue">
+            <TrendingUp size={24} />
+          </div>
+          <div className="dig-kpi-content">
+            <h3>Coincidencia T1/T2</h3>
+            <p className="value">{stats.coincidencia}%</p>
+            <p className="subtext">Conteo 1 = Conteo 2</p>
           </div>
         </div>
 

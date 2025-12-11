@@ -541,7 +541,11 @@ class ConteoService {
           usuario_nombre: displayName, // Usar nombre real si existe
           estado: c.estado,
           // Corregido: Retornar la cantidad de registros (items únicos/filas), no la suma de cantidades
-          total_items: c.conteo_items ? c.conteo_items.length : (c.total_items || 0)
+          total_items: c.conteo_items ? c.conteo_items.length : (c.total_items || 0),
+          // Nuevo: Retornar la suma total de unidades (cantidad)
+          total_cantidad: c.conteo_items ? c.conteo_items.reduce((sum, i) => sum + (Number(i.cantidad) || 0), 0) : 0,
+          // Nuevo: Retornar items para análisis detallado en frontend
+          conteo_items: c.conteo_items
         };
       });
 
