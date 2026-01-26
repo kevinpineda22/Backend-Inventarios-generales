@@ -49,6 +49,48 @@ export class ConteoModel {
   }
 
   /**
+   * Obtener solo cabeceras de conteos (sin items) para análisis rápido
+   */
+  static async findHeadersByCompany(companiaId) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CONTEOS)
+        .select(`
+          id,
+          tipo_conteo,
+          estado,
+          ubicacion_id,
+          created_at,
+          ubicacion:inv_general_ubicaciones!inner(
+            id,
+            numero,
+            clave,
+            pasillo:inv_general_pasillos!inner(
+              id,
+              numero,
+              zona:inv_general_zonas!inner(
+                id,
+                nombre,
+                bodega:inv_general_bodegas!inner(
+                  id,
+                  nombre,
+                  compania_id
+                )
+              )
+            )
+          )
+        `)
+        .eq('estado', 'finalizado')
+        .eq('ubicacion.pasillo.zona.bodega.compania_id', companiaId);
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
    * Obtener conteo específico de una ubicación (Recuperar el más reciente)
    */
   static async findByUbicacionAndTipo(ubicacionId, tipoConteo) {

@@ -561,23 +561,22 @@ class ConteoService {
 
   /**
    * Obtener ubicaciones con diferencias pendientes de reconteo
+   * OPTIMIZADO: Carga ligera de cabeceras primero, luego cálculo bajo demanda
    */
   static async getUbicacionesConDiferencias(companiaId) {
     try {
-      // 1. Obtener todos los conteos finalizados de la compañía
-      const conteos = await ConteoModel.findAll({ companiaId });
+      // 1. Obtener SOLO CABECERAS de conteos finalizados (Lightweight)
+      // Evitamos traer millones de registros de items filtrando solo los headers
+      const conteosHeaders = await ConteoModel.findHeadersByCompany(companiaId);
       
-      // 2. Agrupar por ubicación
+      // 2. Agrupar por ubicación en memoria
       const ubicacionesMap = new Map();
       
-      conteos.forEach(c => {
-        // Solo nos interesan conteos finalizados
-        if (c.estado !== 'finalizado') return;
-
+      conteosHeaders.forEach(c => {
         const ubicacionId = c.ubicacion_id;
         if (!ubicacionesMap.has(ubicacionId)) {
           ubicacionesMap.set(ubicacionId, {
-            ubicacion: c.ubicacion, // Info de ubicación
+            ubicacion: c.ubicacion, 
             c1: null,
             c2: null,
             c3: null
@@ -591,36 +590,42 @@ class ConteoService {
       });
 
       // 3. Filtrar candidatos: Tienen C1 y C2, pero NO C3
-      const candidatos = [];
+      const ubicacionesCandidatas = [];
       for (const [id, data] of ubicacionesMap) {
         if (data.c1 && data.c2 && !data.c3) {
-          candidatos.push(data);
+          ubicacionesCandidatas.push(id);
         }
       }
 
-      // 4. Calcular diferencias para los candidatos
-      // Esto puede ser lento si hay muchos, pero es necesario para saber la diferencia real
-      const resultados = [];
-      
-      for (const candidato of candidatos) {
-        // Llamamos a calcularDiferencias (que ya trae los items y calcula)
-        const diffResult = await this.calcularDiferencias(candidato.ubicacion.id);
-        
-        if (diffResult.success && diffResult.data.total_diferencias > 0) {
-          resultados.push({
-            ubicacion: candidato.ubicacion,
-            diferencias: diffResult.data.diferencias,
-            total_diferencias: diffResult.data.total_diferencias,
-            conteo1: candidato.c1,
-            conteo2: candidato.c2
-          });
+      // 4. Calcular diferencias reales en paralelo
+      // Solo traemos items para las ubicaciones que pasaron el filtro inicial
+      const promesasCalculo = ubicacionesCandidatas.map(async (ubicacionId) => {
+        try {
+            const diffResult = await this.calcularDiferencias(ubicacionId);
+            const dataUbicacion = ubicacionesMap.get(ubicacionId);
+
+            if (diffResult.success && diffResult.data.total_diferencias > 0) {
+                return {
+                    ubicacion: dataUbicacion.ubicacion,
+                    diferencias: diffResult.data.diferencias,
+                    total_diferencias: diffResult.data.total_diferencias,
+                    conteo1: dataUbicacion.c1,
+                    conteo2: dataUbicacion.c2
+                };
+            }
+        } catch (e) {
+            console.error(`Error calculando diferencias para ubicación ${ubicacionId}`, e);
         }
-      }
+        return null;
+      });
+
+      const itemsProcesados = await Promise.all(promesasCalculo);
+      const finalResult = itemsProcesados.filter(item => item !== null);
 
       return {
         success: true,
-        data: resultados,
-        count: resultados.length
+        data: finalResult,
+        count: finalResult.length
       };
 
     } catch (error) {

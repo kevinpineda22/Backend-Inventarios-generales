@@ -6,7 +6,8 @@ import { supabase } from '../../supabaseClient';
 import Swal from 'sweetalert2';
 import DashboardInventarioGeneral from './DashboardInventarioGeneral';
 import FiltrosInventarioGeneral from './FiltrosInventarioGeneral';
-import BitacoraActividad from './BitacoraActividad';
+import ComparativaModal from './Components/ComparativaModal';
+import DetalleConteoModal from './Components/DetalleConteoModal';
 import { ScrollText } from 'lucide-react';
 
 const HistorialConteos = () => {
@@ -14,7 +15,6 @@ const HistorialConteos = () => {
   const [conteos, setConteos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [showBitacora, setShowBitacora] = useState(false);
   
   // Nuevo estado para la vista de panel
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'dashboard'
@@ -157,91 +157,56 @@ const HistorialConteos = () => {
     }
   };
 
-  const handleCerrarPasillo = async (pasilloId) => {
+  const handleCerrarNivel = async (tipo, id, nombre = '') => {
+    const configs = {
+      pasillo: {
+        title: '¿Cerrar Pasillo?',
+        text: 'Esta acción bloqueará el ingreso de nuevos conteos en este pasillo. ¿Está seguro?',
+        success: 'El pasillo ha sido cerrado correctamente.',
+        action: (id, cia) => inventarioService.cerrarPasillo(id, cia)
+      },
+      zona: {
+        title: '¿Cerrar Zona?',
+        text: 'Se cerrará la zona completa. Asegúrese de que todos los pasillos estén listos.',
+        success: 'La zona ha sido cerrada correctamente.',
+        action: (id, cia) => inventarioService.cerrarZona(id, cia)
+      },
+      bodega: {
+        title: '¿Cerrar Bodega?',
+        text: 'Esta acción finalizará el inventario de toda la bodega. No se podrán realizar más cambios.',
+        success: 'El inventario de la bodega ha sido finalizado.',
+        action: (id, cia) => inventarioService.cerrarBodega(id, cia)
+      }
+    };
+
+    const config = configs[tipo];
+    if (!config) return;
+
     const result = await Swal.fire({
-      title: '¿Cerrar Pasillo?',
-      text: "Esta acción bloqueará el ingreso de nuevos conteos en este pasillo. ¿Está seguro?",
+      title: config.title,
+      text: config.text,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#64748b',
-      confirmButtonText: 'Sí, cerrar pasillo',
+      confirmButtonText: `Sí, cerrar ${tipo}`,
       cancelButtonText: 'Cancelar'
     });
 
     if (!result.isConfirmed) return;
 
     try {
-      await inventarioService.cerrarPasillo(pasilloId, selectedCompany);
-      // Actualizar estado local optimista o recargar
+      await config.action(id, selectedCompany);
       cargarEstadoJerarquia();
       Swal.fire({
         title: '¡Cerrado!',
-        text: 'El pasillo ha sido cerrado correctamente.',
+        text: config.success,
         icon: 'success',
         timer: 1500,
         showConfirmButton: false
       });
     } catch (error) {
-      Swal.fire('Error', 'Error al cerrar pasillo: ' + error.message, 'error');
-    }
-  };
-
-  const handleCerrarZona = async (zonaId) => {
-    const result = await Swal.fire({
-      title: '¿Cerrar Zona?',
-      text: "Se cerrará la zona completa. Asegúrese de que todos los pasillos estén listos.",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
-      confirmButtonText: 'Sí, cerrar zona',
-      cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-      await inventarioService.cerrarZona(zonaId, selectedCompany);
-      cargarEstadoJerarquia();
-      Swal.fire({
-        title: '¡Cerrada!',
-        text: 'La zona ha sido cerrada correctamente.',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-      });
-    } catch (error) {
-      Swal.fire('Error', 'Error al cerrar zona: ' + error.message, 'error');
-    }
-  };
-
-  const handleCerrarBodega = async (bodegaId) => {
-    const result = await Swal.fire({
-      title: '¿Cerrar Bodega?',
-      text: "Esta acción finalizará el inventario de toda la bodega. No se podrán realizar más cambios.",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
-      confirmButtonText: 'Sí, cerrar bodega',
-      cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-      await inventarioService.cerrarBodega(bodegaId, selectedCompany);
-      cargarEstadoJerarquia();
-      Swal.fire({
-        title: '¡Bodega Cerrada!',
-        text: 'El inventario de la bodega ha sido finalizado.',
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
-      });
-    } catch (error) {
-      Swal.fire('Error', 'Error al cerrar bodega: ' + error.message, 'error');
+      Swal.fire('Error', `Error al cerrar ${tipo}: ` + error.message, 'error');
     }
   };
 
@@ -435,142 +400,312 @@ const HistorialConteos = () => {
     return { totalZonas, zonasCerradas, totalPasillos, pasillosCerrados };
   };
 
-  const handleCompare = async (locationGroup) => {
+  // Helper para guardar ajuste (reutilizable)
+  const executeSaveAdjustment = async (ubicacionId, itemsToSave, user, silent = false) => {
     try {
-      setLoadingComparison(true);
+      await inventarioService.guardarAjusteFinal({
+        ubicacionId,
+        usuarioId: user.id,
+        usuarioEmail: user.email || 'admin@sistema.com',
+        items: itemsToSave
+      });
 
-      // OPTIMIZACIÓN: Intentar usar endpoint de comparativa del backend
-      const ubicacionId = locationGroup.c1?.ubicacion_id || locationGroup.c2?.ubicacion_id || locationGroup.diff?.ubicacion_id;
-      
-      if (ubicacionId) {
-        try {
-          const result = await inventarioService.obtenerComparativa(ubicacionId);
-          if (result.success) {
-               const { location, items } = result.data;
-               
-               // Inicializar selecciones automáticas
-               const initialSelection = {};
-               const initialManualValues = {};
-
-               items.forEach(item => {
-                 if (location.c4) {
-                   initialSelection[item.codigo] = 'manual';
-                   initialManualValues[item.codigo] = item.c4;
-                 } else {
-                   const diff = item.c1 - item.c2;
-                   if (diff === 0) {
-                     initialSelection[item.codigo] = 'c1';
-                   } else {
-                     if (item.c3 > 0 && (item.c3 === item.c1 || item.c3 === item.c2)) {
-                       initialSelection[item.codigo] = 'c3';
-                     }
-                   }
-                 }
-               });
-
-               setFinalSelection(initialSelection);
-               setManualValues(initialManualValues);
-               setComparisonData({ location, items });
-               setLoadingComparison(false);
-               return;
-          }
-        } catch (e) {
-          console.warn("Fallo carga optimizada, usando fallback...", e);
-        }
+      if (!silent) {
+        Swal.fire({
+          title: '¡Guardado!',
+          text: 'Ajuste final guardado exitosamente.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        // Notificación discreta para procesos automáticos
+        const Toast = Swal.mixin({
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2000,
+          timerProgressBar: true
+        });
+        Toast.fire({
+          icon: 'success',
+          title: 'Ajuste guardado automáticamente'
+        });
       }
+      return true;
+    } catch (error) {
+      console.error("Error al guardar ajuste:", error);
+      if (!silent) {
+        Swal.fire({
+          title: 'Error',
+          text: 'Error al guardar ajuste: ' + error.message,
+          icon: 'error',
+          confirmButtonText: 'Cerrar'
+        });
+      }
+      return false;
+    }
+  };
 
-      const c1Id = locationGroup.c1?.id;
-      const c2Id = locationGroup.c2?.id;
-      const c3Id = locationGroup.diff?.id; // ID del Reconteo (Conteo 3)
-      const c4Id = locationGroup.final?.id; // ID del Ajuste Final (Conteo 4)
+  // Helper para obtener datos de comparativa y analizar estado
+  const fetchAndAnalyzeComparison = async (locationGroup) => {
+    // 1. Intentar optimización
+    const ubicacionId = locationGroup.c1?.ubicacion_id || locationGroup.c2?.ubicacion_id || locationGroup.diff?.ubicacion_id;
+    let items = [];
+    let locationData = locationGroup;
 
-      const [itemsC1, itemsC2, itemsC3, itemsC4] = await Promise.all([
+    // Fetch data
+    try {
+      if (ubicacionId) {
+        const result = await inventarioService.obtenerComparativa(ubicacionId);
+        if (result.success) {
+          items = result.data.items.map(i => ({
+             ...i,
+             id: i.item_id,
+             barra: i.codigo_barra
+          })); // Normalizar estructura
+          locationData = result.data.location;
+        }
+      } else {
+        // Fallback lógica antigua (fetch individual)
+        // ... (Simplificado para este ejemplo, asumimos que la optimización funciona o se implementa fallback completo si falla)
+         throw new Error("ID de ubicación no encontrado, fallback requerido");
+      }
+    } catch (e) {
+       // Fallback manual fetch if needed
+       const c1Id = locationGroup.c1?.id;
+       const c2Id = locationGroup.c2?.id;
+       const c3Id = locationGroup.diff?.id;
+       const c4Id = locationGroup.final?.id;
+
+       const [itemsC1, itemsC2, itemsC3, itemsC4] = await Promise.all([
         c1Id ? inventarioService.obtenerDetalleConteo(c1Id) : Promise.resolve([]),
         c2Id ? inventarioService.obtenerDetalleConteo(c2Id) : Promise.resolve([]),
         c3Id ? inventarioService.obtenerDetalleConteo(c3Id) : Promise.resolve([]),
         c4Id ? inventarioService.obtenerDetalleConteo(c4Id) : Promise.resolve([])
       ]);
 
-      // Merge items by item_codigo
       const itemMap = {};
       const normalize = (val) => String(val).trim();
-      
       const processItem = (item, type) => {
         const key = normalize(item.item_codigo);
         if (!itemMap[key]) {
           itemMap[key] = {
-            id: item.item_id, // Guardar ID real del item
+            id: item.item_id,
             codigo: item.item_codigo,
             descripcion: item.descripcion,
             barra: item.codigo_barra,
-            c1: 0,
-            c2: 0,
-            c3: 0, // Inicializar reconteo
-            c4: 0  // Inicializar ajuste final
+            c1: 0, c2: 0, c3: 0, c4: 0
           };
         }
         itemMap[key][type] += Number(item.cantidad) || 0;
       };
 
-      itemsC1.forEach(item => processItem(item, 'c1'));
-      itemsC2.forEach(item => processItem(item, 'c2'));
-      itemsC3.forEach(item => processItem(item, 'c3'));
-      itemsC4.forEach(item => processItem(item, 'c4'));
+      itemsC1.forEach(i => processItem(i, 'c1'));
+      itemsC2.forEach(i => processItem(i, 'c2'));
+      itemsC3.forEach(i => processItem(i, 'c3'));
+      itemsC4.forEach(i => processItem(i, 'c4'));
+      items = Object.values(itemMap);
+    }
 
-      // Inicializar selecciones automáticas
-      const initialSelection = {};
-      const initialManualValues = {};
+    // Analizar resolución
+    const initialSelection = {};
+    const initialManualValues = {};
+    let allResolved = true;
+    const itemsToSave = [];
 
-      Object.values(itemMap).forEach(item => {
-        // Si ya existe un ajuste final (C4), le damos prioridad absoluta para mostrarlo
-        if (c4Id) {
+    items.forEach(item => {
+       // Si ya tiene C4 (ajuste final), tomamos ese valor
+       if (locationData.c4) {
           initialSelection[item.codigo] = 'manual';
           initialManualValues[item.codigo] = item.c4;
-        } else {
-          // Lógica normal si no hay ajuste final guardado
-          const diff = item.c1 - item.c2;
-          if (diff === 0) {
-            initialSelection[item.codigo] = 'c1'; // Si coinciden, seleccionar C1 por defecto
-          } else {
-            // Si hay diferencia, verificamos si el Reconteo (C3) coincide con C1 o C2
-            if (item.c3 > 0 && (item.c3 === item.c1 || item.c3 === item.c2)) {
-              initialSelection[item.codigo] = 'c3';
-            }
-          }
-          // Si hay diferencia y el reconteo no coincide, NO seleccionamos nada por defecto
-        }
-      });
+          return;
+       }
 
+       const diff = item.c1 - item.c2;
+       let resolvedVal = null;
+
+       if (diff === 0) {
+         initialSelection[item.codigo] = 'c1';
+         resolvedVal = item.c1;
+       } else {
+         if (item.c3 > 0 && (item.c3 === item.c1 || item.c3 === item.c2)) {
+           initialSelection[item.codigo] = 'c3';
+           resolvedVal = item.c3;
+         } else {
+           allResolved = false; // Conflicto no resuelto
+         }
+       }
+
+       if (resolvedVal !== null) {
+          itemsToSave.push({
+             itemId: item.id,
+             codigo: item.barra || item.codigo,
+             cantidad: resolvedVal,
+             companiaId: selectedCompany
+          });
+       }
+    });
+
+    return {
+       items,
+       locationData,
+       initialSelection,
+       initialManualValues,
+       allResolved,
+       itemsToSave,
+       ubicacionId
+    };
+  };
+
+  const handleCompare = async (locationGroup, autoSaveIfPossible = true) => {
+    // 1. Abrir Modal Inmediatamente (UX optimista)
+    // Solo si no es una llamada puramente automática donde no se espera UI
+    if (!autoSaveIfPossible) {
+        setComparisonData({
+            location: locationGroup,
+            items: [],
+            loading: true
+        });
+        setFinalSelection({});
+        setManualValues({});
+    }
+
+    try {
+      setLoadingComparison(true);
+      
+      const analysis = await fetchAndAnalyzeComparison(locationGroup);
+      const { items, locationData, initialSelection, initialManualValues, allResolved, itemsToSave, ubicacionId } = analysis;
+
+      // Lógica de Auto-Guardado
+      // Si todo está resuelto, NO hay ajuste final previo, y el flag está activo
+      if (allResolved && !locationData.c4 && autoSaveIfPossible && itemsToSave.length > 0) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+             const saved = await executeSaveAdjustment(ubicacionId, itemsToSave, user, true);
+             if (saved) {
+                cargarHistorial(false); // Refrescar lista
+                setLoadingComparison(false);
+                if (!autoSaveIfPossible) setComparisonData(null); // Cerrar si se abrió
+                return; 
+             }
+          }
+      }
+
+      // Si no se auto-guardó, mostramos los datos en el modal (o actualizamos el loading)
       setFinalSelection(initialSelection);
       setManualValues(initialManualValues);
-      setComparisonData({
-        location: locationGroup,
-        items: Object.values(itemMap)
-      });
+      setComparisonData({ location: locationData, items, loading: false });
 
     } catch (error) {
       setMessage({ type: 'error', text: 'Error al cargar comparativa: ' + error.message });
+      setComparisonData(null); // Cerrar en error
     } finally {
       setLoadingComparison(false);
     }
   };
 
+  const handleGuardarTodoAutomatico = async () => {
+    const result = await Swal.fire({
+      title: '¿Resolver y Guardar Todo?',
+      html: `Se buscarán ubicaciones con conteos completos (1 y 2) y <b>sin diferencias</b> (o diferencias ya resueltas por Conteos 3).<br/><br/>
+             Las ubicaciones con conflictos pendientes se mantendrán para revisión manual.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, procesar automáticamente',
+      cancelButtonText: 'Cancelar'
+    });
 
+    if (!result.isConfirmed) return;
+
+    setLoadingComparison(true);
+    let guardados = 0;
+    let omitidos = 0;
+    
+    // Aplanar lista de ubicaciones candidatas
+    const candidates = [];
+    hierarchicalLocations.forEach(zona => {
+        if (zona.pasillos) {
+            zona.pasillos.forEach(pasillo => {
+                const locations = pasillo.ubicaciones || [];
+                locations.forEach(loc => {
+                    // Solo procesar si tiene conteos base (c1/c2) y NO tiene final (c4)
+                    if ((loc.c1 || loc.c2) && !loc.final) {
+                        candidates.push(loc);
+                    }
+                });
+            });
+        }
+    });
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sesión expirada");
+
+      // Mostrar indicador de carga
+      Swal.fire({
+        title: 'Procesando Auto-Guardado',
+        html: `Analizando ${candidates.length} ubicaciones candidatas...<br>Por favor espere.`,
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      for (const loc of candidates) {
+          try {
+              const analysis = await fetchAndAnalyzeComparison(loc);
+              if (analysis.allResolved && analysis.itemsToSave.length > 0) {
+                  // Pasar silent=true para no mostrar alertas individuales
+                  await executeSaveAdjustment(analysis.ubicacionId, analysis.itemsToSave, user, true);
+                  guardados++;
+              } else {
+                  omitidos++;
+              }
+          } catch (e) {
+              console.warn("Error procesando ubicación auto:", loc, e);
+              omitidos++;
+          }
+      }
+
+      Swal.fire({
+        title: 'Proceso completado',
+        text: `Se guardaron ${guardados} ubicaciones automáticamente. Quedan ${omitidos} pendientes de revisión manual.`,
+        icon: 'success'
+      });
+      
+      cargarHistorial(false);
+
+    } catch (error) {
+       Swal.fire('Error', error.message, 'error');
+    } finally {
+       setLoadingComparison(false);
+    }
+  };
 
   const handleVerDetalleConteo = async (conteo, numeroConteo) => {
     if (!conteo) return;
+    
+    // Optimistic UI: Abrir modal inmediatamente con estado de carga
+    setSingleDetail({
+      conteo: conteo,
+      numero: numeroConteo,
+      items: [],
+      loading: true
+    });
+
     try {
-      setLoading(true);
+      // No activamos global loading para evitar parpadeos de fondo
+      // setLoading(true); 
       const items = await inventarioService.obtenerDetalleConteo(conteo.id);
-      setSingleDetail({
-        conteo: conteo,
-        numero: numeroConteo,
-        items: items
-      });
+      setSingleDetail(prev => ({
+        ...prev,
+        items: items,
+        loading: false
+      }));
     } catch (error) {
       setMessage({ type: 'error', text: 'Error al cargar detalle: ' + error.message });
-    } finally {
-      setLoading(false);
+      setSingleDetail(null); // Cerrar si falla
     }
   };
 
@@ -642,46 +777,20 @@ const HistorialConteos = () => {
 
     try {
       setLoadingComparison(true);
-      
-      // Obtener ID de ubicación de alguno de los conteos base
       const ubicacionId = comparisonData.location.c1?.ubicacion_id || comparisonData.location.c2?.ubicacion_id;
-      
-      if (!ubicacionId) {
-        throw new Error('No se pudo identificar el ID de la ubicación');
-      }
-
-      // Obtener usuario actual de Supabase
       const { data: { user } } = await supabase.auth.getUser();
       
-      if (!user || !user.id) {
-        throw new Error('No se ha identificado el usuario actual. Por favor inicie sesión nuevamente.');
+      if (!user) throw new Error('Usuario no identificado');
+
+      const success = await executeSaveAdjustment(ubicacionId, itemsToSave, user, false);
+      
+      if (success) {
+        closeComparison();
+        cargarHistorial(false);
       }
 
-      await inventarioService.guardarAjusteFinal({
-        ubicacionId,
-        usuarioId: user.id,
-        usuarioEmail: user.email || 'admin@sistema.com',
-        items: itemsToSave
-      });
-
-      Swal.fire({
-        title: '¡Guardado!',
-        text: 'Ajuste final guardado exitosamente.',
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
-      });
-      
-      closeComparison();
-      cargarHistorial(false); // Recargar para ver si hay cambios (aunque el ajuste es un nuevo registro)
-
     } catch (error) {
-      Swal.fire({
-        title: 'Error',
-        text: 'Error al guardar ajuste: ' + error.message,
-        icon: 'error',
-        confirmButtonText: 'Cerrar'
-      });
+      Swal.fire('Error', error.message, 'error');
     } finally {
       setLoadingComparison(false);
     }
@@ -716,6 +825,47 @@ const HistorialConteos = () => {
     return conteo.total_items || 0;
   };
 
+  const renderConteoBox = (conteo, numero) => {
+    if (!conteo) return (
+      <div className="hc-conteo-box">
+        <span className="hc-conteo-label">Conteo #{numero}</span>
+        <span style={{color:'#cbd5e1', fontSize:'0.8rem'}}>Pendiente</span>
+      </div>
+    );
+
+    return (
+      <div className={`hc-conteo-box active`}>
+        <span className="hc-conteo-label">Conteo #{numero}</span>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'5px'}}>
+          <span className="hc-user-avatar">👤</span>
+          <span className="hc-user-name" title={conteo.usuario_nombre}>
+            {userMap[conteo.usuario_nombre] || conteo.usuario_nombre?.split('@')[0]}
+          </span>
+        </div>
+        <span className="hc-mini-status-badge" style={{backgroundColor: getStatusColor(conteo.estado)}}>
+          {conteo.estado === 'en_progreso' ? 'En Proceso' : 'Finalizado'}
+        </span>
+        <button 
+          className="hc-btn-items"
+          onClick={() => handleVerDetalleConteo(conteo, numero)}
+        >
+          Ver Items ({getConteoQty(conteo)})
+        </button>
+      </div>
+    );
+  };
+
+  const handleCambioBodega = (bodega) => {
+    if (selectedBodega === bodega) return;
+    
+    // Limpieza inmediata para UX robusto (evita ver datos de bodega anterior)
+    setConteos([]);
+    setHierarchyStatus(null);
+    setLoading(true);
+    
+    setSelectedBodega(bodega);
+  };
+
   const stats = getDashboardStats();
 
   return (
@@ -744,7 +894,7 @@ const HistorialConteos = () => {
               <div 
                 key={bodega}
                 className={`hc-bodega-item ${selectedBodega === bodega ? 'active' : ''}`}
-                onClick={() => setSelectedBodega(bodega)}
+                onClick={() => handleCambioBodega(bodega)}
               >
                 <span>📦</span> {bodega}
               </div>
@@ -780,26 +930,6 @@ const HistorialConteos = () => {
                 </div>
                 
                 <div className="hc-header-actions">
-                  <button 
-                    className="hc-btn-toggle-view"
-                    onClick={() => setShowBitacora(true)}
-                    title="Ver Bitácora de Actividad"
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      border: '1px solid #e2e8f0',
-                      background: 'white',
-                      cursor: 'pointer',
-                      marginRight: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      color: '#2563eb'
-                    }}
-                  >
-                    <ScrollText size={18} />
-                    Bitácora
-                  </button>
 
                   <button 
                     className={`hc-btn-toggle-view ${viewMode === 'dashboard' ? 'active' : ''}`}
@@ -821,6 +951,24 @@ const HistorialConteos = () => {
                   </button>
 
                   <button 
+                    className="hc-btn-toggle-view"
+                    onClick={handleGuardarTodoAutomatico}
+                    title="Guardar automáticamente todo lo resuelto"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #16a34a',
+                      background: '#dcfce7',
+                      color: '#15803d',
+                      cursor: 'pointer',
+                      marginRight: '10px',
+                      fontWeight: 600
+                    }}
+                  >
+                    🚀 Guardar Auto
+                  </button>
+
+                  <button 
                     onClick={() => cargarHistorial(true)} 
                     className="hc-btn-refresh" 
                     title="Actualizar datos"
@@ -832,7 +980,7 @@ const HistorialConteos = () => {
                     className={`hc-btn-close-level bodega ${hierarchyStatus?.bodega === 'cerrado' ? 'closed' : ''}`}
                     onClick={() => {
                       const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
-                      if (bodegaId) handleCerrarBodega(bodegaId);
+                      if (bodegaId) handleCerrarNivel('bodega', bodegaId);
                     }}
                     disabled={hierarchyStatus?.bodega === 'cerrado' || !hierarchyStatus}
                     title="Cerrar Bodega completa"
@@ -920,7 +1068,7 @@ const HistorialConteos = () => {
                           <h3>📍 Zona: {zona.nombre}</h3>
                           <button 
                             className={`hc-btn-close-level ${isZonaClosed ? 'closed' : ''}`}
-                            onClick={() => handleCerrarZona(zona.id)}
+                            onClick={() => handleCerrarNivel('zona', zona.id)}
                             disabled={isZonaClosed || !allPasillosClosed}
                             title={!allPasillosClosed ? "Debe cerrar todos los pasillos primero" : "Cerrar Zona"}
                           >
@@ -938,7 +1086,7 @@ const HistorialConteos = () => {
                                   <h4>Pasillo {pasillo.numero}</h4>
                                   <button 
                                     className={`hc-btn-close-level ${isPasilloClosed ? 'closed' : ''}`}
-                                    onClick={() => handleCerrarPasillo(pasillo.id)}
+                                    onClick={() => handleCerrarNivel('pasillo', pasillo.id)}
                                     disabled={isPasilloClosed}
                                   >
                                     {isPasilloClosed ? '🔒 Cerrado' : '🔓 Cerrar Pasillo'}
@@ -958,57 +1106,9 @@ const HistorialConteos = () => {
                                           
                                           <div className="hc-card-body">
                                             <div className="hc-conteo-grid">
-                                              {/* Conteo 1 */}
-                                              <div className={`hc-conteo-box ${loc.c1 ? 'active' : ''}`}>
-                                                <span className="hc-conteo-label">Conteo #1</span>
-                                                {loc.c1 ? (
-                                                  <>
-                                                    <div style={{display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'5px'}}>
-                                                      <span className="hc-user-avatar">👤</span>
-                                                      <span className="hc-user-name" title={loc.c1.usuario_nombre}>
-                                                        {userMap[loc.c1.usuario_nombre] || loc.c1.usuario_nombre?.split('@')[0]}
-                                                      </span>
-                                                    </div>
-                                                    <span className="hc-mini-status-badge" style={{backgroundColor: getStatusColor(loc.c1.estado)}}>
-                                                      {loc.c1.estado === 'en_progreso' ? 'En Proceso' : 'Finalizado'}
-                                                    </span>
-                                                    <button 
-                                                      className="hc-btn-items"
-                                                      onClick={() => handleVerDetalleConteo(loc.c1, 1)}
-                                                    >
-                                                      Ver Items ({getConteoQty(loc.c1)})
-                                                    </button>
-                                                  </>
-                                                ) : (
-                                                  <span style={{color:'#cbd5e1', fontSize:'0.8rem'}}>Pendiente</span>
-                                                )}
-                                              </div>
-
-                                              {/* Conteo 2 */}
-                                              <div className={`hc-conteo-box ${loc.c2 ? 'active' : ''}`}>
-                                                <span className="hc-conteo-label">Conteo #2</span>
-                                                {loc.c2 ? (
-                                                  <>
-                                                    <div style={{display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'5px'}}>
-                                                      <span className="hc-user-avatar">👤</span>
-                                                      <span className="hc-user-name" title={loc.c2.usuario_nombre}>
-                                                        {userMap[loc.c2.usuario_nombre] || loc.c2.usuario_nombre?.split('@')[0]}
-                                                      </span>
-                                                    </div>
-                                                    <span className="hc-mini-status-badge" style={{backgroundColor: getStatusColor(loc.c2.estado)}}>
-                                                      {loc.c2.estado === 'en_progreso' ? 'En Proceso' : 'Finalizado'}
-                                                    </span>
-                                                    <button 
-                                                      className="hc-btn-items"
-                                                      onClick={() => handleVerDetalleConteo(loc.c2, 2)}
-                                                    >
-                                                      Ver Items ({getConteoQty(loc.c2)})
-                                                    </button>
-                                                  </>
-                                                ) : (
-                                                  <span style={{color:'#cbd5e1', fontSize:'0.8rem'}}>Pendiente</span>
-                                                )}
-                                              </div>
+                                              {/* Conteo 1 & 2 */}
+                                              {renderConteoBox(loc.c1, 1)}
+                                              {renderConteoBox(loc.c2, 2)}
                                             </div>
 
                                             {loc.diff && (
@@ -1036,7 +1136,7 @@ const HistorialConteos = () => {
                                           <div className="hc-card-footer">
                                             <button 
                                               className="hc-btn-compare"
-                                              onClick={() => handleCompare(loc)}
+                                              onClick={() => handleCompare(loc, false)}
                                               disabled={!loc.c1 && !loc.c2}
                                             >
                                               <span>⚖️</span> Ver Comparativa
@@ -1067,244 +1167,25 @@ const HistorialConteos = () => {
       </div>
 
       {/* Comparison Modal */}
-      {comparisonData && (
-        <div className="hc-modal-overlay">
-          <div className="hc-modal-content-large">
-            <div className="hc-modal-header">
-              <h3>Comparativa: {comparisonData.location.zona} - {comparisonData.location.pasillo} - {comparisonData.location.ubicacion}</h3>
-              <button onClick={closeComparison} className="hc-close-btn">×</button>
-            </div>
-            <div className="hc-modal-body">
-              <table className="hc-comparison-table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Descripción</th>
-                    <th className="hc-text-center">Conteo #1</th>
-                    <th className="hc-text-center">Conteo #2</th>
-                    <th className="hc-text-center">Diferencia</th>
-                    <th className="hc-text-center">Reconteo</th>
-                    <th className="hc-text-center">Conteo Final</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparisonData.items.map(item => {
-                    const diff = item.c1 - item.c2;
-                    const selectedSource = finalSelection[item.codigo];
-                    let finalValue = '';
-                    
-                    if (selectedSource === 'c1') finalValue = item.c1;
-                    else if (selectedSource === 'c2') finalValue = item.c2;
-                    else if (selectedSource === 'c3') finalValue = item.c3;
-                    else if (selectedSource === 'manual') finalValue = manualValues[item.codigo] || '';
-
-                    return (
-                      <tr key={item.codigo} className={diff !== 0 ? 'hc-diff-row' : ''}>
-                        <td>{item.codigo}</td>
-                        <td>{item.descripcion}</td>
-                        <td className="hc-text-center">
-                          {diff === 0 ? (
-                            <span style={{color: '#27ae60', fontWeight: 'bold'}}>{item.c1}</span>
-                          ) : (
-                            <label className="hc-radio-label">
-                              <input 
-                                type="radio" 
-                                name={`final-${item.codigo}`}
-                                checked={selectedSource === 'c1'}
-                                onChange={() => {
-                                  setFinalSelection(prev => ({...prev, [item.codigo]: 'c1'}));
-                                  setManualValues(prev => {
-                                    const next = {...prev};
-                                    delete next[item.codigo];
-                                    return next;
-                                  });
-                                }}
-                              />
-                              {item.c1}
-                            </label>
-                          )}
-                        </td>
-                        <td className="hc-text-center">
-                          {diff === 0 ? (
-                            <span style={{color: '#27ae60', fontWeight: 'bold'}}>{item.c2}</span>
-                          ) : (
-                            <label className="hc-radio-label">
-                              <input 
-                                type="radio" 
-                                name={`final-${item.codigo}`}
-                                checked={selectedSource === 'c2'}
-                                onChange={() => {
-                                  setFinalSelection(prev => ({...prev, [item.codigo]: 'c2'}));
-                                  setManualValues(prev => {
-                                    const next = {...prev};
-                                    delete next[item.codigo];
-                                    return next;
-                                  });
-                                }}
-                              />
-                              {item.c2}
-                            </label>
-                          )}
-                        </td>
-                        <td className={`hc-text-center ${diff !== 0 ? 'hc-has-diff' : ''}`}>
-                          {diff === 0 ? (
-                            <span style={{color: '#27ae60'}}>OK</span>
-                          ) : (
-                            diff
-                          )}
-                        </td>
-                        <td className="hc-text-center">
-                          {item.c3 > 0 ? (
-                            <label className="hc-radio-label">
-                              <input 
-                                type="radio" 
-                                name={`final-${item.codigo}`}
-                                checked={selectedSource === 'c3'}
-                                onChange={() => {
-                                  setFinalSelection(prev => ({...prev, [item.codigo]: 'c3'}));
-                                  setManualValues(prev => {
-                                    const next = {...prev};
-                                    delete next[item.codigo];
-                                    return next;
-                                  });
-                                }}
-                              />
-                              {item.c3}
-                            </label>
-                          ) : '-'
-                          }
-                        </td>
-                        <td className="hc-text-center">
-                          {diff === 0 ? (
-                             <span style={{fontWeight: 'bold', fontSize: '1.1em', color: '#27ae60'}}>{item.c1}</span>
-                          ) : (
-                            (() => {
-                              // Lógica para mostrar texto verde si el reconteo resuelve la diferencia
-                              const matchesC1orC2 = item.c3 > 0 && (item.c3 === item.c1 || item.c3 === item.c2);
-                              const hasManualOverride = item.c4 > 0 && item.c4 !== item.c3;
-                              
-                              // Si coincide con C1 o C2 y no hay un override manual diferente, mostramos texto verde
-                              if (matchesC1orC2 && !hasManualOverride) {
-                                return (
-                                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
-                                    <span style={{fontWeight: 'bold', fontSize: '1.1em', color: '#27ae60'}}>{item.c3}</span>
-                                    <span title="Coincidencia con conteo anterior" style={{cursor: 'help', fontSize: '0.8em'}}>⚡</span>
-                                  </div>
-                                );
-                              }
-
-                              return (
-                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
-                                  <input 
-                                    type="number"
-                                    className="hc-manual-input"
-                                    value={finalValue}
-                                    placeholder="Manual..."
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setFinalSelection(prev => ({...prev, [item.codigo]: 'manual'}));
-                                      setManualValues(prev => ({...prev, [item.codigo]: val}));
-                                    }}
-                                    onClick={() => {
-                                      if (selectedSource !== 'manual') {
-                                         setFinalSelection(prev => ({...prev, [item.codigo]: 'manual'}));
-                                         if (finalValue !== '') {
-                                            setManualValues(prev => ({...prev, [item.codigo]: finalValue}));
-                                         }
-                                      }
-                                    }}
-                                  />
-                                </div>
-                              );
-                            })()
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="hc-modal-footer" style={{padding: '1.5rem 2rem', borderTop: '1px solid var(--hc-border)', display: 'flex', justifyContent: 'flex-end', gap: '1rem'}}>
-              <button onClick={closeComparison} className="hc-btn-cancel" style={{padding: '0.75rem 1.5rem', border: '1px solid var(--hc-border)', background: 'white', borderRadius: '8px', cursor: 'pointer'}}>
-                Cancelar
-              </button>
-              <button 
-                onClick={handleGuardarAjuste} 
-                className="hc-btn-save" 
-                style={{padding: '0.75rem 1.5rem', background: 'var(--hc-primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600'}}
-                disabled={loadingComparison}
-              >
-                {loadingComparison ? 'Guardando...' : '💾 Guardar Ajuste Final'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ComparativaModal 
+        comparisonData={comparisonData}
+        closeComparison={closeComparison}
+        finalSelection={finalSelection}
+        setFinalSelection={setFinalSelection}
+        manualValues={manualValues}
+        setManualValues={setManualValues}
+        handleGuardarAjuste={handleGuardarAjuste}
+        loadingComparison={loadingComparison}
+      />
 
       {/* Single Detail Modal */}
-      {singleDetail && (
-        <div className="hc-modal-overlay">
-          <div className="hc-modal-content-large">
-            <div className="hc-modal-header">
-              <h3>Detalle Conteo #{singleDetail.numero} - {singleDetail.conteo.estado === 'en_progreso' ? '(En Proceso)' : '(Finalizado)'}</h3>
-              <div style={{display: 'flex', gap: '10px'}}>
-                <button 
-                  onClick={() => refreshDetail(singleDetail.conteo.id)} 
-                  className="hc-modal-action-btn"
-                  title="Actualizar detalle"
-                >
-                  🔄
-                </button>
-                <button onClick={closeSingleDetail} className="hc-close-btn">×</button>
-              </div>
-            </div>
-            <div className="hc-modal-body">
-              <div className="hc-detail-info-box">
-                <div className="hc-detail-info-item">
-                  <span className="hc-detail-label">Usuario Responsable</span>
-                  <span className="hc-detail-value">{singleDetail.conteo.usuario_nombre}</span>
-                </div>
-                <div className="hc-detail-info-item">
-                  <span className="hc-detail-label">Fecha de Inicio</span>
-                  <span className="hc-detail-value">{new Date(singleDetail.conteo.fecha_inicio).toLocaleString()}</span>
-                </div>
-                <div className="hc-detail-info-item">
-                  <span className="hc-detail-label">Total Items</span>
-                  <span className="hc-detail-value">{singleDetail.items.length}</span>
-                </div>
-              </div>
-              <table className="hc-comparison-table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Descripción</th>
-                    <th>Código Barra</th>
-                    <th className="hc-text-center">Cantidad</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {singleDetail.items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td>{item.item_codigo}</td>
-                      <td>{item.descripcion}</td>
-                      <td>{item.codigo_barra}</td>
-                      <td className="hc-text-center"><strong>{item.cantidad}</strong></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bitácora Panel */}
-      <BitacoraActividad 
-        isOpen={showBitacora} 
-        onClose={() => setShowBitacora(false)} 
-        conteos={conteos.filter(c => c.bodega === selectedBodega)} 
+      <DetalleConteoModal 
+        singleDetail={singleDetail}
+        closeSingleDetail={closeSingleDetail}
+        refreshDetail={refreshDetail}
       />
+
+      {/* Bitácora Panel Removed */}
     </div>
   );
 };

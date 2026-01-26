@@ -31,17 +31,24 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
   const [selectedItem, setSelectedItem] = useState(null); // Item seleccionado para editar
   const [qtyInput, setQtyInput] = useState('');
   const inputRef = useRef(null);
+  
+  // Estado para el input de scanner (PDA)
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const barcodeInputRef = useRef(null);
 
   useEffect(() => {
     cargarUbicaciones();
   }, [companiaId]);
 
-  // Foco automático al input del modal
+  // Foco automático al input del modal y al scanner cuando se cambia de vista
   useEffect(() => {
     if (modalOpen && inputRef.current) {
       setTimeout(() => inputRef.current.focus(), 100);
+    } else if (viewMode === 'recount' && !modalOpen && barcodeInputRef.current) {
+      // Enfocar input de scanner si estamos en modo reconteo y sin modal abierto
+      setTimeout(() => barcodeInputRef.current.focus(), 100);
     }
-  }, [modalOpen]);
+  }, [modalOpen, viewMode]);
 
   const cargarUbicaciones = async () => {
     try {
@@ -155,6 +162,30 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
       toast.error('Error al iniciar la sesión de reconteo');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBarcodeScan = (e) => {
+    e.preventDefault();
+    if (!barcodeInput.trim()) return;
+
+    const scannedCode = barcodeInput.trim();
+    
+    // Buscar en las diferencias de la ubicación activa
+    const foundDiff = activeRecount.diferencias.find(diff => {
+      const code = diff.item?.codigo || diff.item?.codigo_barra;
+      // Comparación laxa por si acaso llegan números vs strings
+      return String(code) === String(scannedCode);
+    });
+
+    if (foundDiff) {
+      // Item encontrado -> Abrir modal de reconteo
+      handleItemClick(foundDiff);
+      setBarcodeInput('');
+    } else {
+      // Item no encontrado en esta lista
+      toast.error(`El código ${scannedCode} no corresponde a items con diferencia en esta ubicación.`);
+      setBarcodeInput('');
     }
   };
 
@@ -454,6 +485,40 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
           </p>
         </div>
 
+        {/* --- BARRA DE ESCANEO (PDA / Manual) --- */}
+        <div className="scan-bar-container" style={{ padding: '10px', background: '#34495e', display: 'flex', gap: '10px' }}>
+            <form onSubmit={handleBarcodeScan} style={{ flex: 1, display: 'flex' }}>
+                <input
+                    ref={barcodeInputRef}
+                    type="text"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    placeholder="Escanear código de barras..."
+                    className="pda-scan-input"
+                    style={{
+                        flex: 1,
+                        padding: '10px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        fontSize: '1rem'
+                    }}
+                    autoComplete="off"
+                />
+                <button type="submit" className="btn-scan-submit" style={{
+                    marginLeft: '10px',
+                    padding: '0 15px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#27ae60',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                }}>
+                    OK
+                </button>
+            </form>
+        </div>
+
         <div className="recount-items-list">
           {activeRecount.diferencias.map((diff, idx) => {
             // Verificar estado de este item
@@ -486,7 +551,12 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
               <div 
                 key={idx} 
                 className={`recount-item-row ${isCounted ? 'completed' : ''}`}
-                onClick={() => handleItemClick(diff)}
+                onClick={() => {
+                   // Si queremos forzar escaneo, podemos comentar la línea de abajo o mostrar una alerta
+                   toast.info("Por favor escanee el producto para verificar.");
+                   // handleItemClick(diff); // <-- Deshabilitado para forzar escaneo (descomentar si se permite manual)
+                }}
+                style={{ opacity: isCounted ? 0.7 : 1, cursor: 'not-allowed' }}
               >
                 <div className="recount-item-info">
                   <span className="item-desc">{diff.item?.descripcion}</span>
