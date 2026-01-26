@@ -1,0 +1,116 @@
+.fig-filters-container {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  background: transparent;
+  padding: 0;
+  border: none;
+  width: 100%;
+}
+
+.fig-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fig-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 0.9rem;
+  color: #64748b;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.fig-input {
+  padding: 0.5rem 1rem 0.5rem 2.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  width: 200px;
+  outline: none;
+  transition: all 0.2s;
+  background-color: #f8fafc;
+  height: 40px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.fig-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1em;
+  padding-right: 2.5rem;
+}
+
+.fig-input:focus {
+  border-color: #3b82f6;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.fig-input:hover {
+  border-color: #cbd5e1;
+  background-color: white;
+}
+
+.fig-adv-search-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0 1.25rem;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  margin-right: auto; /* Push filters to the right or keep left */
+}
+
+.fig-adv-search-btn:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+}
+
+.fig-icon-btn {
+  font-size: 1rem;
+}
+
+.fig-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: white;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.fig-toggle-btn:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.fig-toggle-btn.active {
+  background-color: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
+}

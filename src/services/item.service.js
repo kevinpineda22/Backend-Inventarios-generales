@@ -36,6 +36,22 @@ export class ItemService {
       const codigoData = await CodigoModel.findByBarcodeWithItem(codigoBarra, companiaId);
       
       if (!codigoData) {
+        // Fallback: Intentar buscar directamente en items por código de item 
+        // (útil si el "código de barras" ingresado es en realidad el código interno del item "item")
+        const itemData = await ItemModel.findByItemCode(codigoBarra, companiaId);
+
+        if (itemData) {
+           return {
+             success: true,
+             data: {
+               ...itemData,
+               unidad_medida: 'UND', // Default si no viene de la tabla de códigos con unidad específica
+               factor_empaque: 1,
+               codigo_barra_scanned: codigoBarra
+             }
+           };
+        }
+
         return {
           success: false,
           message: 'Item no encontrado'

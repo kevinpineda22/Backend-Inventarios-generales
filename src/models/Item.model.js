@@ -97,6 +97,27 @@ export class ItemModel {
   }
 
   /**
+   * Buscar item por código de item exacto (columna 'item')
+   */
+  static async findByItemCode(itemCode, companiaId) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.ITEMS)
+        .select('*')
+        .eq('item', itemCode)
+        .eq('compania_id', companiaId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    } catch (error) {
+       // Si no existe la columna, retornamos null
+       if (error.message && error.message.includes('does not exist')) return null;
+       throw handleSupabaseError(error);
+    }
+  }
+
+  /**
    * Buscar items por término (descripción o código)
    */
   static async search(term, companiaId) {
