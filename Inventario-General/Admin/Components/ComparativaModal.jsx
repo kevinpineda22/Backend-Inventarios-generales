@@ -11,14 +11,42 @@ const ComparativaModal = ({
     handleGuardarAjuste, 
     loadingComparison 
 }) => {
+    const [editMode, setEditMode] = React.useState(false);
+
+    // Calcular si hay items finalizados o estamos en modo "Solo Finalizados"
+    const hasFinalData = React.useMemo(() => {
+        if (!comparisonData || !comparisonData.items) return false;
+        return comparisonData.items.some(i => i.c4 > 0);
+    }, [comparisonData]);
+
     if (!comparisonData) return null;
 
     return (
         <div className="hc-modal-overlay">
           <div className="hc-modal-content-large">
             <div className="hc-modal-header">
-              <h3>Comparativa: {comparisonData.location.zona} - {comparisonData.location.pasillo} - {comparisonData.location.ubicacion}</h3>
-              <button onClick={closeComparison} className="hc-close-btn">×</button>
+              <h3>
+                  Comparativa: {comparisonData.location.zona} - {comparisonData.location.pasillo} - {comparisonData.location.ubicacion}
+                  {hasFinalData && <span className="badge-finalizado" style={{marginLeft:'10px', fontSize:'0.7em', background:'#27ae60', color:'white', padding:'2px 6px', borderRadius:'4px'}}>FINALIZADO</span>}
+              </h3>
+              <div style={{display:'flex', gap:'10px'}}>
+                  <button 
+                    onClick={() => setEditMode(!editMode)} 
+                    className="hc-btn-edit"
+                    style={{
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        border: '1px solid #3498db',
+                        background: editMode ? '#3498db' : 'transparent',
+                        color: editMode ? 'white' : '#3498db',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                    }}
+                  >
+                    {editMode ? '🔓 Edición Activa' : '✏️ Editar Todo'}
+                  </button>
+                  <button onClick={closeComparison} className="hc-close-btn">×</button>
+              </div>
             </div>
             <div className="hc-modal-body">
               {comparisonData.loading ? (
@@ -127,7 +155,7 @@ const ComparativaModal = ({
                           }
                         </td>
                         <td className="hc-text-center">
-                          {diff === 0 ? (
+                          {diff === 0 && !editMode ? (
                              <span style={{fontWeight: 'bold', fontSize: '1.1em', color: '#27ae60'}}>{item.c1}</span>
                           ) : (
                             (() => {
@@ -135,8 +163,8 @@ const ComparativaModal = ({
                               const matchesC1orC2 = item.c3 > 0 && (item.c3 === item.c1 || item.c3 === item.c2);
                               const hasManualOverride = item.c4 > 0 && item.c4 !== item.c3;
                               
-                              // Si coincide con C1 o C2 y no hay un override manual diferente, mostramos texto verde
-                              if (matchesC1orC2 && !hasManualOverride) {
+                              // Si NO estamos en modo edición Y coincide con C1 o C2 Y no hay un override manual diferente, mostramos texto verde
+                              if (!editMode && matchesC1orC2 && !hasManualOverride) {
                                 return (
                                   <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
                                     <span style={{fontWeight: 'bold', fontSize: '1.1em', color: '#27ae60'}}>{item.c3}</span>
@@ -144,24 +172,45 @@ const ComparativaModal = ({
                                   </div>
                                 );
                               }
+                              
+                              // VALOR POR DEFECTO PARA EL INPUT (Pre-fill)
+                              // Si hay ManualValues, usar eso. 
+                              // Si no, y hay selección, usar valor de la selección.
+                              // Si no, usar diff===0 ? c1 : c3.
+                              let displayValue = finalValue;
+                              if (editMode && displayValue === '' && manualValues[item.codigo] === undefined) {
+                                  // Auto-sugerir el valor actual si empezamos a editar
+                                  if (selectedSource === 'c1') displayValue = item.c1;
+                                  else if (selectedSource === 'c2') displayValue = item.c2;
+                                  else if (selectedSource === 'c3') displayValue = item.c3;
+                                  else if (diff === 0) displayValue = item.c1;
+                              }
 
                               return (
                                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
                                   <input 
                                     type="number"
                                     className="hc-manual-input"
-                                    value={finalValue}
-                                    placeholder="Manual..."
+                                    value={displayValue}
+                                    placeholder={editMode ? "Nuevo..." : "Manual..."}
+                                    style={editMode ? {borderColor: '#3498db', backgroundColor: '#f0f9ff'} : {}}
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       setFinalSelection(prev => ({...prev, [item.codigo]: 'manual'}));
                                       setManualValues(prev => ({...prev, [item.codigo]: val}));
                                     }}
                                     onClick={() => {
-                                      if (selectedSource !== 'manual') {
+                                      if (selectedSource !== 'manual' || editMode) {
                                          setFinalSelection(prev => ({...prev, [item.codigo]: 'manual'}));
-                                         if (finalValue !== '') {
-                                            setManualValues(prev => ({...prev, [item.codigo]: finalValue}));
+                                         
+                                         // Si hacemos click y está vacío (o es inicio de edición), rellenar con el valor lógico
+                                         if (!manualValues[item.codigo]) {
+                                             let autoVal = displayValue;
+                                             if (autoVal === '' || autoVal === undefined) {
+                                                 if (item.c3 > 0) autoVal = item.c3;
+                                                 else if (diff === 0) autoVal = item.c1;
+                                             }
+                                             setManualValues(prev => ({...prev, [item.codigo]: autoVal}));
                                          }
                                       }
                                     }}

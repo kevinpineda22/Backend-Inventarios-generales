@@ -285,6 +285,18 @@ const EmpleadoInventarioGeneral = ({
 
       setSeleccion({ ...seleccion, ubicacion: ubicacionId });
       setMessage({ type: "", text: "" });
+
+      // Efecto suave de scroll hacia la sección de la clave
+      setTimeout(() => {
+        const clavePanel = document.getElementById("clave-panel-section");
+        if (clavePanel) {
+          clavePanel.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Opcional: enfocar el input
+          const input = document.getElementById("clave-input");
+          if(input) input.focus();
+        }
+      }, 300);
+
     } catch (error) {
       console.error("Error:", error);
       setMessage({
@@ -593,7 +605,7 @@ const EmpleadoInventarioGeneral = ({
 
       {/* Panel de clave para iniciar conteo */}
       {ubicacionActual && !mostrarConteo && (
-        <div className="clave-panel">
+        <div id="clave-panel-section" className="clave-panel">
           <h3>Ubicación Seleccionada: #{ubicacionActual.numero}</h3>
           <p>
             Tipo de Conteo:{" "}
@@ -641,6 +653,8 @@ const EmpleadoInventarioGeneral = ({
             <p>Ingrese la clave para acceder al reconteo de diferencias.</p>
             <input
               type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               className="clave-input"

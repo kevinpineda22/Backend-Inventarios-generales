@@ -516,9 +516,10 @@ const HistorialConteos = () => {
 
     items.forEach(item => {
        // Si ya tiene C4 (ajuste final), tomamos ese valor
-       if (locationData.c4) {
+       // Check for both .c4 (backend format) and .final (frontend format)
+       if (locationData.c4 || locationData.final) {
           initialSelection[item.codigo] = 'manual';
-          initialManualValues[item.codigo] = item.c4;
+          initialManualValues[item.codigo] = item.c4 || 0;
           return;
        }
 
@@ -727,9 +728,16 @@ const HistorialConteos = () => {
       const diff = item.c1 - item.c2;
       let finalQty = 0;
       
-      if (diff === 0) {
-        finalQty = item.c1; // Si no hay diferencia, tomamos C1 (que es igual a C2)
-      } else {
+      // Prioridad 1: Valor Manual Explícito (Modo Edición)
+      if (manualValues[item.codigo] !== undefined && finalSelection[item.codigo] === 'manual') {
+          finalQty = Number(manualValues[item.codigo]);
+      }
+      // Prioridad 2: Coincidencia (Sin diferencias)
+      else if (diff === 0) {
+        finalQty = item.c1; 
+      } 
+      // Prioridad 3: Selección de Diferencias
+      else {
         const selection = finalSelection[item.codigo];
         if (!selection) {
           missingSelection = true;

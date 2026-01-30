@@ -55,7 +55,8 @@ export class ItemController {
    */
   static async search(req, res) {
     try {
-      const { q, companiaId } = req.query;
+      const { q } = req.query;
+      const companiaId = req.query.companiaId || req.query.compania_id;
 
       if (!q || q.length < 2) {
         return successResponse(res, [], 'Término de búsqueda muy corto');

@@ -1,0 +1,132 @@
+.comparacion-siesa-container {
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    min-height: 80vh;
+}
+
+.cs-header h2 {
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.cs-header p {
+    color: #7f8c8d;
+    margin-bottom: 20px;
+}
+
+.cs-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+}
+
+.cs-status-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.api-status-label {
+    font-weight: 600;
+    color: #34495e;
+}
+
+.btn-comparar {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-comparar:hover {
+    background-color: #2980b9;
+}
+
+.btn-comparar:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+/* Stats Row */
+.cs-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.stat-card h3 {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin-bottom: 10px;
+}
+
+.stat-card .value {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.stat-card.match .value { color: #27ae60; }
+.stat-card.diff .value { color: #e74c3c; }
+.stat-card.missing .value { color: #f39c12; }
+.stat-card.missing-sys .value { color: #8e44ad; }
+
+/* Table */
+.cs-table-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+.cs-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cs-table th, .cs-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.cs-table th {
+    background-color: #34495e;
+    color: white;
+    font-weight: 600;
+}
+
+.cs-table tr:hover {
+    background-color: #f1f2f6;
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: white;
+}
+
+.badge.match { background-color: #27ae60; }
+.badge.diff { background-color: #e74c3c; }
+.badge.warn { background-color: #f39c12; }

@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import "./ConteoPorUbicacion.css";
 import { inventarioGeneralService as inventarioService } from "../../services/inventarioGeneralService";
 import { toast, ToastContainer } from "react-toastify";
 import Swal from "sweetalert2";
-import { FaTrashAlt, FaArrowLeft } from "react-icons/fa";
+import { FaTrashAlt, FaArrowLeft, FaKeyboard, FaCamera } from "react-icons/fa";
+import EscanerBarras from '../../pages/DesarrolloSurtido_API/EscanerBarras';
 
 const unidadMedidaOptions = {
   UND: 1,
@@ -20,11 +21,14 @@ const unidadMedidaOptions = {
   P13: 13,
   P14: 14,
   P15: 15,
+  P16: 16,
+  P18: 18,
   P20: 20,
   P24: 24,
   P25: 25,
   P28: 28,
   P30: 30,
+  P35: 35,
   P40: 40,
   P48: 48,
   P50: 50,
@@ -47,6 +51,8 @@ const ConteoPorUbicacion = ({
   const [loading, setLoading] = useState(false);
   const [conteoIniciado, setConteoIniciado] = useState(false);
   const [conteoId, setConteoId] = useState(null);
+  const [tecladoActivo, setTecladoActivo] = useState(false); // Estado para controlar el teclado virtual
+  const [isScanning, setIsScanning] = useState(false); // Estado para Scanner de Camara
 
   // Estados para la lógica de escaneo tipo ScannerFisico
   const [cantidadMultiplicador, setCantidadMultiplicador] = useState("0");
@@ -71,6 +77,23 @@ const ConteoPorUbicacion = ({
     }
   }, []);
 
+  // Mantiene una referencia estable para no reinicializar la cámara en cada render
+  const procesarCodigoRef = useRef(null);
+  
+  // Actualizamos la ref cada vez que cambia el metodo principal
+  useEffect(() => {
+    procesarCodigoRef.current = procesarCodigo;
+  }); // Sin dependencias: actualiza en cada render para tener siempre la última versión
+
+  const handleStableScan = useCallback((code) => {
+    console.log("Cámara detectó:", code);
+    if (procesarCodigoRef.current) {
+      procesarCodigoRef.current(code);
+    }
+  }, []); 
+  // --------------------------------------
+
+  // 
   // Manejo de teclado global para escáner físico
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -122,6 +145,44 @@ const ConteoPorUbicacion = ({
     }
   };
 
+  const handleMainDivKeyDown = (e) => {
+    if (loading) return;
+    e.stopPropagation(); // Evitar que el listener global lo capture doble
+
+    if (e.key === 'Enter') {
+      procesarCodigo(lastScanned.codigo);
+      return;
+    }
+    
+    if (e.key === 'Backspace') {
+      setLastScanned(prev => ({...prev, codigo: String(prev.codigo).slice(0, -1)}));
+      return;
+    }
+
+    // Permitir caracteres válidos para códigos de barra (letras y números)
+    // Se elimina la restricción estricta de números si existen códigos como M7708872634318
+    if (e.key.length === 1) {
+       setLastScanned(prev => ({...prev, codigo: (prev.codigo || "") + e.key}));
+    }
+  };
+
+  const handleMultiplierDivKeyDown = (e) => {
+    e.stopPropagation();
+    
+    if (e.key >= "0" && e.key <= "9") {
+      setCantidadMultiplicador((prev) => {
+        if (prev === "0") return e.key;
+        return prev + e.key;
+      });
+    } else if (e.key === "Backspace") {
+      setCantidadMultiplicador((prev) => prev.slice(0, -1) || "0");
+    } else if (e.key === "Enter") {
+      if (lastScanned.codigo && !loading) {
+        handleAgregarItem();
+      }
+    }
+  };
+  
   const iniciarNuevoConteo = async () => {
     try {
       setLoading(true);
@@ -454,27 +515,97 @@ const ConteoPorUbicacion = ({
 
       {/* Sección de Escaneo Estilo ScannerFisico */}
       <div className="lector-input-group">
-        <label className="lector-input-label" htmlFor="lector-main-input">
-          Escanear Código
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <label className="lector-input-label" htmlFor="lector-main-input" style={{ marginBottom: 0 }}>
+            Escanear Código
+          </label>
+          <button
+            onClick={() => {
+              setTecladoActivo(!tecladoActivo);
+              setTimeout(() => mainInputRef.current?.focus(), 100);
+            }}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "15px",
+              border: "none",
+              backgroundColor: tecladoActivo ? "#27ae60" : "#95a5a6",
+              color: "white",
+              fontSize: "0.8rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px"
+            }}
+            title={tecladoActivo ? "Ocultar teclado virtual" : "Mostrar teclado virtual"}
+          >
+            <FaKeyboard /> {tecladoActivo ? "ON" : "OFF"}
+          </button>
+        </div>
         <div style={{ display: "flex", gap: "10px" }}>
+          {!tecladoActivo ? (
+            <div
+                id="lector-main-div"
+                ref={mainInputRef}
+                tabIndex={0}
+                className="lector-main-input"
+                style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    cursor: 'text',
+                    backgroundColor: '#fff', 
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap'
+                }}
+                onKeyDown={handleMainDivKeyDown}
+                onFocus={(e) => {
+                    // Asegurar borde de foco visual
+                    e.target.style.borderColor = '#3498db';
+                }}
+                onBlur={(e) => {
+                    e.target.style.borderColor = '#ddd';
+                }}
+            >
+                {lastScanned.codigo || <span style={{color:'#999'}}>Escanea...</span>}
+            </div>
+          ) : (
           <input
             id="lector-main-input"
             ref={mainInputRef}
             type="text"
-            inputMode="none"
+            inputMode="text"
             autoFocus
-            placeholder="Escanea código..."
+            placeholder="Escribe el código..."
             value={lastScanned.codigo || ""}
-            onChange={(e) =>
-              setLastScanned((prev) => ({ ...prev, codigo: e.target.value }))
-            }
+            onChange={(e) => setLastScanned(prev => ({...prev, codigo: e.target.value}))}
             onKeyDown={(e) => {
               if (e.key === "Enter") procesarCodigo(lastScanned.codigo);
             }}
             className="lector-main-input"
             disabled={loading}
           />
+          )}
+          
+          <button 
+              type="button" 
+              onClick={() => setIsScanning(true)}
+              style={{
+                  padding: '0 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  background: '#2c3e50',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+              }}
+              title="Escanear con Cámara"
+          >
+              <FaCamera size={18} />
+          </button>
+
           <button
             onClick={() => procesarCodigo(lastScanned.codigo)}
             className="btn-agregar"
@@ -485,6 +616,13 @@ const ConteoPorUbicacion = ({
           </button>
         </div>
       </div>
+
+      {/* --- COMPONENTE DE ESCANER DE CAMARA --- */}
+      <EscanerBarras 
+          isScanning={isScanning} 
+          setIsScanning={setIsScanning} 
+          onScan={handleStableScan} 
+      />
 
       <div className="lector-controls-group">
         <div className="lector-unit-field">
@@ -516,16 +654,40 @@ const ConteoPorUbicacion = ({
           >
             Multiplicador
           </label>
+          {!tecladoActivo ? (
+             <div
+                id="lector-multiplier-div"
+                ref={multiplierInputRef}
+                tabIndex={0}
+                className="lector-multiplier-input"
+                style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    backgroundColor: '#f8f9fa',
+                    cursor: 'text'
+                }}
+                onKeyDown={handleMultiplierDivKeyDown}
+                onFocus={(e) => e.target.style.borderColor = '#3498db'}
+                onBlur={(e) => e.target.style.borderColor = '#ddd'}
+             >
+                {cantidadMultiplicador || "0"}
+             </div>
+          ) : (
           <input
             id="lector-multiplier-input"
             ref={multiplierInputRef}
             type="text"
-            readOnly
+            inputMode="numeric"
             value={cantidadMultiplicador}
+            onChange={(e) => {
+               // Permitir solo numeros
+               if (/^\d*$/.test(e.target.value)) setCantidadMultiplicador(e.target.value);
+            }}
             onKeyDown={handleMultiplierKeyDown}
             className="lector-multiplier-input"
-            onClick={() => multiplierInputRef.current?.focus()}
+            placeholder="#"
           />
+          )}
           <small className="lector-multiplier-help">
             Escribe números para sumar cantidad
           </small>

@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './PanelReconteoDiferencias.css';
 import { inventarioGeneralService as inventarioService } from '../../services/inventarioGeneralService';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
-import { FaCheckCircle, FaEdit, FaBoxOpen } from 'react-icons/fa';
+import { FaCheckCircle, FaEdit, FaBoxOpen, FaCamera } from 'react-icons/fa'; // Agregar icono camara
+import EscanerBarras from '../../pages/DesarrolloSurtido_API/EscanerBarras';
 
 const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuarioEmail, onCerrar, filtros }) => {
   const [allUbicaciones, setAllUbicaciones] = useState([]); // Todas las ubicaciones sin filtrar
@@ -14,6 +15,7 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
   const [filterBodega, setFilterBodega] = useState(filtros?.bodega || "");
   const [filterZona, setFilterZona] = useState(filtros?.zona || "");
   const [filterPasillo, setFilterPasillo] = useState(filtros?.pasillo || "");
+  const [filterItem, setFilterItem] = useState(""); // Filtro por item (codigo/nombre)
 
   // Listas para los selectores de filtro (derivadas de los datos)
   const [bodegasOptions, setBodegasOptions] = useState([]);
@@ -35,6 +37,8 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
   // Estado para el input de scanner (PDA)
   const [barcodeInput, setBarcodeInput] = useState('');
   const barcodeInputRef = useRef(null);
+  // Estado para Scanner de Camara
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     cargarUbicaciones();
@@ -109,9 +113,20 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
     if (filterPasillo) {
       filtered = filtered.filter(u => String(u.ubicacion.pasillo?.id) === String(filterPasillo));
     }
+    
+    if (filterItem && filterItem.trim() !== '') {
+      const term = filterItem.toLowerCase().trim();
+      filtered = filtered.filter(u => 
+        u.diferencias.some(diff => {
+          const desc = diff.item?.descripcion?.toLowerCase() || '';
+          const code = (diff.item?.codigo || diff.item?.codigo_barra || '').toLowerCase();
+          return desc.includes(term) || code.includes(term);
+        })
+      );
+    }
 
     setUbicaciones(filtered);
-  }, [allUbicaciones, filterBodega, filterZona, filterPasillo]);
+  }, [allUbicaciones, filterBodega, filterZona, filterPasillo, filterItem]);
 
   const handleStartRecount = async (data) => {
     try {
@@ -165,57 +180,179 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
     }
   };
 
-  const handleBarcodeScan = (e) => {
-    e.preventDefault();
-    if (!barcodeInput.trim()) return;
+  // Manejo de Scanner Manual y de Camara Unificado
+  const handleBarcodeProcess = async (code) => {
+    try {
+        // 1. Validación básica
+        if (!code) {
+            toast.warning("Lectura vacía detectada");
+            return;
+        }
+        
+        // Limpiamos el código
+        const normalizedCode = String(code).trim().toUpperCase();
+        console.log("Procesando código:", normalizedCode);
+        
+        // Validar Estado
+        if (!activeRecount || !activeRecount.diferencias) {
+            console.error("Estado inválido:", activeRecount);
+            alert("Error crítico: No hay datos de diferencias cargados. Por favor recarga la página.");
+            return;
+        }
 
-    const scannedCode = barcodeInput.trim();
-    
-    // Buscar en las diferencias de la ubicación activa
-    const foundDiff = activeRecount.diferencias.find(diff => {
-      const code = diff.item?.codigo || diff.item?.codigo_barra;
-      // Comparación laxa por si acaso llegan números vs strings
-      return String(code) === String(scannedCode);
-    });
+        // 2. Intento de Búsqueda Local (Optimista)
+        // Debug: Log para ver qué códigos tiene el frontend
+        console.log("Intentando búsqueda local para " + normalizedCode);
 
-    if (foundDiff) {
-      // Item encontrado -> Abrir modal de reconteo
-      handleItemClick(foundDiff);
-      setBarcodeInput('');
-    } else {
-      // Item no encontrado en esta lista
-      toast.error(`El código ${scannedCode} no corresponde a items con diferencia en esta ubicación.`);
-      setBarcodeInput('');
+        let foundDiff = activeRecount.diferencias.find(diff => {
+            // Recopilar todos los códigos posibles de este item
+            const candidates = [];
+            if (diff.item?.codigo) candidates.push(String(diff.item.codigo).trim().toUpperCase());
+            if (diff.item?.codigo_barra) candidates.push(String(diff.item.codigo_barra).trim().toUpperCase());
+            if (diff.item?.codigo_barras) candidates.push(String(diff.item.codigo_barras).trim().toUpperCase()); // Por si acaso
+            
+            // Support for multiple barcodes (joined table)
+            if (diff.item?.codigos && Array.isArray(diff.item.codigos)) {
+                diff.item.codigos.forEach(c => {
+                    if (c.codigo_barras) candidates.push(String(c.codigo_barras).trim().toUpperCase());
+                });
+            }
+
+            return candidates.some(itemCode => {
+                // A. Coincidencia exacta
+                if (itemCode === normalizedCode) return true;
+                
+                // B. UPC vs EAN13 (Ceros al inicio)
+                if (normalizedCode.length > itemCode.length && normalizedCode.endsWith(itemCode) && Number(normalizedCode) === Number(itemCode)) return true;
+                if (itemCode.length > normalizedCode.length && itemCode.endsWith(normalizedCode) && Number(itemCode) === Number(normalizedCode)) return true;
+
+                return false;
+            });
+        });
+
+        // 3. Si no se encuentra localmente, buscar en el Backend (Fallback Robusto)
+        if (!foundDiff) {
+            console.log("No encontrado localmente, consultando al servidor...");
+            /* No activamos loading global para no interrumpir flujo, pero podríamos usar un toast de 'Buscando...' */
+            
+            try {
+                const response = await inventarioService.buscarItemPorCodigoBarra(normalizedCode, companiaId);
+                
+                if (response.success && response.data) {
+                    const backendItem = response.data;
+                    console.log("Encontrado en backend:", backendItem);
+                    
+                    // IMPORTANTE: Buscamos si el item recuperado del backend corresponde a alguna de las diferencias
+                    // La coincidencia se hace por ID de item, que es único e inmutable
+                     foundDiff = activeRecount.diferencias.find(d => 
+                        String(d.item_id) === String(backendItem.id) || 
+                        String(d.item?.id) === String(backendItem.id)
+                    );
+                    
+                    if (!foundDiff) {
+                        // El item existe en la BD pero no está en la lista de diferencias para esta ubicación
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Producto No Corresponde',
+                            html: `El código escaneado <b>(${normalizedCode})</b> corresponde a "<b>${backendItem.descripcion}</b>", <br/>pero este producto NO está en la lista de diferencias.`,
+                            confirmButtonColor: '#e74c3c'
+                        }).then(() => {
+                            if (barcodeInputRef.current) barcodeInputRef.current.focus();
+                        });
+                        
+                        setBarcodeInput('');
+                        return;
+                    }
+                }
+            } catch (serverError) {
+                console.error("Error buscando en servidor:", serverError);
+                // Continuamos al bloque final para reportar error si no se halló nada
+            }
+        }
+
+        if (foundDiff) {
+            // CASO EXITO
+            handleItemClick(foundDiff);
+            setBarcodeInput('');
+        } else {
+            // CASO FALLO
+            console.warn(`Código ${code} no encontrado.`);
+            
+            Swal.fire({
+                icon: 'error',
+                title: 'Código No Reconocido',
+                html: `El código escaneado <b>(${normalizedCode})</b> no pertenece a ninguno de los productos de la lista <br/>ni se encontró en la base de datos.`,
+                confirmButtonColor: '#e74c3c'
+            }).then(() => {
+                if (barcodeInputRef.current) barcodeInputRef.current.focus();
+            });
+
+            setBarcodeInput('');
+        }
+    } catch (err) {
+        console.error("Error en handleBarcodeProcess:", err);
+        alert("Ocurrió un error al procesar el código: " + err.message);
     }
   };
 
+  // --- STABLE SCAN HANDLER FOR CAMERA ---
+  // Mantiene una referencia estable para no reinicializar la cámara en cada render
+  const handleBarcodeProcessRef = useRef(handleBarcodeProcess);
+  
+  // Actualizamos la ref cada vez que cambia el metodo principal
+  useEffect(() => {
+    handleBarcodeProcessRef.current = handleBarcodeProcess;
+  }, [allUbicaciones, activeRecount, recountedItems]); // Agregamos dependencias explícitas porsiaca
+
+  const handleStableScan = useCallback((code) => {
+    console.log("Cámara detectó:", code);
+    if (handleBarcodeProcessRef.current) {
+      handleBarcodeProcessRef.current(code);
+    }
+  }, []); 
+  // --------------------------------------
+
+  const handleBarcodeScan = (e) => {
+    e.preventDefault();
+    handleBarcodeProcess(barcodeInput);
+  };
+
   const handleItemClick = (diffItem) => {
-    // Buscar si ya tenemos un conteo para este item
-    // diffItem viene de la lista de diferencias (item maestro)
-    // recountedItems viene del backend (conteo_items)
-    
-    // Calcular cantidad actual registrada
-    const currentRecords = recountedItems.filter(r => {
-      // 1. Match por ID
-      const rId = r.item_id || r.producto_id || r.id_item || (r.item && r.item.id);
-      if (String(rId) === String(diffItem.item_id)) return true;
+    try {
+        console.log("Abriendo modal para:", diffItem);
+        // Buscar si ya tenemos un conteo para este item
+        // diffItem viene de la lista de diferencias (item maestro)
+        // recountedItems viene del backend (conteo_items)
+        
+        // Calcular cantidad actual registrada
+        // Aseguramos que recountedItems sea un array
+        const safeRecounted = Array.isArray(recountedItems) ? recountedItems : [];
+        
+        const currentRecords = safeRecounted.filter(r => {
+        // 1. Match por ID
+        const rId = r.item_id || r.producto_id || r.id_item || (r.item && r.item.id);
+        if (String(rId) === String(diffItem.item_id)) return true;
 
-      // 2. Match por Código de Barras (Fallback por si los IDs difieren)
-      const diffBarcode = diffItem.item?.codigo || diffItem.item?.codigo_barra;
-      const rBarcode = r.item?.codigo || r.item?.codigo_barra;
-      if (diffBarcode && rBarcode && String(diffBarcode) === String(rBarcode)) return true;
+        // 2. Match por Código de Barras (Fallback por si los IDs difieren)
+        const diffBarcode = diffItem.item?.codigo || diffItem.item?.codigo_barra;
+        const rBarcode = r.item?.codigo || r.item?.codigo_barra;
+        if (diffBarcode && rBarcode && String(diffBarcode) === String(rBarcode)) return true;
 
-      return false;
-    });
-    const currentQty = currentRecords.reduce((sum, r) => sum + Number(r.cantidad), 0);
+        return false;
+        });
+        const currentQty = currentRecords.reduce((sum, r) => sum + Number(r.cantidad), 0);
 
-    setSelectedItem({
-      ...diffItem,
-      currentQty,
-      currentRecords // Guardamos referencia para poder borrarlos si se sobrescribe
-    });
-    setQtyInput(currentQty > 0 ? String(currentQty) : '');
-    setModalOpen(true);
+        setSelectedItem({
+        ...diffItem,
+        currentQty,
+        currentRecords // Guardamos referencia para poder borrarlos si se sobrescribe
+        });
+        setQtyInput(currentQty > 0 ? String(currentQty) : '');
+        setModalOpen(true);
+    } catch (error) {
+        console.error("Error abriendo modal:", error);
+        alert("Error al intentar abrir el item: " + error.message);
+    }
   };
 
   const handleSaveQuantity = async () => {
@@ -396,8 +533,19 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
             </select>
           </div>
 
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#2c3e50', fontSize: '0.9rem' }}>Buscar Item</label>
+            <input 
+              type="text"
+              placeholder="Código o nombre..."
+              value={filterItem} 
+              onChange={(e) => setFilterItem(e.target.value)}
+              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.95rem' }}
+            />
+          </div>
+
           <button 
-            onClick={() => { setFilterBodega(""); setFilterZona(""); setFilterPasillo(""); }}
+            onClick={() => { setFilterBodega(""); setFilterZona(""); setFilterPasillo(""); setFilterItem(""); }}
             style={{ 
               padding: '8px 15px', 
               backgroundColor: '#95a5a6', 
@@ -491,10 +639,9 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
                 <input
                     ref={barcodeInputRef}
                     type="text"
+                    className="pda-scan-input"
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Escanear código de barras..."
-                    className="pda-scan-input"
                     style={{
                         flex: 1,
                         padding: '10px',
@@ -504,8 +651,28 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
                     }}
                     autoComplete="off"
                 />
+                
+                <button 
+                    type="button" 
+                    onClick={() => setIsScanning(true)}
+                    style={{
+                        marginLeft: '5px',
+                        padding: '0 12px',
+                        borderRadius: '4px',
+                        border: '1px solid #fff',
+                        background: 'transparent',
+                        color: 'white',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                >
+                    <FaCamera size={18} />
+                </button>
+
                 <button type="submit" className="btn-scan-submit" style={{
-                    marginLeft: '10px',
+                    marginLeft: '5px',
                     padding: '0 15px',
                     borderRadius: '4px',
                     border: 'none',
@@ -518,6 +685,13 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
                 </button>
             </form>
         </div>
+
+        {/* --- COMPONENTE DE ESCANER DE CAMARA --- */}
+        <EscanerBarras 
+            isScanning={isScanning} 
+            setIsScanning={setIsScanning} 
+            onScan={handleStableScan} 
+        />
 
         <div className="recount-items-list">
           {activeRecount.diferencias.map((diff, idx) => {
@@ -552,9 +726,8 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
                 key={idx} 
                 className={`recount-item-row ${isCounted ? 'completed' : ''}`}
                 onClick={() => {
-                   // Si queremos forzar escaneo, podemos comentar la línea de abajo o mostrar una alerta
-                   toast.info("Por favor escanee el producto para verificar.");
-                   // handleItemClick(diff); // <-- Deshabilitado para forzar escaneo (descomentar si se permite manual)
+                   // Bloqueo de click manual
+                   toast.info("⚠️ Debe escanear el producto para registrar el conteo.");
                 }}
                 style={{ opacity: isCounted ? 0.7 : 1, cursor: 'not-allowed' }}
               >
@@ -602,6 +775,7 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
                 <input
                   ref={inputRef}
                   type="number"
+                  inputMode="decimal"
                   className="qty-input"
                   value={qtyInput}
                   onChange={(e) => setQtyInput(e.target.value)}
