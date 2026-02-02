@@ -57,10 +57,10 @@ class ConteoService {
               const type = i.conteo.tipo_conteo;
               const qty = parseFloat(i.cantidad);
               
-              if (type === 1) q1 = qty;
-              else if (type === 2) q2 = qty;
-              else if (type === 3) q3 = qty;
-              else if (type === 4) q4 = qty;
+              if (type === 1) q1 = (q1 === null ? 0 : q1) + qty;
+              else if (type === 2) q2 = (q2 === null ? 0 : q2) + qty;
+              else if (type === 3) q3 = (q3 === null ? 0 : q3) + qty;
+              else if (type === 4) q4 = (q4 === null ? 0 : q4) + qty;
           });
 
           let finalQty = 0;
@@ -807,12 +807,18 @@ class ConteoService {
           conteo.items.forEach(i => {
              const key = i.item?.codigo || i.item_id;
              const desc = i.item?.descripcion || 'Sin Descripción';
-             // Guardar metadata del item
-             itemsMap.set(key, { 
-               cantidad: parseFloat(i.cantidad || 0), 
-               descripcion: desc,
-               itemCode: i.item?.codigo || 'S/C'
-             });
+             const qty = parseFloat(i.cantidad || 0);
+
+             // Guardar metadata del item y SUMAR cantidades (Fix para múltiples registros por item)
+             if (itemsMap.has(key)) {
+               itemsMap.get(key).cantidad += qty;
+             } else {
+               itemsMap.set(key, { 
+                 cantidad: qty, 
+                 descripcion: desc,
+                 itemCode: i.item?.codigo || 'S/C'
+               });
+             }
              locData.allItems.add(key);
           });
         }
