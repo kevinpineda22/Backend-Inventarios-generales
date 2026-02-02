@@ -97,6 +97,36 @@ export class ItemModel {
   }
 
   /**
+   * Buscar todos los items que compartan un código de barras
+   */
+  static async findAllByBarcode(codigoBarra, companiaId) {
+    try {
+      // Búsqueda robusta por 'codigo' o 'codigo_barra'
+      const { data, error } = await supabase
+        .from(TABLES.ITEMS)
+        .select('id')
+        .or(`codigo.eq.${codigoBarra},codigo_barra.eq.${codigoBarra}`) // OR syntax
+        .eq('compania_id', companiaId);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.warn("Error en findAllByBarcode, intentando fallback simple:", error.message);
+      // Fallback si falla el OR por columnas inexistentes
+      try {
+         const { data } = await supabase
+         .from(TABLES.ITEMS)
+         .select('id')
+         .eq('codigo', codigoBarra)
+         .eq('compania_id', companiaId);
+         return data || [];
+      } catch (e) {
+         return [];
+      }
+    }
+  }
+
+  /**
    * Buscar item por código de item exacto (columna 'item')
    */
   static async findByItemCode(itemCode, companiaId) {

@@ -18,27 +18,19 @@ class ConteoService {
       const itemInfo = await ItemModel.findById(itemId);
       let targetItemIds = [itemId];
       
-      if (itemInfo && itemInfo.codigo) {
-          // Buscar otros items con el mismo código en la misma compañía
-          const duplicates = await ItemModel.findByBarcode(itemInfo.codigo, companiaId);
-          // Si findByBarcode retorna solo uno, necesitamos findALLByBarcode. 
-          // Asumiremos que si hay duplicados, querremos buscar en todos.
-          // Como no tenemos findAllByBarcode a mano en ItemModel, usaremos una estrategia más directa.
-          // Pero para salir del paso, si hay duplicidad de IDs, lo mejor es ampliar la búsqueda en ConteoItemModel.
-          
-          // Por ahora, para ser seguros y no romper nada si no existen esos métodos:
-          // Vamos a asumir que el problema es items duplicados y trataremos de encontrarlos.
-          // Si no podemos, seguimos solo con itemId.
+      if (itemInfo && (itemInfo.codigo || itemInfo.codigo_barra)) {
+          const code = itemInfo.codigo || itemInfo.codigo_barra;
+          // Buscar todos los items con el mismo código
+          const duplicates = await ItemModel.findAllByBarcode(code, companiaId);
+          if (duplicates && duplicates.length > 0) {
+              targetItemIds = duplicates.map(d => d.id);
+          }
       }
 
-      // ESTRATEGIA: Buscar items por ID directamente.
-      // Si el usuario sospecha que no salen todos, es probable que haya items con mismo código pero diferente ID.
-      // Vamos a confiar en que itemId es el principal, pero si falla, el usuario debería fusionar items.
+      // 2. Buscar ubicaciones para TODOS los IDs encontrados
+      const rawData = await ConteoItemModel.findLocationsByItem(targetItemIds);
       
-      // SIN EMBARGO, vamos a aplicar la lógica de suma robusta de nuevo porsiaca.
-      const rawData = await ConteoItemModel.findLocationsByItem(itemId);
-      
-      // 1. Agrupar por ubicación para consolidar duplicados (C1, C2, C3, C4)
+      // 3. Agrupar por ubicación para consolidar duplicados (C1, C2, C3, C4)
       const locationGroups = {};
 
       rawData.forEach(item => {

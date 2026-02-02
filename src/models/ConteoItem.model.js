@@ -46,10 +46,12 @@ export class ConteoItemModel {
   }
 
   /**
-   * Buscar en qué conteos/ubicaciones está un item
+   * Buscar en qué conteos/ubicaciones están uno o varios items (Array of IDs support)
    */
   static async findLocationsByItem(itemId) {
     try {
+      const ids = Array.isArray(itemId) ? itemId : [itemId];
+      
       const { data, error } = await supabase
         .from(TABLES.CONTEO_ITEMS)
         .select(`
@@ -78,7 +80,7 @@ export class ConteoItemModel {
             )
           )
         `)
-        .eq('item_id', itemId)
+        .in('item_id', ids) // Changed from eq to in
         .order('created_at', { ascending: false });
 
       if (error) throw error;
