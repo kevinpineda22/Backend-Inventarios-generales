@@ -724,67 +724,131 @@ class ConteoService {
         };
       }
 
-      // 2. Seleccionar el conteo válido por ubicación (El de mayor jerarquía)
-      // Jerarquía: 4 (Ajuste) > 3 (Reconteo) > 2 (Segundo) > 1 (Primero)
-      const ubicacionesMap = new Map();
+      // 2. Agrupar conteos por ubicación y tipo
+      const locMap = new Map(); // ubicacionId -> { c1, c2, c3, c4, items: Set<string>, bodegaNombre }
 
       conteos.forEach(conteo => {
         const ubicacionId = conteo.ubicacion_id;
-        
-        if (!ubicacionesMap.has(ubicacionId)) {
-          ubicacionesMap.set(ubicacionId, conteo);
-        } else {
-          const current = ubicacionesMap.get(ubicacionId);
-          // Si el nuevo tiene mayor tipo_conteo, reemplaza al anterior
-          if (conteo.tipo_conteo > current.tipo_conteo) {
-            ubicacionesMap.set(ubicacionId, conteo);
-          }
-          // Si tienen el mismo tipo (raro en finalizados validos, pero posible por error), 
-          // tomamos el más reciente
-          else if (conteo.tipo_conteo === current.tipo_conteo) {
-            if (new Date(conteo.created_at) > new Date(current.created_at)) {
-              ubicacionesMap.set(ubicacionId, conteo);
-            }
-          }
-        }
-      });
-
-      // 3. Agregar items de los conteos ganadores
-      const itemsMap = new Map();
-      const conteosFinales = Array.from(ubicacionesMap.values());
-      let bodegaNombre = '';
-
-      conteosFinales.forEach(conteo => {
-        if (!bodegaNombre && conteo.ubicacion?.pasillo?.zona?.bodega?.nombre) {
-          bodegaNombre = conteo.ubicacion.pasillo.zona.bodega.nombre;
-        }
-
-        if (conteo.items && Array.isArray(conteo.items)) {
-          conteo.items.forEach(conteoItem => {
-            const itemKey = conteoItem.item?.codigo || conteoItem.item_id; // Agrupar por código o ID
-            
-            if (!itemsMap.has(itemKey)) {
-              itemsMap.set(itemKey, {
-                item: conteoItem.item?.codigo || 'S/C',
-                descripcion: conteoItem.item?.descripcion || 'Sin Descripción',
-                bodega: bodegaNombre,
-                conteo_cantidad: 0
-              });
-            }
-            
-            const entry = itemsMap.get(itemKey);
-            entry.conteo_cantidad += parseFloat(conteoItem.cantidad || 0);
+        if (!locMap.has(ubicacionId)) {
+          locMap.set(ubicacionId, {
+            c1: null,
+            c2: null,
+            c3: null,
+            c4: null,
+            allItems: new Set(),
+            bodegaNombre: conteo.ubicacion?.pasillo?.zona?.bodega?.nombre || ''
           });
         }
+
+        const locData = locMap.get(ubicacionId);
+        
+        // Convertir items de array a Map para acceso rápido
+        const itemsMap = new Map();
+        if (conteo.items && Array.isArray(conteo.items)) {
+          conteo.items.forEach(i => {
+             const key = i.item?.codigo || i.item_id;
+             const desc = i.item?.descripcion || 'Sin Descripción';
+             // Guardar metadata del item
+             itemsMap.set(key, { 
+               cantidad: parseFloat(i.cantidad || 0), 
+               descripcion: desc,
+               itemCode: i.item?.codigo || 'S/C'
+             });
+             locData.allItems.add(key);
+          });
+        }
+
+        // Asignar según tipo (si hay duplicados del mismo tipo, tomamos el más reciente)
+        const type = conteo.tipo_conteo;
+        let assign = false;
+        
+        if (type === 1) {
+             if (!locData.c1 || new Date(conteo.created_at) > new Date(locData.c1.date)) assign = true;
+             if (assign) locData.c1 = { items: itemsMap, date: conteo.created_at };
+        } else if (type === 2) {
+             if (!locData.c2 || new Date(conteo.created_at) > new Date(locData.c2.date)) assign = true;
+             if (assign) locData.c2 = { items: itemsMap, date: conteo.created_at }; 
+        } else if (type === 3) {
+             if (!locData.c3 || new Date(conteo.created_at) > new Date(locData.c3.date)) assign = true;
+             if (assign) locData.c3 = { items: itemsMap, date: conteo.created_at };
+        } else if (type === 4) {
+             if (!locData.c4 || new Date(conteo.created_at) > new Date(locData.c4.date)) assign = true;
+             if (assign) locData.c4 = { items: itemsMap, date: conteo.created_at };
+        }
       });
 
+      // 3. Resolver item por item usando lógica de consenso (Igual que Comparativa)
+      const exportItemsMap = new Map();
+      let bodegaNombreGlobal = '';
+
+      for (const [locId, locData] of locMap) {
+         if (!bodegaNombreGlobal && locData.bodegaNombre) bodegaNombreGlobal = locData.bodegaNombre;
+
+         for (const itemKey of locData.allItems) {
+             // Obtener cantidad en cada conteo (null si el conteo no existe, 0 si existe pero no tiene el item)
+             const getQty = (cContainer, key) => {
+                 if (!cContainer) return null; // El conteo no existe
+                 const itemData = cContainer.items.get(key);
+                 return itemData ? itemData.cantidad : 0; // Si existe conteo, item faltante es 0
+             };
+
+             const q1 = getQty(locData.c1, itemKey);
+             const q2 = getQty(locData.c2, itemKey);
+             const q3 = getQty(locData.c3, itemKey);
+             const q4 = getQty(locData.c4, itemKey);
+
+             // Obtener metadata (descripción) de cualquier conteo que lo tenga
+             let meta = locData.c1?.items.get(itemKey) || 
+                        locData.c2?.items.get(itemKey) || 
+                        locData.c3?.items.get(itemKey) || 
+                        locData.c4?.items.get(itemKey);
+
+             let finalQty = 0;
+
+             // Lógica de Prioridad:
+             // 1. Ajuste Final (C4) es la verdad absoluta si existe.
+             if (q4 !== null) {
+                 finalQty = q4;
+             }
+             // 2. Si hay Consenso (C1 == C2), ignoramos C3 y confiamos en el consenso.
+             else if (q1 !== null && q2 !== null && q1 === q2) {
+                 finalQty = q1;
+             }
+             // 3. Si hay Reconteo (C3), se usa para desempatar o corregir.
+             else if (q3 !== null) {
+                 finalQty = q3;
+             }
+             // 4. Fallback a C2 (Último conteo regular).
+             else if (q2 !== null) {
+                 finalQty = q2;
+             }
+             // 5. Fallback a C1.
+             else if (q1 !== null) {
+                 finalQty = q1;
+             }
+             
+             // Agregar al acumulado global
+             if (finalQty > 0) { // Opcional: include 0s? Usually exports omit 0s.
+                 if (!exportItemsMap.has(itemKey)) {
+                     exportItemsMap.set(itemKey, {
+                         item: meta?.itemCode || 'S/C',
+                         descripcion: meta?.descripcion || 'Sin Descripción',
+                         bodega: bodegaNombreGlobal,
+                         conteo_cantidad: 0
+                     });
+                 }
+                 exportItemsMap.get(itemKey).conteo_cantidad += finalQty;
+             }
+         }
+      }
+
       // 4. Convertir a array
-      const resultado = Array.from(itemsMap.values());
+      const resultado = Array.from(exportItemsMap.values());
 
       return {
         success: true,
         data: resultado,
-        bodega: bodegaNombre,
+        bodega: bodegaNombreGlobal,
         message: `Datos exportados correctamente. ${resultado.length} items únicos.`
       };
 
