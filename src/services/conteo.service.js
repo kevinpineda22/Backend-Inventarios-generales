@@ -54,8 +54,12 @@ class ConteoService {
           let q1 = null, q2 = null, q3 = null, q4 = null;
           
           items.forEach(i => {
-              const type = i.conteo.tipo_conteo;
-              const qty = parseFloat(i.cantidad);
+              // Robustez: Asegurar que conteo existe y tipos son correctos
+              if (!i.conteo) return;
+              const type = Number(i.conteo.tipo_conteo);
+              const qty = Number(i.cantidad);
+
+              if (isNaN(qty)) return;
               
               if (type === 1) q1 = (q1 === null ? 0 : q1) + qty;
               else if (type === 2) q2 = (q2 === null ? 0 : q2) + qty;
@@ -823,22 +827,38 @@ class ConteoService {
           });
         }
 
-        // Asignar según tipo (si hay duplicados del mismo tipo, tomamos el más reciente)
-        const type = conteo.tipo_conteo;
-        let assign = false;
+        // Asignar según tipo (si hay duplicados del mismo tipo, mezclamos los items para sumar conteos parciales)
+        const type = Number(conteo.tipo_conteo);
+        let target = null;
         
-        if (type === 1) {
-             if (!locData.c1 || new Date(conteo.created_at) > new Date(locData.c1.date)) assign = true;
-             if (assign) locData.c1 = { items: itemsMap, date: conteo.created_at };
-        } else if (type === 2) {
-             if (!locData.c2 || new Date(conteo.created_at) > new Date(locData.c2.date)) assign = true;
-             if (assign) locData.c2 = { items: itemsMap, date: conteo.created_at }; 
-        } else if (type === 3) {
-             if (!locData.c3 || new Date(conteo.created_at) > new Date(locData.c3.date)) assign = true;
-             if (assign) locData.c3 = { items: itemsMap, date: conteo.created_at };
-        } else if (type === 4) {
-             if (!locData.c4 || new Date(conteo.created_at) > new Date(locData.c4.date)) assign = true;
-             if (assign) locData.c4 = { items: itemsMap, date: conteo.created_at };
+        if (type === 1) target = 'c1';
+        else if (type === 2) target = 'c2';
+        else if (type === 3) target = 'c3';
+        else if (type === 4) target = 'c4';
+
+        if (target) {
+             if (!locData[target]) {
+                 // Si no existe el slot, lo creamos
+                 locData[target] = { items: itemsMap, date: conteo.created_at };
+             } else {
+                 // Si ya existe (ej: varias sesiones de conteo 1), MEZCLAMOS (Merge)
+                 const existingMap = locData[target].items;
+                 
+                 itemsMap.forEach((val, k) => {
+                     if (existingMap.has(k)) {
+                         // Si el item ya estaba, sumamos la cantidad
+                         existingMap.get(k).cantidad += val.cantidad;
+                     } else {
+                         // Si es nuevo, lo agregamos
+                         existingMap.set(k, val);
+                     }
+                 });
+
+                 // Actualizamos fecha si este conteo es más reciente
+                 if (new Date(conteo.created_at) > new Date(locData[target].date)) {
+                     locData[target].date = conteo.created_at;
+                 }
+             }
         }
       });
 
