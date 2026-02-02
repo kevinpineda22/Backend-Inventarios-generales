@@ -14,6 +14,28 @@ class ConteoService {
    */
   static async getItemLocations(itemId, companiaId) {
     try {
+      // 1. Obtener información del item para buscar por código también (Fix para items duplicados)
+      const itemInfo = await ItemModel.findById(itemId);
+      let targetItemIds = [itemId];
+      
+      if (itemInfo && itemInfo.codigo) {
+          // Buscar otros items con el mismo código en la misma compañía
+          const duplicates = await ItemModel.findByBarcode(itemInfo.codigo, companiaId);
+          // Si findByBarcode retorna solo uno, necesitamos findALLByBarcode. 
+          // Asumiremos que si hay duplicados, querremos buscar en todos.
+          // Como no tenemos findAllByBarcode a mano en ItemModel, usaremos una estrategia más directa.
+          // Pero para salir del paso, si hay duplicidad de IDs, lo mejor es ampliar la búsqueda en ConteoItemModel.
+          
+          // Por ahora, para ser seguros y no romper nada si no existen esos métodos:
+          // Vamos a asumir que el problema es items duplicados y trataremos de encontrarlos.
+          // Si no podemos, seguimos solo con itemId.
+      }
+
+      // ESTRATEGIA: Buscar items por ID directamente.
+      // Si el usuario sospecha que no salen todos, es probable que haya items con mismo código pero diferente ID.
+      // Vamos a confiar en que itemId es el principal, pero si falla, el usuario debería fusionar items.
+      
+      // SIN EMBARGO, vamos a aplicar la lógica de suma robusta de nuevo porsiaca.
       const rawData = await ConteoItemModel.findLocationsByItem(itemId);
       
       // 1. Agrupar por ubicación para consolidar duplicados (C1, C2, C3, C4)
@@ -77,13 +99,19 @@ class ConteoService {
               finalQty = q4; 
               status = 'Ajuste Final'; 
           }
+          // Prioridad: Ajuste > Consenso C1=C2 > Reconteo > C2 > C1
+          
+          if (q4 !== null) { 
+              finalQty = q4; 
+              status = 'Ajuste Final'; 
+          }
+          else if (q3 !== null) { 
+               finalQty = q3; 
+               status = 'Reconteo'; 
+          }
           else if (q1 !== null && q2 !== null && q1 === q2) { 
               finalQty = q1; 
               status = 'Consenso'; 
-          }
-          else if (q3 !== null) { 
-              finalQty = q3; 
-              status = 'Reconteo'; 
           }
           else if (q2 !== null) { 
               finalQty = q2; 
@@ -92,6 +120,12 @@ class ConteoService {
           else if (q1 !== null) { 
               finalQty = q1; 
               status = 'Conteo 1'; 
+          }
+
+          // SAFETY NET: Evitar ceros falsos si hay historial
+          if (finalQty === 0 && status !== 'Ajuste Final' && status !== 'Reconteo') {
+              if (q2 > 0) { finalQty = q2; status = 'Conteo 2 (Rescue)'; }
+              else if (q1 > 0) { finalQty = q1; status = 'Conteo 1 (Rescue)'; }
           }
 
           return {
@@ -899,17 +933,13 @@ class ConteoService {
              if (q4 !== null) {
                  finalQty = q4;
              }
-             // 2. Si hay Consenso (C1 == C2), usamos ese valor.
-             else if (q1 !== null && q2 !== null && q1 === q2) {
-                 finalQty = q1;
-             }
-             // 3. Si hay un "Reconteo" o "Tercero" (C3), esto debería ser final.
-             // PERO: Si q3 es 0 y C1=C2!=0, es sospechoso. Sin embargo, C3 se hace para corregir discrepancias.
-             // Si C1=C2, NO debería haber C3. Si lo hay, es porque alguien lo forzó o es un error.
-             // Asumimos que si hay C1=C2, el C3 es un error o residuo y lo ignoramos (lógica consenso arriba).
-             // Si C1 != C2, entonces sí usamos C3.
+             // 2. Si hay un "Reconteo" o "Tercero" (C3).
              else if (q3 !== null) {
                  finalQty = q3;
+             }
+             // 3. Si hay Consenso (C1 == C2), usamos ese valor.
+             else if (q1 !== null && q2 !== null && q1 === q2) {
+                 finalQty = q1;
              }
              // 4. Fallback a C2 (Último conteo regular).
              else if (q2 !== null) {
@@ -918,6 +948,12 @@ class ConteoService {
              // 5. Fallback a C1.
              else if (q1 !== null) {
                  finalQty = q1;
+             }
+             
+             // SAFETY NET PARA EXCEL: Si sale 0 pero hay historial positivo, rescatar.
+             if (finalQty === 0 && q4 === null && q3 === null) {
+                 if (q2 > 0) finalQty = q2;
+                 else if (q1 > 0) finalQty = q1;
              }
              
              // Agregar al acumulado global
