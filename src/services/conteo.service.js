@@ -868,40 +868,46 @@ class ConteoService {
 
              let finalQty = 0;
 
-             // Lógica de Prioridad:
+             // Lógica de Prioridad Ajustada para prevenir falsos ceros
              // 1. Ajuste Final (C4) es la verdad absoluta si existe.
              if (q4 !== null) {
                  finalQty = q4;
              }
-             // 2. Si hay Consenso (C1 == C2), se usa ese valor.
+             // 2. Si hay Consenso (C1 == C2), usamos ese valor.
              else if (q1 !== null && q2 !== null && q1 === q2) {
                  finalQty = q1;
              }
-             // 3. Si hay Reconteo (C3) y TIENE VALOR para este item, se usa.
+             // 3. Si hay un "Reconteo" o "Tercero" (C3), esto debería ser final.
+             // PERO: Si q3 es 0 y C1=C2!=0, es sospechoso. Sin embargo, C3 se hace para corregir discrepancias.
+             // Si C1=C2, NO debería haber C3. Si lo hay, es porque alguien lo forzó o es un error.
+             // Asumimos que si hay C1=C2, el C3 es un error o residuo y lo ignoramos (lógica consenso arriba).
+             // Si C1 != C2, entonces sí usamos C3.
              else if (q3 !== null) {
                  finalQty = q3;
              }
-             // 4. Si no hay Reconteo (o no incluye este item), y hubo discrepancia o falta C2:
-             // Fallback a C2 si existe
+             // 4. Fallback a C2 (Último conteo regular).
              else if (q2 !== null) {
                  finalQty = q2;
              }
-             // 5. Fallback a C1
+             // 5. Fallback a C1.
              else if (q1 !== null) {
                  finalQty = q1;
              }
              
              // Agregar al acumulado global
              if (finalQty > 0) {
-                 if (!exportItemsMap.has(itemKey)) {
-                     exportItemsMap.set(itemKey, {
-                         item: meta?.itemCode || 'S/C',
+                 // Normalizar clave de exportación (Siempre código de barras si es posible)
+                 const exportKey = meta?.itemCode !== 'S/C' ? meta.itemCode : itemKey;
+                 
+                 if (!exportItemsMap.has(exportKey)) {
+                     exportItemsMap.set(exportKey, {
+                         item: exportKey,
                          descripcion: meta?.descripcion || 'Sin Descripción',
                          bodega: bodegaNombreGlobal,
                          conteo_cantidad: 0
                      });
                  }
-                 exportItemsMap.get(itemKey).conteo_cantidad += finalQty;
+                 exportItemsMap.get(exportKey).conteo_cantidad += finalQty;
              }
          }
       }
