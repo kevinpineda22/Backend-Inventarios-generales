@@ -240,6 +240,14 @@ class ConteoService {
             message: 'Item ID no encontrado'
           };
         }
+        
+        // CRITICAL: Validar que el item pertenece a la compañía correcta
+        if (String(itemMaster.compania_id) !== String(companiaId)) {
+          return {
+            success: false,
+            message: 'Item no pertenece a la compañía seleccionada'
+          };
+        }
       } else {
         // 1. Buscar el código de barras en la tabla de códigos (1:N)
         let codigoData = await CodigoModel.findByBarcodeWithItem(codigoBarra, companiaId);

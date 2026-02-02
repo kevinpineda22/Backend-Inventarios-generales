@@ -58,6 +58,7 @@ export class CodigoModel {
 
   /**
    * Buscar producto por código de barras (con JOIN a items)
+   * CRITICAL: Ahora filtra TAMBIÉN que el item relacionado pertenezca a la compañía correcta
    */
   static async findByBarcodeWithItem(codigoBarras, companiaId = null) {
     try {
@@ -69,7 +70,7 @@ export class CodigoModel {
           unidad_medida,
           factor,
           activo,
-          inv_general_items (
+          inv_general_items!inner (
             *
           )
         `)
@@ -78,6 +79,8 @@ export class CodigoModel {
 
       if (companiaId) {
         query = query.eq('compania_id', companiaId);
+        // CRITICAL FIX: Filtrar también el item por compañía
+        query = query.eq('inv_general_items.compania_id', companiaId);
       }
 
       const { data, error } = await query.single();
@@ -92,7 +95,7 @@ export class CodigoModel {
               unidad_medida,
               factor,
               activo,
-              inv_general_items (
+              inv_general_items!inner (
                 *
               )
             `)
@@ -101,6 +104,8 @@ export class CodigoModel {
 
           if (companiaId) {
             query2 = query2.eq('compania_id', companiaId);
+            // CRITICAL FIX: Filtrar también el item por compañía
+            query2 = query2.eq('inv_general_items.compania_id', companiaId);
           }
           
           const { data: data2, error: error2 } = await query2.single();
