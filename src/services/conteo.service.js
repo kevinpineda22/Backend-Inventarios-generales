@@ -50,48 +50,25 @@ class ConteoService {
 
       // 2. Resolver cantidad final para cada ubicación (Lógica de Consenso)
       const locations = Object.values(locationGroups).map(group => {
-          // 2.1 Agrupar por conteo_id primero para manejar registros divididos (Split Counts)
-          const conteosMap = {}; // conteoId -> { type, date, qty }
+          const items = group.items;
+          let q1 = null, q2 = null, q3 = null, q4 = null;
           
-          group.items.forEach(i => {
-             const cId = i.conteo.id;
-             if (!conteosMap[cId]) {
-                 conteosMap[cId] = {
-                     type: i.conteo.tipo_conteo,
-                     date: new Date(i.conteo.created_at), // Fecha del conteo
-                     qty: 0
-                 };
-             }
-             conteosMap[cId].qty += parseFloat(i.cantidad || 0);
+          items.forEach(i => {
+              const type = i.conteo.tipo_conteo;
+              const qty = parseFloat(i.cantidad);
+              
+              if (type === 1) q1 = qty;
+              else if (type === 2) q2 = qty;
+              else if (type === 3) q3 = qty;
+              else if (type === 4) q4 = qty;
           });
-          
-          // 2.2 Seleccionar el MEJOR (más reciente) conteo para cada tipo
-          let c1 = null, c2 = null, c3 = null, c4 = null;
-          
-          Object.values(conteosMap).forEach(c => {
-              if (c.type === 1) {
-                  if (!c1 || c.date > c1.date) c1 = c;
-              } else if (c.type === 2) {
-                  if (!c2 || c.date > c2.date) c2 = c;
-              } else if (c.type === 3) {
-                  if (!c3 || c.date > c3.date) c3 = c;
-              } else if (c.type === 4) {
-                  if (!c4 || c.date > c4.date) c4 = c;
-              }
-          });
-          
-          const q1 = c1 ? c1.qty : null;
-          const q2 = c2 ? c2.qty : null;
-          const q3 = c3 ? c3.qty : null;
-          const q4 = c4 ? c4.qty : null;
-          
-          // Usar la fecha del conteo ganador para mostrar en la tabla
-          const winnerDate = (c4 || c3 || c2 || c1)?.date.toISOString() || group.meta.created_at;
 
           let finalQty = 0;
           let status = 'N/A';
 
           // Prioridad: Ajuste > Consenso C1=C2 > Reconteo > C2 > C1
+          // Nota en Reconteo (q3): Aqui q3 existe porque vino de la DB. 
+          // Si tiene length, es que hay registro. Si es 0, es un 0 explícito.
           if (q4 !== null) { 
               finalQty = q4; 
               status = 'Ajuste Final'; 
@@ -119,7 +96,7 @@ class ConteoService {
             pasillo: group.meta.pasillo,
             ubicacion: group.meta.ubicacion,
             cantidad: finalQty,
-            fecha: winnerDate, // Usar fecha real del conteo seleccionado
+            fecha: group.meta.created_at,
             tipo_conteo: status, 
             estado_conteo: 'consolidado',
             bodega_id: group.meta.bodega_id,
@@ -830,16 +807,13 @@ class ConteoService {
           conteo.items.forEach(i => {
              const key = i.item?.codigo || i.item_id;
              const desc = i.item?.descripcion || 'Sin Descripción';
-             // 1. Asegurar que sumamos si hay registros divididos (mismo item en mismo conteo)
-             if (!itemsMap.has(key)) {
-                itemsMap.set(key, { 
-                   cantidad: 0, 
-                   descripcion: desc,
-                   itemCode: i.item?.codigo || 'S/C'
-                });
-                locData.allItems.add(key);
-             }
-             itemsMap.get(key).cantidad += parseFloat(i.cantidad || 0);
+             // Guardar metadata del item
+             itemsMap.set(key, { 
+               cantidad: parseFloat(i.cantidad || 0), 
+               descripcion: desc,
+               itemCode: i.item?.codigo || 'S/C'
+             });
+             locData.allItems.add(key);
           });
         }
 
