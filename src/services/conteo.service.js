@@ -16,36 +16,95 @@ class ConteoService {
     try {
       const rawData = await ConteoItemModel.findLocationsByItem(itemId);
       
-      // Filtrar por compañía y formatear
-      const locations = rawData
-        .filter(item => {
-          // Navegar con seguridad por si algo es null
-          const bodega = item.conteo?.ubicacion?.pasillo?.zona?.bodega;
-          return bodega && String(bodega.compania_id) === String(companiaId);
-        })
-        .map(item => {
+      // 1. Agrupar por ubicación para consolidar duplicados (C1, C2, C3, C4)
+      const locationGroups = {};
+
+      rawData.forEach(item => {
           const c = item.conteo;
-          const u = c.ubicacion;
-          const p = u.pasillo;
-          const z = p.zona;
-          const b = z.bodega;
+          if (!c || !c.ubicacion) return;
           
+          const ubicacionId = c.ubicacion.id;
+          const bodega = c.ubicacion.pasillo?.zona?.bodega;
+          
+          // Filtrar por compañía
+          if (!bodega || String(bodega.compania_id) !== String(companiaId)) return;
+
+          if (!locationGroups[ubicacionId]) {
+              locationGroups[ubicacionId] = {
+                  items: [],
+                  meta: {
+                      bodega: bodega.nombre,
+                      zona: c.ubicacion.pasillo.zona.nombre,
+                      pasillo: c.ubicacion.pasillo.numero,
+                      ubicacion: c.ubicacion.numero,
+                      bodega_id: bodega.id,
+                      zona_id: c.ubicacion.pasillo.zona.id,
+                      pasillo_id: c.ubicacion.pasillo.id,
+                      ubicacion_id: c.ubicacion.id,
+                      created_at: item.created_at
+                  }
+              };
+          }
+          locationGroups[ubicacionId].items.push(item);
+      });
+
+      // 2. Resolver cantidad final para cada ubicación (Lógica de Consenso)
+      const locations = Object.values(locationGroups).map(group => {
+          const items = group.items;
+          let q1 = null, q2 = null, q3 = null, q4 = null;
+          
+          items.forEach(i => {
+              const type = i.conteo.tipo_conteo;
+              const qty = parseFloat(i.cantidad);
+              
+              if (type === 1) q1 = qty;
+              else if (type === 2) q2 = qty;
+              else if (type === 3) q3 = qty;
+              else if (type === 4) q4 = qty;
+          });
+
+          let finalQty = 0;
+          let status = 'N/A';
+
+          // Prioridad: Ajuste > Consenso C1=C2 > Reconteo > C2 > C1
+          // Nota en Reconteo (q3): Aqui q3 existe porque vino de la DB. 
+          // Si tiene length, es que hay registro. Si es 0, es un 0 explícito.
+          if (q4 !== null) { 
+              finalQty = q4; 
+              status = 'Ajuste Final'; 
+          }
+          else if (q1 !== null && q2 !== null && q1 === q2) { 
+              finalQty = q1; 
+              status = 'Consenso'; 
+          }
+          else if (q3 !== null) { 
+              finalQty = q3; 
+              status = 'Reconteo'; 
+          }
+          else if (q2 !== null) { 
+              finalQty = q2; 
+              status = 'Conteo 2'; 
+          }
+          else if (q1 !== null) { 
+              finalQty = q1; 
+              status = 'Conteo 1'; 
+          }
+
           return {
-            bodega: b.nombre,
-            zona: z.nombre,
-            pasillo: p.numero,
-            ubicacion: u.numero,
-            cantidad: item.cantidad,
-            fecha: item.created_at,
-            tipo_conteo: c.tipo_conteo,
-            estado_conteo: c.estado,
-            // IDs para navegación
-            bodega_id: b.id,
-            zona_id: z.id,
-            pasillo_id: p.id,
-            ubicacion_id: u.id
+            bodega: group.meta.bodega,
+            zona: group.meta.zona,
+            pasillo: group.meta.pasillo,
+            ubicacion: group.meta.ubicacion,
+            cantidad: finalQty,
+            fecha: group.meta.created_at,
+            tipo_conteo: status, 
+            estado_conteo: 'consolidado',
+            bodega_id: group.meta.bodega_id,
+            zona_id: group.meta.zona_id,
+            pasillo_id: group.meta.pasillo_id,
+            ubicacion_id: group.meta.ubicacion_id
           };
-        });
+      });
 
       return {
         success: true,
@@ -777,7 +836,7 @@ class ConteoService {
         }
       });
 
-      // 3. Resolver item por item usando lógica de consenso (Igual que Comparativa)
+      // 3. Resolver item por item usando lógica de consenso
       const exportItemsMap = new Map();
       let bodegaNombreGlobal = '';
 
@@ -785,19 +844,23 @@ class ConteoService {
          if (!bodegaNombreGlobal && locData.bodegaNombre) bodegaNombreGlobal = locData.bodegaNombre;
 
          for (const itemKey of locData.allItems) {
-             // Obtener cantidad en cada conteo (null si el conteo no existe, 0 si existe pero no tiene el item)
-             const getQty = (cContainer, key) => {
+             // getQty mejorado: Maneja conteos parciales (C3)
+             // isPartial = true: Si el item no existe, retorna null (ignorar)
+             // isPartial = false: Si el item no existe, retorna 0 (no encontrado en conteo ciego)
+             const getQty = (cContainer, key, isPartial = false) => {
                  if (!cContainer) return null; // El conteo no existe
                  const itemData = cContainer.items.get(key);
-                 return itemData ? itemData.cantidad : 0; // Si existe conteo, item faltante es 0
+                 if (itemData) return itemData.cantidad;
+                 // Item no encontrado en este conteo:
+                 return isPartial ? null : 0; 
              };
 
-             const q1 = getQty(locData.c1, itemKey);
-             const q2 = getQty(locData.c2, itemKey);
-             const q3 = getQty(locData.c3, itemKey);
-             const q4 = getQty(locData.c4, itemKey);
+             const q1 = getQty(locData.c1, itemKey, false); // C1 Completo
+             const q2 = getQty(locData.c2, itemKey, false); // C2 Completo
+             const q3 = getQty(locData.c3, itemKey, true);  // C3 Parcial (Solo diferencias)
+             const q4 = getQty(locData.c4, itemKey, false); // C4 Ajuste Final (Asumimos completo para la ubicación)
 
-             // Obtener metadata (descripción) de cualquier conteo que lo tenga
+             // Obtener metadata
              let meta = locData.c1?.items.get(itemKey) || 
                         locData.c2?.items.get(itemKey) || 
                         locData.c3?.items.get(itemKey) || 
@@ -810,25 +873,26 @@ class ConteoService {
              if (q4 !== null) {
                  finalQty = q4;
              }
-             // 2. Si hay Consenso (C1 == C2), ignoramos C3 y confiamos en el consenso.
+             // 2. Si hay Consenso (C1 == C2), se usa ese valor.
              else if (q1 !== null && q2 !== null && q1 === q2) {
                  finalQty = q1;
              }
-             // 3. Si hay Reconteo (C3), se usa para desempatar o corregir.
+             // 3. Si hay Reconteo (C3) y TIENE VALOR para este item, se usa.
              else if (q3 !== null) {
                  finalQty = q3;
              }
-             // 4. Fallback a C2 (Último conteo regular).
+             // 4. Si no hay Reconteo (o no incluye este item), y hubo discrepancia o falta C2:
+             // Fallback a C2 si existe
              else if (q2 !== null) {
                  finalQty = q2;
              }
-             // 5. Fallback a C1.
+             // 5. Fallback a C1
              else if (q1 !== null) {
                  finalQty = q1;
              }
              
              // Agregar al acumulado global
-             if (finalQty > 0) { // Opcional: include 0s? Usually exports omit 0s.
+             if (finalQty > 0) {
                  if (!exportItemsMap.has(itemKey)) {
                      exportItemsMap.set(itemKey, {
                          item: meta?.itemCode || 'S/C',
