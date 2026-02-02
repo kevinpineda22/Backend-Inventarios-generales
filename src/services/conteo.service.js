@@ -93,11 +93,23 @@ class ConteoService {
           }
           // Prioridad: Ajuste > Consenso C1=C2 > Reconteo > C2 > C1
           
-          if (q4 !== null) { 
+          // FIX ROBUSTO V2: Priorizar valores positivos sobre ceros accidentales
+          // Si tenemos un ajuste final positivo, es ley.
+          if (q4 !== null && q4 > 0) { 
               finalQty = q4; 
               status = 'Ajuste Final'; 
           }
-          else if (q3 !== null) { 
+          // Si el ajuste es 0, verifiquemos si es lógico (si C1 o C2 eran enormes, el 0 es sospechoso)
+          else if (q4 === 0 && (q1 > 0 || q2 > 0)) {
+               // Si C4 es 0 pero C1/C2 tienen datos, ignoramos C4 temporalmente para mostrar el hallazgo
+               if (q2 > 0) { finalQty = q2; status = 'Conteo 2 (Recuperado)'; }
+               else { finalQty = q1; status = 'Conteo 1 (Recuperado)'; }
+          }
+          else if (q4 === 0) {
+              finalQty = 0;
+              status = 'Ajuste Final (0)';
+          }
+          else if (q3 !== null && q3 > 0) { 
                finalQty = q3; 
                status = 'Reconteo'; 
           }
@@ -114,10 +126,13 @@ class ConteoService {
               status = 'Conteo 1'; 
           }
 
-          // SAFETY NET: Evitar ceros falsos si hay historial
-          if (finalQty === 0 && status !== 'Ajuste Final' && status !== 'Reconteo') {
-              if (q2 > 0) { finalQty = q2; status = 'Conteo 2 (Rescue)'; }
-              else if (q1 > 0) { finalQty = q1; status = 'Conteo 1 (Rescue)'; }
+          // SAFETY NET FINAL: Si por alguna razón sigue siendo 0 y hay historia, sacar el máximo
+          if (finalQty === 0) {
+              const maxH = Math.max(q1 || 0, q2 || 0, q3 || 0);
+              if (maxH > 0) {
+                  finalQty = maxH;
+                  status = 'Histórico Recuperado';
+              }
           }
 
           return {
@@ -922,11 +937,22 @@ class ConteoService {
 
              // Lógica de Prioridad Ajustada para prevenir falsos ceros
              // 1. Ajuste Final (C4) es la verdad absoluta si existe.
-             if (q4 !== null) {
+             if (q4 !== null && q4 > 0) {
                  finalQty = q4;
              }
+             // FIX: Si q4 es 0 explícito, solo lo respetamos si NO hay historial masivo en C1/C2 que sugiera un error.
+             // (Ej: C1=8000, C2=8000, C4=0 -> Sospechoso, mostramos 8000)
+             else if (q4 === 0 && (q1 > 10 || q2 > 10)) {
+                 // Ignoramos el ajuste en 0 si parece accidente y tomamos el consenso
+                 if (q1 !== null && q2 !== null && q1 === q2) finalQty = q1;
+                 else if (q2 !== null) finalQty = q2;
+                 else finalQty = q1 || 0;
+             }
+             else if (q4 === 0) {
+                 finalQty = 0; // Es un 0 genuino y no hay evidencia fuerte en contra
+             }
              // 2. Si hay un "Reconteo" o "Tercero" (C3).
-             else if (q3 !== null) {
+             else if (q3 !== null && q3 > 0) {
                  finalQty = q3;
              }
              // 3. Si hay Consenso (C1 == C2), usamos ese valor.
@@ -942,10 +968,10 @@ class ConteoService {
                  finalQty = q1;
              }
              
-             // SAFETY NET PARA EXCEL: Si sale 0 pero hay historial positivo, rescatar.
-             if (finalQty === 0 && q4 === null && q3 === null) {
-                 if (q2 > 0) finalQty = q2;
-                 else if (q1 > 0) finalQty = q1;
+             // ULITMO RECURSO: Si todo dio 0 pero hubo conteo en algun momento, mostrar el maximo encontrado
+             if (finalQty === 0) {
+                 const maxVal = Math.max(q1 || 0, q2 || 0, q3 || 0, q4 || 0);
+                 if (maxVal > 0) finalQty = maxVal;
              }
              
              // Agregar al acumulado global

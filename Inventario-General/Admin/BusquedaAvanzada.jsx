@@ -58,28 +58,9 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany }) => {
         try {
             const locs = await inventarioGeneralService.getItemLocations(item.id, selectedCompany);
             
-            // Group locations by physical place (Bodega + Zona + Pasillo + Ubicacion)
-            const groupedLocs = {};
-            
-            // FIX: Usar el registro más reciente por ubicación en lugar de sumar todos.
-            // Esto corrige el error donde se sumaban conteos repetidos (ej: Conteo 1 + Conteo 2 + Conteo 3 = 33 en vez de 11)
-            locs.forEach(loc => {
-                const key = `${loc.bodega_id}-${loc.zona_id}-${loc.pasillo_id}-${loc.ubicacion_id}`;
-                const currentQty = Number(loc.cantidad);
-                const currentDate = new Date(loc.fecha);
-
-                if (!groupedLocs[key]) {
-                    groupedLocs[key] = { ...loc, cantidad: currentQty, _dateObj: currentDate };
-                } else {
-                    // Si ya existe un registro para esta misma ubicación exacta, comparamos fechas.
-                    // Nos quedamos con el dato más reciente (el último conteo válido).
-                    if (currentDate > groupedLocs[key]._dateObj) {
-                        groupedLocs[key] = { ...loc, cantidad: currentQty, _dateObj: currentDate };
-                    }
-                }
-            });
-
-            setLocations(Object.values(groupedLocs));
+            // Backend ahora se encarga de consolidar y sumar correctamente.
+            // Usamos la respuesta directa.
+            setLocations(locs || []);
         } catch (e) {
             console.error(e);
             setLocations([]);
