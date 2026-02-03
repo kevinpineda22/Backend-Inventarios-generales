@@ -26,16 +26,25 @@ class InventarioConsolidadoService {
           break;
 
         case 'pasillo':
+          // Primero consolidar todas las ubicaciones del pasillo
+          await this.consolidarUbicacionesDePasillo(referenciaId, usuarioId);
+          // Luego sumar las consolidaciones
           itemsConsolidados = await this.sumarInventarioHijos('ubicacion', 'pasillo_id', referenciaId);
           jerarquia = await this.getJerarquiaPasillo(referenciaId);
           break;
 
         case 'zona':
+          // Primero consolidar todos los pasillos de la zona
+          await this.consolidarPasillosDeZona(referenciaId, usuarioId);
+          // Luego sumar las consolidaciones
           itemsConsolidados = await this.sumarInventarioHijos('pasillo', 'zona_id', referenciaId);
           jerarquia = await this.getJerarquiaZona(referenciaId);
           break;
 
         case 'bodega':
+          // Primero consolidar todas las zonas de la bodega
+          await this.consolidarZonasDeBodega(referenciaId, usuarioId);
+          // Luego sumar las consolidaciones
           itemsConsolidados = await this.sumarInventarioHijos('zona', 'bodega_id', referenciaId);
           jerarquia = await this.getJerarquiaBodega(referenciaId);
           break;
@@ -149,6 +158,95 @@ class InventarioConsolidadoService {
       return await InventarioConsolidadoModel.sumByParent(nivelHijo, campoFiltro, valorFiltro);
     } catch (error) {
       throw new Error(`Error al sumar inventario de hijos: ${error.message}`);
+    }
+  }
+
+  /**
+   * Consolidar todas las ubicaciones de un pasillo
+   */
+  static async consolidarUbicacionesDePasillo(pasilloId, usuarioId) {
+    const ubicaciones = await UbicacionModel.findByPasillo(pasilloId);
+    
+    for (const ubicacion of ubicaciones) {
+      try {
+        const itemsConsolidados = await this.calcularInventarioUbicacion(ubicacion.id);
+        const jerarquia = await this.getJerarquiaUbicacion(ubicacion.id);
+        
+        if (itemsConsolidados.length > 0) {
+          await InventarioConsolidadoModel.upsertBatch(
+            itemsConsolidados,
+            'ubicacion',
+            ubicacion.id,
+            usuarioId,
+            jerarquia
+          );
+        }
+      } catch (error) {
+        console.error(`Error consolidando ubicación ${ubicacion.id}:`, error);
+        // Continuar con la siguiente ubicación
+      }
+    }
+  }
+
+  /**
+   * Consolidar todos los pasillos de una zona
+   */
+  static async consolidarPasillosDeZona(zonaId, usuarioId) {
+    const pasillos = await PasilloModel.findByZona(zonaId);
+    
+    for (const pasillo of pasillos) {
+      try {
+        // Consolidar ubicaciones del pasillo primero
+        await this.consolidarUbicacionesDePasillo(pasillo.id, usuarioId);
+        
+        // Luego consolidar el pasillo
+        const itemsConsolidados = await this.sumarInventarioHijos('ubicacion', 'pasillo_id', pasillo.id);
+        const jerarquia = await this.getJerarquiaPasillo(pasillo.id);
+        
+        if (itemsConsolidados.length > 0) {
+          await InventarioConsolidadoModel.upsertBatch(
+            itemsConsolidados,
+            'pasillo',
+            pasillo.id,
+            usuarioId,
+            jerarquia
+          );
+        }
+      } catch (error) {
+        console.error(`Error consolidando pasillo ${pasillo.id}:`, error);
+        // Continuar con el siguiente pasillo
+      }
+    }
+  }
+
+  /**
+   * Consolidar todas las zonas de una bodega
+   */
+  static async consolidarZonasDeBodega(bodegaId, usuarioId) {
+    const zonas = await ZonaModel.findByBodega(bodegaId);
+    
+    for (const zona of zonas) {
+      try {
+        // Consolidar pasillos de la zona primero
+        await this.consolidarPasillosDeZona(zona.id, usuarioId);
+        
+        // Luego consolidar la zona
+        const itemsConsolidados = await this.sumarInventarioHijos('pasillo', 'zona_id', zona.id);
+        const jerarquia = await this.getJerarquiaZona(zona.id);
+        
+        if (itemsConsolidados.length > 0) {
+          await InventarioConsolidadoModel.upsertBatch(
+            itemsConsolidados,
+            'zona',
+            zona.id,
+            usuarioId,
+            jerarquia
+          );
+        }
+      } catch (error) {
+        console.error(`Error consolidando zona ${zona.id}:`, error);
+        // Continuar con la siguiente zona
+      }
     }
   }
 
