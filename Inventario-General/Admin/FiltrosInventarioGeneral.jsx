@@ -14,7 +14,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         ...prev,
         zona: location.zona,
         pasillo: location.pasillo,
-        // Opcional: limpiar filtro de usuario para ver todo el pasillo
+        ubicacion: location.ubicacion, // <-- Nuevo: Filtrar también por ubicación
         usuario: '' 
     }));
   };
@@ -27,6 +27,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
   const options = useMemo(() => {
     let zonas = [];
     let pasillos = [];
+    let ubicaciones = []; // <-- Nuevo array para ubicaciones
     let usuarios = [];
 
     // 1. Obtener conteos de la bodega actual
@@ -41,7 +42,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
     });
     usuarios = [...uniqueUsers].sort();
 
-    // 3. Filtrar conteos para calcular zonas/pasillos
+    // 3. Filtrar conteos para calcular zonas/pasillos/ubicaciones
     let sourceData = conteosBodega;
     if (filtros.usuario) {
         sourceData = conteosBodega.filter(c => 
@@ -67,6 +68,23 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
             const uniquePasillos = new Set(sourceData.map(c => c.pasillo));
             pasillos = [...uniquePasillos].sort();
         }
+
+        // Lógica para ubicaciones usando conteos
+        if (filtros.pasillo) {
+            const uniqueUbicaciones = new Set(
+                sourceData
+                .filter(c => (!filtros.zona || c.zona === filtros.zona) && c.pasillo === filtros.pasillo)
+                .map(c => c.ubicacion)
+            );
+            ubicaciones = [...uniqueUbicaciones].sort((a, b) => {
+                // Intento de sort numérico si son números
+                const numA = parseInt(a);
+                const numB = parseInt(b);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return String(a).localeCompare(String(b));
+            });
+        }
+
     } else {
         // Usar estructura jerárquica si está disponible y NO hay usuario seleccionado
         zonas = structure.map(z => z.nombre).sort();
@@ -74,19 +92,36 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         if (filtros.zona) {
             const zonaObj = structure.find(z => z.nombre === filtros.zona);
             if (zonaObj) {
-            pasillos = zonaObj.pasillos.map(p => p.numero).sort();
+                pasillos = zonaObj.pasillos.map(p => p.numero).sort();
             }
         } else {
             const allPasillos = new Set();
             structure.forEach(z => {
-            z.pasillos.forEach(p => allPasillos.add(p.numero));
+                z.pasillos.forEach(p => allPasillos.add(p.numero));
             });
             pasillos = [...allPasillos].sort();
         }
+        
+        // Lógica para ubicaciones basada (limitada) en lo que tenemos o conteos como fallback
+        // Como 'structure' suele traer solo zonas/pasillos para el estado, para ubicaciones
+        // es mejor confiar en los 'conteos' reales que tenemos cargados.
+        if (filtros.pasillo) {
+            const uniqueUbicaciones = new Set(
+                sourceData
+                .filter(c => (!filtros.zona || c.zona === filtros.zona) && c.pasillo === filtros.pasillo)
+                .map(c => c.ubicacion)
+            );
+            ubicaciones = [...uniqueUbicaciones].sort((a, b) => {
+                const numA = parseInt(a);
+                const numB = parseInt(b);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return String(a).localeCompare(String(b));
+            });
+        }
     }
 
-    return { zonas, pasillos, usuarios };
-  }, [structure, conteos, selectedBodega, filtros.zona, filtros.usuario]);
+    return { zonas, pasillos, ubicaciones, usuarios };
+  }, [structure, conteos, selectedBodega, filtros.zona, filtros.pasillo, filtros.usuario]);
 
   return (
     <div className="fig-filters-container">
@@ -144,6 +179,22 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
           <option value="">Todos los Pasillos</option>
           {options.pasillos.map(p => (
             <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="fig-input-wrapper">
+        <span className="fig-icon">📌</span>
+        <select 
+          value={filtros.ubicacion}
+          onChange={e => handleChange('ubicacion', e.target.value)}
+          className="fig-input fig-select"
+          disabled={!filtros.pasillo}
+          title={!filtros.pasillo ? "Seleccione un pasillo primero" : ""}
+        >
+          <option value="">Todas</option>
+          {options.ubicaciones.map(u => (
+            <option key={u} value={u}>{u}</option>
           ))}
         </select>
       </div>

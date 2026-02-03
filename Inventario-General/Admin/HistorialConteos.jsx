@@ -23,6 +23,7 @@ const HistorialConteos = () => {
   const [filtros, setFiltros] = useState({
     zona: '',
     pasillo: '',
+    ubicacion: '',
     usuario: '',
     producto: '',
   });
@@ -196,8 +197,19 @@ const HistorialConteos = () => {
     if (!result.isConfirmed) return;
 
     try {
+      // Mostrar indicador de carga
+      Swal.fire({
+        title: 'Procesando...',
+        text: `Cerrando ${tipo}, por favor espere...`,
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
       await config.action(id, selectedCompany);
-      cargarEstadoJerarquia();
+      await cargarEstadoJerarquia(); // Esperar actualización para reflejar cambios UI
+      
       Swal.fire({
         title: '¡Cerrado!',
         text: config.success,
@@ -284,12 +296,13 @@ const HistorialConteos = () => {
       });
     }
 
-    // 1. Filtrar conteos por ubicación (Bodega, Zona, Pasillo)
+    // 1. Filtrar conteos por ubicación (Bodega, Zona, Pasillo, Ubicación)
     // NO filtramos por usuario aquí para no perder el contexto de la ubicación completa
     const filtered = conteos.filter(c => 
       c.bodega === selectedBodega &&
       (!filtros.zona || c.zona.toLowerCase().includes(filtros.zona.toLowerCase())) &&
-      (!filtros.pasillo || c.pasillo.toLowerCase().includes(filtros.pasillo.toLowerCase()))
+      (!filtros.pasillo || String(c.pasillo).toLowerCase().includes(filtros.pasillo.toLowerCase())) &&
+      (!filtros.ubicacion || String(c.ubicacion).toLowerCase() === String(filtros.ubicacion).toLowerCase())
     );
 
     filtered.forEach(c => {
@@ -870,6 +883,15 @@ const HistorialConteos = () => {
     setConteos([]);
     setHierarchyStatus(null);
     setLoading(true);
+    
+    // Resetear filtros para evitar búsquedas inconsistentes en la nueva bodega
+    setFiltros({
+      zona: '',
+      pasillo: '',
+      ubicacion: '',
+      usuario: '',
+      producto: '',
+    });
     
     setSelectedBodega(bodega);
   };

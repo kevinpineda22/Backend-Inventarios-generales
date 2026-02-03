@@ -150,6 +150,12 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
                                     <span className="adv-ph-label">Descripción</span>
                                     <span className="adv-ph-value">{selectedItem.descripcion}</span>
                                 </div>
+                                <div className="adv-ph-item">
+                                    <span className="adv-ph-label" style={{color: '#27ae60'}}>Total Encontrado</span>
+                                    <span className="adv-ph-value" style={{color: '#27ae60', fontSize: '1.2rem', fontWeight: 'bold'}}>
+                                        {locations.reduce((sum, loc) => sum + (parseFloat(loc.cantidad) || 0), 0)}
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="adv-locations-title">

@@ -356,6 +356,8 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
   };
 
   const handleSaveQuantity = async () => {
+    if (loading) return; // Prevenir doble ejecución
+
     if (!qtyInput || isNaN(qtyInput)) {
       toast.warning('Ingrese una cantidad válida');
       return;
@@ -761,7 +763,7 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
 
         {/* MODAL DE CANTIDAD */}
         {modalOpen && selectedItem && (
-          <div className="modal-overlay" onClick={() => setModalOpen(false)}>
+          <div className="modal-overlay" onClick={() => !loading && setModalOpen(false)}>
             <div className="modal-content" onClick={e => e.stopPropagation()}>
               <div className="modal-title">
                 <FaBoxOpen style={{marginRight:'8px'}} />
@@ -779,17 +781,43 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
                   className="qty-input"
                   value={qtyInput}
                   onChange={(e) => setQtyInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveQuantity()}
+                  onKeyDown={(e) => (e.key === 'Enter' && !loading) && handleSaveQuantity()}
                   placeholder="0"
+                  disabled={loading}
                 />
               </div>
 
               <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => setModalOpen(false)}>
+                <button 
+                  className="btn-cancel" 
+                  onClick={() => setModalOpen(false)}
+                  disabled={loading}
+                  style={{ opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+                >
                   Cancelar
                 </button>
-                <button className="btn-save" onClick={handleSaveQuantity}>
-                  Guardar
+                <button 
+                  className="btn-save" 
+                  onClick={handleSaveQuantity}
+                  disabled={loading}
+                  style={{ 
+                    opacity: loading ? 0.7 : 1, 
+                    cursor: loading ? 'wait' : 'pointer',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {loading && <div style={{
+                    width: '16px', 
+                    height: '16px', 
+                    border: '2px solid white', 
+                    borderTop: '2px solid transparent', 
+                    borderRadius: '50%', 
+                    animation: 'spin 1s linear infinite'
+                  }}/>}
+                  {loading ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </div>

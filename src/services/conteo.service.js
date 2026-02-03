@@ -692,7 +692,8 @@ class ConteoService {
             ubicacion: c.ubicacion, 
             c1: null,
             c2: null,
-            c3: null
+            c3: null,
+            c4: null // Check for Final Adjustment
           });
         }
         
@@ -700,12 +701,13 @@ class ConteoService {
         if (c.tipo_conteo === 1) entry.c1 = c;
         if (c.tipo_conteo === 2) entry.c2 = c;
         if (c.tipo_conteo === 3) entry.c3 = c;
+        if (c.tipo_conteo === 4) entry.c4 = c;
       });
 
-      // 3. Filtrar candidatos: Tienen C1 y C2, pero NO C3
+      // 3. Filtrar candidatos: Tienen C1 y C2, pero NO C3 y NO C4
       const ubicacionesCandidatas = [];
       for (const [id, data] of ubicacionesMap) {
-        if (data.c1 && data.c2 && !data.c3) {
+        if (data.c1 && data.c2 && !data.c3 && !data.c4) {
           ubicacionesCandidatas.push(id);
         }
       }
