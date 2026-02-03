@@ -27,7 +27,7 @@ export class InventarioController {
       // Consolidar inventario del pasillo
       try {
         console.log(`[CONSOLIDACIÓN] Consolidando pasillo ${pasilloId}`);
-        await InventarioConsolidadoService.consolidarInventario('pasillo', pasilloId, null);
+        await InventarioConsolidadoService.consolidarInventario('pasillo', pasilloId);
         console.log(`[CONSOLIDACIÓN] Pasillo ${pasilloId} consolidado exitosamente`);
       } catch (consolidacionError) {
         console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar pasillo ${pasilloId}:`, consolidacionError);
@@ -79,7 +79,7 @@ export class InventarioController {
       // Consolidar inventario de la zona
       try {
         console.log(`[CONSOLIDACIÓN] Consolidando zona ${zonaId}`);
-        await InventarioConsolidadoService.consolidarInventario('zona', zonaId, null);
+        await InventarioConsolidadoService.consolidarInventario('zona', zonaId);
         console.log(`[CONSOLIDACIÓN] Zona ${zonaId} consolidada exitosamente`);
       } catch (consolidacionError) {
         console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar zona ${zonaId}:`, consolidacionError);
@@ -111,7 +111,7 @@ export class InventarioController {
       // Consolidar inventario de la bodega
       try {
         console.log(`[CONSOLIDACIÓN] Consolidando bodega ${bodegaId}`);
-        await InventarioConsolidadoService.consolidarInventario('bodega', bodegaId, null);
+        await InventarioConsolidadoService.consolidarInventario('bodega', bodegaId);
         console.log(`[CONSOLIDACIÓN] Bodega ${bodegaId} consolidada exitosamente`);
       } catch (consolidacionError) {
         console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar bodega ${bodegaId}:`, consolidacionError);

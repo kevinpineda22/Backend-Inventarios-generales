@@ -29,7 +29,7 @@ export class InventarioConsolidadoModel {
   /**
    * Guardar o actualizar múltiples registros
    */
-  static async upsertBatch(items, nivel, referenciaId, usuarioId, jerarquia) {
+  static async upsertBatch(items, nivel, referenciaId, jerarquia) {
     try {
       const records = items.map(item => ({
         nivel,
@@ -37,7 +37,6 @@ export class InventarioConsolidadoModel {
         item_id: item.item_id,
         cantidad_total: item.cantidad,
         compania_id: parseInt(jerarquia.compania_id), // Convertir a integer
-        created_by: usuarioId || null, // Campo correcto es created_by
         bodega_id: jerarquia.bodega_id,
         zona_id: jerarquia.zona_id || null,
         pasillo_id: jerarquia.pasillo_id || null,

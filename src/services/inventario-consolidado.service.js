@@ -14,7 +14,7 @@ class InventarioConsolidadoService {
   /**
    * Consolidar inventario según nivel jerárquico
    */
-  static async consolidarInventario(nivel, referenciaId, usuarioId) {
+  static async consolidarInventario(nivel, referenciaId) {
     try {
       let itemsConsolidados = [];
       let jerarquia = {};
@@ -27,7 +27,7 @@ class InventarioConsolidadoService {
 
         case 'pasillo':
           // Primero consolidar todas las ubicaciones del pasillo
-          await this.consolidarUbicacionesDePasillo(referenciaId, usuarioId);
+          await this.consolidarUbicacionesDePasillo(referenciaId);
           // Luego sumar las consolidaciones
           itemsConsolidados = await this.sumarInventarioHijos('ubicacion', 'pasillo_id', referenciaId);
           jerarquia = await this.getJerarquiaPasillo(referenciaId);
@@ -35,7 +35,7 @@ class InventarioConsolidadoService {
 
         case 'zona':
           // Primero consolidar todos los pasillos de la zona
-          await this.consolidarPasillosDeZona(referenciaId, usuarioId);
+          await this.consolidarPasillosDeZona(referenciaId);
           // Luego sumar las consolidaciones
           itemsConsolidados = await this.sumarInventarioHijos('pasillo', 'zona_id', referenciaId);
           jerarquia = await this.getJerarquiaZona(referenciaId);
@@ -43,7 +43,7 @@ class InventarioConsolidadoService {
 
         case 'bodega':
           // Primero consolidar todas las zonas de la bodega
-          await this.consolidarZonasDeBodega(referenciaId, usuarioId);
+          await this.consolidarZonasDeBodega(referenciaId);
           // Luego sumar las consolidaciones
           itemsConsolidados = await this.sumarInventarioHijos('zona', 'bodega_id', referenciaId);
           jerarquia = await this.getJerarquiaBodega(referenciaId);
@@ -59,7 +59,6 @@ class InventarioConsolidadoService {
           itemsConsolidados,
           nivel,
           referenciaId,
-          usuarioId,
           jerarquia
         );
       }
@@ -164,7 +163,7 @@ class InventarioConsolidadoService {
   /**
    * Consolidar todas las ubicaciones de un pasillo
    */
-  static async consolidarUbicacionesDePasillo(pasilloId, usuarioId) {
+  static async consolidarUbicacionesDePasillo(pasilloId) {
     const ubicaciones = await UbicacionModel.findByPasillo(pasilloId);
     
     for (const ubicacion of ubicaciones) {
@@ -177,7 +176,6 @@ class InventarioConsolidadoService {
             itemsConsolidados,
             'ubicacion',
             ubicacion.id,
-            usuarioId,
             jerarquia
           );
         }
@@ -191,13 +189,13 @@ class InventarioConsolidadoService {
   /**
    * Consolidar todos los pasillos de una zona
    */
-  static async consolidarPasillosDeZona(zonaId, usuarioId) {
+  static async consolidarPasillosDeZona(zonaId) {
     const pasillos = await PasilloModel.findByZona(zonaId);
     
     for (const pasillo of pasillos) {
       try {
         // Consolidar ubicaciones del pasillo primero
-        await this.consolidarUbicacionesDePasillo(pasillo.id, usuarioId);
+        await this.consolidarUbicacionesDePasillo(pasillo.id);
         
         // Luego consolidar el pasillo
         const itemsConsolidados = await this.sumarInventarioHijos('ubicacion', 'pasillo_id', pasillo.id);
@@ -208,7 +206,6 @@ class InventarioConsolidadoService {
             itemsConsolidados,
             'pasillo',
             pasillo.id,
-            usuarioId,
             jerarquia
           );
         }
@@ -222,13 +219,13 @@ class InventarioConsolidadoService {
   /**
    * Consolidar todas las zonas de una bodega
    */
-  static async consolidarZonasDeBodega(bodegaId, usuarioId) {
+  static async consolidarZonasDeBodega(bodegaId) {
     const zonas = await ZonaModel.findByBodega(bodegaId);
     
     for (const zona of zonas) {
       try {
         // Consolidar pasillos de la zona primero
-        await this.consolidarPasillosDeZona(zona.id, usuarioId);
+        await this.consolidarPasillosDeZona(zona.id);
         
         // Luego consolidar la zona
         const itemsConsolidados = await this.sumarInventarioHijos('pasillo', 'zona_id', zona.id);
@@ -239,7 +236,6 @@ class InventarioConsolidadoService {
             itemsConsolidados,
             'zona',
             zona.id,
-            usuarioId,
             jerarquia
           );
         }
