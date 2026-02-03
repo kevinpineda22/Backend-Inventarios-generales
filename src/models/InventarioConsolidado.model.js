@@ -36,8 +36,8 @@ export class InventarioConsolidadoModel {
         referencia_id: referenciaId,
         item_id: item.item_id,
         cantidad_total: item.cantidad,
-        compania_id: jerarquia.compania_id,
-        consolidado_por: usuarioId,
+        compania_id: parseInt(jerarquia.compania_id), // Convertir a integer
+        created_by: usuarioId || null, // Campo correcto es created_by
         bodega_id: jerarquia.bodega_id,
         zona_id: jerarquia.zona_id || null,
         pasillo_id: jerarquia.pasillo_id || null,
