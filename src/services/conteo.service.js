@@ -7,6 +7,7 @@ import ConteoItemModel from '../models/ConteoItem.model.js';
 import UbicacionModel from '../models/Ubicacion.model.js';
 import ItemModel from '../models/Item.model.js';
 import CodigoModel from '../models/Codigo.model.js';
+import { supabase } from '../config/supabase.js';
 
 class ConteoService {
   /**
@@ -821,9 +822,62 @@ class ConteoService {
   }
 
   /**
-   * Exportar datos de bodega para Excel
+   * Exportar datos de bodega (Optimizado)
    */
   static async exportarBodega(bodegaId) {
+    try {
+      console.log(`[EXPORT] Iniciando exportación optimizada para bodega ${bodegaId}`);
+      
+      const { data, error } = await supabase
+        .from('v_inventario_consolidado_completo')
+        .select('item_sku, item_nombre, bodega, cantidad_total')
+        .eq('bodega_id', bodegaId)
+        .eq('nivel', 'ubicacion');
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return {
+          success: true,
+          data: [],
+          message: 'No hay datos consolidados para exportar en esta bodega.'
+        };
+      }
+
+      const itemMap = {};
+      let bodegaNombre = '';
+
+      data.forEach(row => {
+        if (!bodegaNombre && row.bodega) bodegaNombre = row.bodega;
+        const key = row.item_sku;
+        if (!itemMap[key]) {
+          itemMap[key] = {
+            item: row.item_sku,
+            descripcion: row.item_nombre,
+            bodega: row.bodega,
+            conteo_cantidad: 0
+          };
+        }
+        itemMap[key].conteo_cantidad += Number(row.cantidad_total || 0);
+      });
+
+      const resultado = Object.values(itemMap);
+
+      return {
+        success: true,
+        data: resultado,
+        bodega: bodegaNombre,
+        message: `Datos exportados correctamente. ${resultado.length} items únicos.`
+      };
+
+    } catch (error) {
+      console.error('[EXPORT ERROR]', error);
+      throw new Error(`Error al exportar datos de bodega: ${error.message}`);
+    }
+  }
+
+  /* CODIGO ANTIGUO (DEPRECATED):
+  static async _old_exportarBodega(bodegaId) {
     try {
       // 1. Obtener todos los conteos finalizados de la bodega con sus items
       const conteos = await ConteoModel.findAllWithItems({ bodegaId });
@@ -1014,6 +1068,7 @@ class ConteoService {
       throw new Error(`Error al exportar datos de bodega: ${error.message}`);
     }
   }
+  */
 }
 
 export default ConteoService;
