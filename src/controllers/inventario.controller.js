@@ -5,6 +5,7 @@
 import PasilloModel from '../models/Pasillo.model.js';
 import ZonaModel from '../models/Zona.model.js';
 import BodegaModel from '../models/Bodega.model.js';
+import InventarioConsolidadoService from '../services/inventario-consolidado.service.js';
 import { successResponse, errorResponse } from '../utils/responses.js';
 
 export class InventarioController {
@@ -15,13 +16,23 @@ export class InventarioController {
    */
   static async cerrarPasillo(req, res) {
     try {
-      const { pasilloId } = req.body;
+      const { pasilloId, companiaId } = req.body;
       if (!pasilloId) throw new Error("pasilloId es requerido");
 
       // Actualizar estado a 'cerrado'
       // Asumimos que existe una columna 'estado' o similar. 
       // Si no, habría que crearla en la BD.
       const result = await PasilloModel.update(pasilloId, { estado: 'cerrado' });
+
+      // Consolidar inventario del pasillo
+      try {
+        console.log(`[CONSOLIDACIÓN] Consolidando pasillo ${pasilloId}`);
+        await InventarioConsolidadoService.consolidarInventario('pasillo', pasilloId, companiaId);
+        console.log(`[CONSOLIDACIÓN] Pasillo ${pasilloId} consolidado exitosamente`);
+      } catch (consolidacionError) {
+        console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar pasillo ${pasilloId}:`, consolidacionError);
+        // No fallamos el cierre si falla la consolidación, solo logueamos
+      }
 
       return successResponse(res, result, 'Pasillo cerrado correctamente');
     } catch (error) {
@@ -35,7 +46,7 @@ export class InventarioController {
    */
   static async cerrarZona(req, res) {
     try {
-      const { zonaId } = req.body;
+      const { zonaId, companiaId } = req.body;
       // Nota: zonaId puede ser el ID o el nombre, según lo que envíe el frontend.
       // El frontend envía el nombre en algunos casos, pero idealmente debería ser ID.
       // En HistorialConteos.jsx: handleCerrarZona(zona.nombre) -> envía nombre.
@@ -65,6 +76,16 @@ export class InventarioController {
 
       const result = await ZonaModel.update(zonaId, { estado: 'cerrado' });
 
+      // Consolidar inventario de la zona
+      try {
+        console.log(`[CONSOLIDACIÓN] Consolidando zona ${zonaId}`);
+        await InventarioConsolidadoService.consolidarInventario('zona', zonaId, companiaId);
+        console.log(`[CONSOLIDACIÓN] Zona ${zonaId} consolidada exitosamente`);
+      } catch (consolidacionError) {
+        console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar zona ${zonaId}:`, consolidacionError);
+        // No fallamos el cierre si falla la consolidación, solo logueamos
+      }
+
       return successResponse(res, result, 'Zona cerrada correctamente');
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
@@ -77,7 +98,7 @@ export class InventarioController {
    */
   static async cerrarBodega(req, res) {
     try {
-      const { bodegaId } = req.body;
+      const { bodegaId, companiaId } = req.body;
       // Mismo caso: frontend envía selectedBodega que es el NOMBRE.
       // Necesitamos buscar la bodega por nombre y compañía.
       
@@ -86,6 +107,16 @@ export class InventarioController {
       
       // Por ahora, intentamos update.
       const result = await BodegaModel.update(bodegaId, { estado: 'cerrado' });
+
+      // Consolidar inventario de la bodega
+      try {
+        console.log(`[CONSOLIDACIÓN] Consolidando bodega ${bodegaId}`);
+        await InventarioConsolidadoService.consolidarInventario('bodega', bodegaId, companiaId);
+        console.log(`[CONSOLIDACIÓN] Bodega ${bodegaId} consolidada exitosamente`);
+      } catch (consolidacionError) {
+        console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar bodega ${bodegaId}:`, consolidacionError);
+        // No fallamos el cierre si falla la consolidación, solo logueamos
+      }
 
       return successResponse(res, result, 'Bodega cerrada correctamente');
     } catch (error) {

@@ -153,6 +153,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
             onClose={() => setShowAdvancedSearch(false)} 
             onNavigate={handleNavigate}
             selectedCompany={selectedCompany}
+            selectedBodega={selectedBodega}
         />
       )}
     </div>

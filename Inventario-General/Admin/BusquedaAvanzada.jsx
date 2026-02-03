@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { inventarioGeneralService } from '../../services/inventarioGeneralService';
 import './BusquedaAvanzada.css';
 
-const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany }) => {
+const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega }) => {
     const [query, setQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -59,8 +59,12 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany }) => {
             const locs = await inventarioGeneralService.getItemLocations(item.id, selectedCompany);
             
             // Backend ahora se encarga de consolidar y sumar correctamente.
-            // Usamos la respuesta directa.
-            setLocations(locs || []);
+            // Filtrar solo las ubicaciones de la bodega seleccionada
+            const filteredLocs = selectedBodega 
+                ? (locs || []).filter(loc => loc.bodega === selectedBodega)
+                : (locs || []);
+            
+            setLocations(filteredLocs);
         } catch (e) {
             console.error(e);
             setLocations([]);
