@@ -23,6 +23,17 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
     setFiltros(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleLimpiarFiltros = () => {
+    setFiltros({
+      zona: '',
+      pasillo: '',
+      ubicacion: '',
+      usuario: '',
+      producto: '',
+      soloPendientes: false
+    });
+  };
+
   // Calcular opciones disponibles
   const options = useMemo(() => {
     let zonas = [];
@@ -198,6 +209,35 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
           ))}
         </select>
       </div>
+
+      <button 
+        className="fig-clear-btn"
+        onClick={handleLimpiarFiltros}
+        title="Limpiar todos los filtros"
+        style={{
+          padding: '8px 16px',
+          borderRadius: '6px',
+          border: '1px solid #e2e8f0',
+          background: 'white',
+          color: '#64748b',
+          cursor: 'pointer',
+          fontWeight: '600',
+          transition: 'all 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = '#f8fafc';
+          e.target.style.borderColor = '#cbd5e1';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = 'white';
+          e.target.style.borderColor = '#e2e8f0';
+        }}
+      >
+        <span>🗑️</span> Limpiar Filtros
+      </button>
 
       {showAdvancedSearch && (
         <BusquedaAvanzada 

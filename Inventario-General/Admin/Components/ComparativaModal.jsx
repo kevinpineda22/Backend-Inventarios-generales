@@ -156,7 +156,9 @@ const ComparativaModal = ({
                         </td>
                         <td className="hc-text-center">
                           {diff === 0 && !editMode ? (
-                             <span style={{fontWeight: 'bold', fontSize: '1.1em', color: '#27ae60'}}>{item.c1}</span>
+                             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '30px'}}>
+                                <span style={{fontWeight: 'bold', fontSize: '1.1em', color: '#27ae60'}}>{item.c1}</span>
+                             </div>
                           ) : (
                             (() => {
                               // Lógica para mostrar texto verde si el reconteo resuelve la diferencia
@@ -193,7 +195,10 @@ const ComparativaModal = ({
                                     className="hc-manual-input"
                                     value={displayValue}
                                     placeholder={editMode ? "Nuevo..." : "Manual..."}
-                                    style={editMode ? {borderColor: '#3498db', backgroundColor: '#f0f9ff'} : {}}
+                                    style={{
+                                        textAlign: 'center',
+                                        ...(editMode ? {borderColor: '#3498db', backgroundColor: '#f0f9ff'} : {})
+                                    }}
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       setFinalSelection(prev => ({...prev, [item.codigo]: 'manual'}));

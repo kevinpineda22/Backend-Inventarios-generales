@@ -154,19 +154,50 @@ export class ItemModel {
     try {
       let query = supabase
         .from(TABLES.ITEMS)
-        .select('id, codigo, descripcion');
+        .select('id, codigo, descripcion, grupo');
         
       if (companiaId) {
         query = query.eq('compania_id', companiaId);
       }
         
       query = query.or(`descripcion.ilike.%${term}%,codigo.ilike.%${term}%`)
-        .limit(10); // Limitar resultados para sugerencias
+        .limit(50); // Aumentar el límite para poder ordenar mejor
 
       const { data, error } = await query;
 
       if (error) throw error;
-      return data;
+      
+      // Ordenar resultados por relevancia en JavaScript
+      // Prioridad: 1) Coincidencia exacta de código, 2) Código empieza con término, 
+      // 3) Descripción empieza con término, 4) Resto
+      const sortedData = (data || []).sort((a, b) => {
+        const termLower = term.toLowerCase();
+        const aCodigoLower = (a.codigo || '').toLowerCase();
+        const bCodigoLower = (b.codigo || '').toLowerCase();
+        const aDescLower = (a.descripcion || '').toLowerCase();
+        const bDescLower = (b.descripcion || '').toLowerCase();
+        
+        // Coincidencia exacta de código tiene máxima prioridad
+        if (aCodigoLower === termLower && bCodigoLower !== termLower) return -1;
+        if (bCodigoLower === termLower && aCodigoLower !== termLower) return 1;
+        
+        // Código empieza con el término
+        const aStartsCode = aCodigoLower.startsWith(termLower);
+        const bStartsCode = bCodigoLower.startsWith(termLower);
+        if (aStartsCode && !bStartsCode) return -1;
+        if (bStartsCode && !aStartsCode) return 1;
+        
+        // Descripción empieza con el término
+        const aStartsDesc = aDescLower.startsWith(termLower);
+        const bStartsDesc = bDescLower.startsWith(termLower);
+        if (aStartsDesc && !bStartsDesc) return -1;
+        if (bStartsDesc && !aStartsDesc) return 1;
+        
+        // Por longitud de código (más corto primero, generalmente más relevante)
+        return (a.codigo || '').length - (b.codigo || '').length;
+      });
+      
+      return sortedData.slice(0, 10); // Devolver top 10 más relevantes
     } catch (error) {
       throw handleSupabaseError(error);
     }

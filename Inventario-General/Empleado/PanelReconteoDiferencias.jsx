@@ -428,6 +428,31 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
   };
 
   const handleFinishRecount = async () => {
+    // ✅ Validación: Verificar que todos los items estén contados
+    const allItemsCounted = activeRecount.diferencias.every(diff => {
+      const records = recountedItems.filter(r => {
+        const rId = r.item_id || r.producto_id || r.id_item || (r.item && r.item.id);
+        if (String(rId) === String(diff.item_id)) return true;
+        
+        const diffBarcode = diff.item?.codigo || diff.item?.codigo_barra;
+        const rBarcode = r.item?.codigo || r.item?.codigo_barra;
+        if (diffBarcode && rBarcode && String(diffBarcode) === String(rBarcode)) return true;
+        
+        return false;
+      });
+      return records.length > 0;
+    });
+
+    if (!allItemsCounted) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Reconteo Incompleto',
+        text: 'Debes contar todos los items antes de finalizar el reconteo.',
+        confirmButtonColor: '#e67e22'
+      });
+      return;
+    }
+
     const result = await Swal.fire({
       title: '¿Finalizar Reconteo?',
       text: "Se cerrará la sesión de conteo para esta ubicación.",
@@ -618,6 +643,23 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
 
   // 2. VISTA DE RECONTEO (PDA View)
   if (viewMode === 'recount' && activeRecount) {
+    // ✅ Calcular progreso del reconteo
+    const totalItems = activeRecount.diferencias.length;
+    const countedItems = activeRecount.diferencias.filter(diff => {
+      const records = recountedItems.filter(r => {
+        const rId = r.item_id || r.producto_id || r.id_item || (r.item && r.item.id);
+        if (String(rId) === String(diff.item_id)) return true;
+        
+        const diffBarcode = diff.item?.codigo || diff.item?.codigo_barra;
+        const rBarcode = r.item?.codigo || r.item?.codigo_barra;
+        if (diffBarcode && rBarcode && String(diffBarcode) === String(rBarcode)) return true;
+        
+        return false;
+      });
+      return records.length > 0;
+    }).length;
+    const allCounted = countedItems === totalItems;
+
     return (
       <div className="recount-view">
         <div className="recount-view-header">
@@ -633,6 +675,18 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
           <p>
             {activeRecount.ubicacion.pasillo?.zona?.bodega?.nombre} - {activeRecount.ubicacion.pasillo?.zona?.nombre}
           </p>
+          {/* ✅ Indicador de progreso */}
+          <div style={{
+            marginTop: '10px',
+            padding: '8px 12px',
+            background: allCounted ? 'rgba(39, 174, 96, 0.2)' : 'rgba(230, 126, 34, 0.2)',
+            borderRadius: '4px',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            color: 'white'
+          }}>
+            📊 Progreso: {countedItems} / {totalItems} items contados
+          </div>
         </div>
 
         {/* --- BARRA DE ESCANEO (PDA / Manual) --- */}
@@ -756,8 +810,17 @@ const PanelReconteoDiferencias = ({ companiaId, usuarioId, usuarioNombre, usuari
         </div>
 
         <div className="recount-footer">
-          <button className="btn-finish" onClick={handleFinishRecount}>
-            Finalizar Reconteo
+          <button 
+            className="btn-finish" 
+            onClick={handleFinishRecount}
+            disabled={!allCounted}
+            style={{
+              opacity: allCounted ? 1 : 0.5,
+              cursor: allCounted ? 'pointer' : 'not-allowed',
+              position: 'relative'
+            }}
+          >
+            {allCounted ? '✅ Finalizar Reconteo' : `⏳ Faltan ${totalItems - countedItems} items`}
           </button>
         </div>
 
