@@ -329,10 +329,15 @@ export class ConteoController {
   /**
    * Exportar datos de bodega (Agrupado por items)
    * GET /api/conteos/exportar/:bodegaId
+   * SEGURO: Filtra automáticamente por compañía de la bodega
    */
   static async exportarBodega(req, res) {
     try {
       const { bodegaId } = req.params;
+      
+      if (!bodegaId) {
+        return errorResponse(res, 'bodegaId es requerido', 400);
+      }
 
       const result = await ConteoService.exportarBodega(bodegaId);
 

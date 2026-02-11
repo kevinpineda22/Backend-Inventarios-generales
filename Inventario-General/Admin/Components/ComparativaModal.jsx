@@ -19,6 +19,27 @@ const ComparativaModal = ({
         return comparisonData.items.some(i => i.c4 > 0);
     }, [comparisonData]);
 
+    // Función para seleccionar toda una columna
+    const handleSelectColumn = (column) => {
+        if (!comparisonData || !comparisonData.items) return;
+        
+        const newSelection = { ...finalSelection };
+        const newManualValues = { ...manualValues };
+        
+        comparisonData.items.forEach(item => {
+            const diff = item.c1 - item.c2;
+            // Solo seleccionar items con diferencias o en modo edición
+            if (diff !== 0 || editMode) {
+                newSelection[item.codigo] = column;
+                // Limpiar valores manuales cuando se selecciona una columna
+                delete newManualValues[item.codigo];
+            }
+        });
+        
+        setFinalSelection(newSelection);
+        setManualValues(newManualValues);
+    };
+
     if (!comparisonData) return null;
 
     return (
@@ -60,8 +81,52 @@ const ComparativaModal = ({
                   <tr>
                     <th>Item</th>
                     <th>Descripción</th>
-                    <th className="hc-text-center">Conteo #1</th>
-                    <th className="hc-text-center">Conteo #2</th>
+                    <th className="hc-text-center">
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center'}}>
+                        <span>Conteo #1</span>
+                        <button
+                          onClick={() => handleSelectColumn('c1')}
+                          className="hc-btn-select-column"
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '0.75rem',
+                            borderRadius: '4px',
+                            border: '1px solid #3498db',
+                            background: 'white',
+                            color: '#3498db',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            transition: 'all 0.2s'
+                          }}
+                          title="Seleccionar toda esta columna"
+                        >
+                          ✓ Seleccionar todo
+                        </button>
+                      </div>
+                    </th>
+                    <th className="hc-text-center">
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center'}}>
+                        <span>Conteo #2</span>
+                        <button
+                          onClick={() => handleSelectColumn('c2')}
+                          className="hc-btn-select-column"
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '0.75rem',
+                            borderRadius: '4px',
+                            border: '1px solid #3498db',
+                            background: 'white',
+                            color: '#3498db',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            transition: 'all 0.2s'
+                          }}
+                          title="Seleccionar toda esta columna"
+                        >
+                          ✓ Seleccionar todo
+                        </button>
+                      </div>
+                    </th>
                     <th className="hc-text-center">Diferencia</th>
                     <th className="hc-text-center">Reconteo</th>
                     <th className="hc-text-center">Conteo Final</th>

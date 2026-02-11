@@ -7,6 +7,7 @@ import ConteoItemModel from '../models/ConteoItem.model.js';
 import UbicacionModel from '../models/Ubicacion.model.js';
 import ItemModel from '../models/Item.model.js';
 import CodigoModel from '../models/Codigo.model.js';
+import BodegaModel from '../models/Bodega.model.js';
 import { supabase } from '../config/supabase.js';
 
 class ConteoService {
@@ -825,15 +826,26 @@ class ConteoService {
 
   /**
    * Exportar datos de bodega (Optimizado)
+   * CRÍTICO: Filtra por compania_id para evitar mezcla de datos
    */
   static async exportarBodega(bodegaId) {
     try {
       console.log(`[EXPORT] Iniciando exportación optimizada para bodega ${bodegaId}`);
       
+      // CRÍTICO: Obtener compania_id de la bodega para seguridad
+      const bodega = await BodegaModel.findById(bodegaId);
+      if (!bodega) {
+        throw new Error('Bodega no encontrada');
+      }
+      
+      const companiaId = bodega.compania_id;
+      console.log(`[EXPORT SECURITY] Bodega: ${bodegaId}, Compañía: ${companiaId}`);
+      
       const { data, error } = await supabase
         .from('v_inventario_consolidado_completo')
         .select('item_sku, item_nombre, bodega, cantidad_total')
         .eq('bodega_id', bodegaId)
+        .eq('compania_id', companiaId) // ✅ FILTRO CRÍTICO DE SEGURIDAD
         .eq('nivel', 'ubicacion');
 
       if (error) throw error;
