@@ -201,8 +201,36 @@ const ComparacionSiesa = () => {
             // Filtrar por grupo si está seleccionado
             let filteredLocalData = rawLocalData;
             if (selectedGrupo) {
-                filteredLocalData = rawLocalData.filter(item => item.item_grupo === selectedGrupo || item.grupo === selectedGrupo);
+                // DEBUG: Ver estructura real de los datos
+                if (rawLocalData.length > 0) {
+                    console.log('[DEBUG] Ejemplo de item:', rawLocalData[0]);
+                    console.log('[DEBUG] Campos disponibles:', Object.keys(rawLocalData[0]));
+                }
+                
+                // Extraer código numérico del grupo seleccionado (ej: "1007 - GRANOS" -> "1007")
+                const selectedCodigo = String(selectedGrupo).split('-')[0].trim();
+                console.log(`[FILTRO] Buscando items con código de grupo: "${selectedCodigo}"`);
+                
+                // Filtro flexible: compara por código inicial
+                filteredLocalData = rawLocalData.filter(item => {
+                    const grupoItem = item.item_grupo || item.grupo;
+                    if (!grupoItem) return false;
+                    
+                    const codigoItem = String(grupoItem).split('-')[0].trim();
+                    return codigoItem === selectedCodigo;
+                });
+                
                 console.log(`[FILTRO] De ${rawLocalData.length} items, ${filteredLocalData.length} pertenecen al grupo "${selectedGrupo}"`);
+                
+                // ADVERTENCIA: Si no hay resultados, mostrar ejemplos para debug
+                if (filteredLocalData.length === 0 && rawLocalData.length > 0) {
+                    const ejemplosGrupos = rawLocalData.slice(0, 5).map(i => i.item_grupo || i.grupo).filter(Boolean);
+                    console.warn('[FILTRO] No se encontraron items. Ejemplos de grupos en datos:', ejemplosGrupos);
+                    
+                    if (!rawLocalData[0].item_grupo && !rawLocalData[0].grupo) {
+                        throw new Error('El campo "item_grupo" no existe en los datos. Ejecuta el script UPDATE_VISTA_GRUPO.sql en Supabase.');
+                    }
+                }
             }
 
             // Agrupar Local por Código Item

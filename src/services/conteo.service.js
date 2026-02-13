@@ -869,7 +869,8 @@ class ConteoService {
             item: row.item_sku,
             descripcion: row.item_nombre,
             bodega: row.bodega,
-            conteo_cantidad: 0
+            conteo_cantidad: 0,
+            item_grupo: row.item_grupo // Campo de categoría
           };
         }
         itemMap[key].conteo_cantidad += Number(row.cantidad_total || 0);
