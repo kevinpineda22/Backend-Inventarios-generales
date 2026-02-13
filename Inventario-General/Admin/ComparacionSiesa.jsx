@@ -48,6 +48,16 @@ const ComparacionSiesa = () => {
         
         let processed = [...comparacionData];
 
+        // 0. Filtrar por Grupo (Categoría) - Dinámico en pantalla
+        if (selectedGrupo) {
+            const selectedCodigo = String(selectedGrupo).split('-')[0].trim();
+            processed = processed.filter(item => {
+                if (!item.grupo) return false;
+                const itemCodigo = String(item.grupo).split('-')[0].trim();
+                return itemCodigo === selectedCodigo;
+            });
+        }
+
         // 1. Filtrar por texto
         if (filterText) {
             const lower = filterText.toLowerCase();
@@ -184,64 +194,36 @@ const ComparacionSiesa = () => {
         if (!selectedBodega) {
             return Swal.fire('Error', 'Seleccione una bodega para comparar', 'error');
         }
+        if (!selectedSiesaBodega) {
+            return Swal.fire('Error', 'Seleccione una bodega SIESA para comparar', 'error');
+        }
 
         setLoading(true);
         setComparacionData(null);
         setProgress("Iniciando...");
 
         try {
-            // 1. Obtener Inventario Físico (Local)
-            setProgress("Obteniendo inventario físico finalizado...");
+            // 1. Obtener Inventario Físico (Local) - CARGA TOTAL SIN FILTROS
+            setProgress("Obteniendo inventario físico completo...");
             const rawLocalData = await inventarioGeneralService.exportarBodega(selectedBodega);
             
             if (!rawLocalData || rawLocalData.length === 0) {
                 throw new Error("No hay datos de inventario finalizado para esta bodega.");
             }
 
-            // Filtrar por grupo si está seleccionado
-            let filteredLocalData = rawLocalData;
-            if (selectedGrupo) {
-                // DEBUG: Ver estructura real de los datos
-                if (rawLocalData.length > 0) {
-                    console.log('[DEBUG] Ejemplo de item:', rawLocalData[0]);
-                    console.log('[DEBUG] Campos disponibles:', Object.keys(rawLocalData[0]));
-                }
-                
-                // Extraer código numérico del grupo seleccionado (ej: "1007 - GRANOS" -> "1007")
-                const selectedCodigo = String(selectedGrupo).split('-')[0].trim();
-                console.log(`[FILTRO] Buscando items con código de grupo: "${selectedCodigo}"`);
-                
-                // Filtro flexible: compara por código inicial
-                filteredLocalData = rawLocalData.filter(item => {
-                    const grupoItem = item.item_grupo || item.grupo;
-                    if (!grupoItem) return false;
-                    
-                    const codigoItem = String(grupoItem).split('-')[0].trim();
-                    return codigoItem === selectedCodigo;
-                });
-                
-                console.log(`[FILTRO] De ${rawLocalData.length} items, ${filteredLocalData.length} pertenecen al grupo "${selectedGrupo}"`);
-                
-                // ADVERTENCIA: Si no hay resultados, mostrar ejemplos para debug
-                if (filteredLocalData.length === 0 && rawLocalData.length > 0) {
-                    const ejemplosGrupos = rawLocalData.slice(0, 5).map(i => i.item_grupo || i.grupo).filter(Boolean);
-                    console.warn('[FILTRO] No se encontraron items. Ejemplos de grupos en datos:', ejemplosGrupos);
-                    
-                    if (!rawLocalData[0].item_grupo && !rawLocalData[0].grupo) {
-                        throw new Error('El campo "item_grupo" no existe en los datos. Ejecuta el script UPDATE_VISTA_GRUPO.sql en Supabase.');
-                    }
-                }
-            }
-
+            // NOTA: Eliminado el filtrado previo por 'selectedGrupo'. 
+            // Ahora cargamos TODO para permitir filtrado dinámico en pantalla (post-load).
+            
             // Agrupar Local por Código Item
             const localMap = {};
-            filteredLocalData.forEach(item => {
+            rawLocalData.forEach(item => {
                 const codigo = String(item.item).trim();
                 const cant = parseFloat(item.conteo_cantidad) || 0;
                 if (!localMap[codigo]) {
                     localMap[codigo] = { 
                         descripcion: item.descripcion || '', 
-                        cantidad: 0 
+                        cantidad: 0,
+                        grupo: item.item_grupo || item.grupo // Guardamos el grupo para el filtro visual
                     };
                 }
                 localMap[codigo].cantidad += cant;
@@ -251,7 +233,7 @@ const ComparacionSiesa = () => {
                 }
             });
 
-            // 2. Obtener Inventario SIESA (Estrategia Optimizada)
+            // 2. Obtener Inventario SIESA
             let siesaData = [];
             const itemsToFetch = Object.keys(localMap);
             const totalItems = itemsToFetch.length;
@@ -260,25 +242,25 @@ const ComparacionSiesa = () => {
                 throw new Error("No hay items contados para comparar.");
             }
 
-            // ESTRATEGIA: Auditoría Parcial por Lotes (Batch)
-            // Es la estrategia más eficiente cuando se comparan solo los items contados (ej. 100-5000)
-            // en lugar de descargar la base de datos completa de SIESA (15,000+ registros).
+            // ESTRATEGIA: "Batch" (Anterior/Rápida para el flujo de trabajo del usuario)
+            // Consultamos stock específico solo de los items que están en localMap.
             
-            setProgress(`Consultando ${totalItems} items en SIESA (Modo Batch)...`);
+            setProgress(`Consultando ${totalItems} items en SIESA...`);
             
             try {
+                // Usamos getSiesaStockBatch que es más robusto para listas definidas de items
                 siesaData = await getSiesaStockBatch(
                     itemsToFetch, 
                     (done, total) => setProgress(`Verificando item ${done} de ${total}...`),
-                    selectedCompany,     // Filtro CIA
-                    selectedSiesaBodega  // Filtro Bodega (Optimización)
+                    selectedCompany, 
+                    selectedSiesaBodega
                 );
             } catch (err) {
                 console.error("Error en batch Siesa:", err);
-                throw new Error("Falló la consulta de items a SIESA. " + err.message);
+                throw new Error("Falló la consulta a SIESA. " + err.message);
             }
 
-            // 3. Procesar y Comparar (Lógica Parcial: Solo lo que existe en Local)
+            // 3. Procesar y Comparar
             setProgress("Cruzando información...");
             const report = [];
             let cMatch = 0, cDiff = 0, cMissingSiesa = 0, cMissingCount = 0;
@@ -338,7 +320,8 @@ const ComparacionSiesa = () => {
                     conteo: cantLocal,
                     siesa: cantSiesa,
                     diff: diff,
-                    estado: estado
+                    estado: estado,
+                    grupo: localInfo.grupo // Se pasa el grupo al reporte final
                 });
             });
 
@@ -366,40 +349,43 @@ const ComparacionSiesa = () => {
             </div>
 
             <div className="comp-siesa-controls">
-                <div className="comp-siesa-control-group">
-                    <label>Compañía:</label>
+                <div className="comp-siesa-control-group required-field">
+                    <label>
+                        <span className="label-text">Compañía</span>
+                        <span className="required-indicator">*</span>
+                    </label>
                     <select value={selectedCompany} onChange={e => setSelectedCompany(e.target.value)}>
-                        <option value="">-- Seleccionar Compañía --</option>
+                        <option value="">-- Seleccionar --</option>
                         {companies.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </select>
                 </div>
 
-                <div className="comp-siesa-control-group">
-                    <label>Bodega (Siesa):</label>
+                <div className="comp-siesa-control-group required-field">
+                    <label>
+                        <span className="label-text">Bodega (Siesa)</span>
+                        <span className="required-indicator">*</span>
+                    </label>
                     <select value={selectedSiesaBodega} onChange={e => setSelectedSiesaBodega(e.target.value)}>
-                        <option value="">-- Todas / Sin Filtro --</option>
+                        <option value="">-- Seleccionar --</option>
                         {siesaBodegasOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
                     </select>
                 </div>
 
-                <div className="comp-siesa-control-group">
-                    <label>Categoría/Grupo:</label>
-                    <select value={selectedGrupo} onChange={e => setSelectedGrupo(e.target.value)}>
-                        <option value="">-- Todas las categorías --</option>
-                        {gruposOptions.map((g, idx) => <option key={idx} value={g}>{g}</option>)}
-                    </select>
-                </div>
-
-                <div className="comp-siesa-control-group">
-                    <label>Bodega (Local):</label>
+                <div className="comp-siesa-control-group required-field">
+                    <label>
+                        <span className="label-text">Bodega (Local)</span>
+                        <span className="required-indicator">*</span>
+                    </label>
                     <select value={selectedBodega} onChange={e => setSelectedBodega(e.target.value)}>
-                        <option value="">-- Seleccionar Bodega --</option>
+                        <option value="">-- Seleccionar --</option>
                         {bodegas.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
                     </select>
                 </div>
-                
+
                 <div className="comp-siesa-control-group highlight-date">
-                    <label>📅 Fecha Corte Siesa:</label>
+                    <label>
+                        <span className="label-text">📅 Fecha Corte SIESA</span>
+                    </label>
                     <input 
                         type="text" 
                         value={fechaCorte} 
@@ -407,7 +393,6 @@ const ComparacionSiesa = () => {
                         placeholder="YYYYMMDD"
                         maxLength={8}
                     />
-                    <small className="comp-siesa-hint">Formato: AAAA MM DD (Ej: 20260127)</small>
                 </div>
                 
                 <button 
@@ -415,7 +400,7 @@ const ComparacionSiesa = () => {
                     onClick={handleComparar}
                     disabled={loading}
                 >
-                    {loading ? 'Procesando...' : '🔄 Ejecutar Comparación'}
+                    {loading ? '...' : '🔄 Ejecutar Comparación'}
                 </button>
             </div>
 
@@ -441,6 +426,16 @@ const ComparacionSiesa = () => {
 
                     {/* Toolbar de Filtros de Tabla */}
                     <div className="comp-siesa-table-tools" style={{ display: 'flex', gap: '15px', marginBottom: '15px', padding: '15px', background: 'white', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', flexWrap: 'wrap' }}>
+                         
+                         {/* NUEVO FILTRO DE GRUPO/CATEGORÍA */}
+                         <div className="tool-group" style={{ minWidth: '200px', flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px', color: '#6b7280' }}>📁 Filtrar Categoría:</label>
+                            <select value={selectedGrupo} onChange={e => setSelectedGrupo(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}>
+                                <option value="">-- Todas las categorías --</option>
+                                {gruposOptions.map((g, idx) => <option key={idx} value={g}>{g}</option>)}
+                            </select>
+                         </div>
+
                          <div className="tool-group" style={{ flex: 1, minWidth: '200px' }}>
                             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '4px', color: '#6b7280' }}>🔍 Buscar por Código o Descripción:</label>
                             <input 

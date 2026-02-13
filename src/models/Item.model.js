@@ -351,17 +351,22 @@ export class ItemModel {
    */
   static async findGruposByCompany(companiaId) {
     try {
+      // NOTA: Se aumenta el límite para garantizar traer todas las categorías
+      // ya que por defecto Supabase limita a 1000 filas.
       const { data, error } = await supabase
         .from(TABLES.ITEMS)
         .select('grupo')
         .eq('compania_id', companiaId)
         .not('grupo', 'is', null)
-        .order('grupo', { ascending: true });
+        .limit(100000); // Límite alto para cubrir todo el maestro de items
 
       if (error) throw error;
       
-      // Obtener valores únicos
+      // Obtener valores únicos en memoria (Javscript Set)
       const uniqueGrupos = [...new Set(data.map(item => item.grupo).filter(g => g && g.trim() !== ''))];
+      
+      // Ordenar alfabéticamente para presentación
+      uniqueGrupos.sort((a, b) => a.localeCompare(b));
       
       return uniqueGrupos;
     } catch (error) {
