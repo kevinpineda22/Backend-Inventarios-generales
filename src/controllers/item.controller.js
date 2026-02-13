@@ -178,6 +178,22 @@ export class ItemController {
       return errorResponse(res, error.message, 500, error);
     }
   }
+
+  /**
+   * Obtener grupos únicos de items por compañía
+   * GET /api/items/grupos/:companiaId
+   */
+  static async getGrupos(req, res) {
+    try {
+      const { companiaId } = req.params;
+
+      const result = await ItemService.getGrupos(companiaId);
+
+      return successResponse(res, result.data, `${result.count} grupos encontrados`);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
 }
 
 export default ItemController;

@@ -345,6 +345,29 @@ export class ItemModel {
       throw handleSupabaseError(error);
     }
   }
+
+  /**
+   * Obtener grupos únicos de items de una compañía
+   */
+  static async findGruposByCompany(companiaId) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.ITEMS)
+        .select('grupo')
+        .eq('compania_id', companiaId)
+        .not('grupo', 'is', null)
+        .order('grupo', { ascending: true });
+
+      if (error) throw error;
+      
+      // Obtener valores únicos
+      const uniqueGrupos = [...new Set(data.map(item => item.grupo).filter(g => g && g.trim() !== ''))];
+      
+      return uniqueGrupos;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
 }
 
 export default ItemModel;

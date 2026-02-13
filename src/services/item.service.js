@@ -223,6 +223,22 @@ export class ItemService {
       throw new Error(`Error al eliminar items: ${error.message}`);
     }
   }
+
+  /**
+   * Obtener lista única de grupos (categorías) por compañía
+   */
+  static async getGrupos(companiaId) {
+    try {
+      const grupos = await ItemModel.findGruposByCompany(companiaId);
+      return {
+        success: true,
+        data: grupos,
+        count: grupos.length
+      };
+    } catch (error) {
+      throw new Error(`Error al obtener grupos: ${error.message}`);
+    }
+  }
 }
 
 export default ItemService;

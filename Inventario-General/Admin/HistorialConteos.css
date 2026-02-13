@@ -772,6 +772,33 @@
   box-shadow: 0 1px 3px rgba(52, 152, 219, 0.2);
 }
 
+.hc-btn-export-ubicacion {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #27ae60;
+  background: #dcfce7;
+  color: #15803d;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hc-btn-export-ubicacion:hover {
+  background: #27ae60;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+}
+
+.hc-btn-export-ubicacion:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(39, 174, 96, 0.2);
+}
+
+
 
 .hc-manual-input:focus {
   border-color: var(--hc-primary);

@@ -1206,6 +1206,7 @@ const HistorialConteos = () => {
         setManualValues={setManualValues}
         handleGuardarAjuste={handleGuardarAjuste}
         loadingComparison={loadingComparison}
+        selectedBodega={selectedBodega}
       />
 
       {/* Single Detail Modal */}

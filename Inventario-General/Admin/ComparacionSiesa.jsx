@@ -18,6 +18,10 @@ const ComparacionSiesa = () => {
     const [siesaBodegasOptions, setSiesaBodegasOptions] = useState([]);
     const [selectedSiesaBodega, setSelectedSiesaBodega] = useState('');
 
+    // Filtro Categoría/Grupo
+    const [gruposOptions, setGruposOptions] = useState([]);
+    const [selectedGrupo, setSelectedGrupo] = useState('');
+
     const [bodegas, setBodegas] = useState([]);
     const [selectedBodega, setSelectedBodega] = useState('');
     const [fechaCorte, setFechaCorte] = useState(new Date().toISOString().slice(0, 10).replace(/-/g, '')); // YYYYMMDD
@@ -32,6 +36,7 @@ const ComparacionSiesa = () => {
     useEffect(() => {
         if (selectedCompany) {
             loadSiesaBodegas(selectedCompany);
+            loadGrupos(selectedCompany);
         }
     }, [selectedCompany]);
 
@@ -140,6 +145,17 @@ const ComparacionSiesa = () => {
         }
     };
 
+    const loadGrupos = async (cId) => {
+        setGruposOptions([]); // Limpiar anteriores
+        try {
+            const grupos = await inventarioGeneralService.obtenerGrupos(cId);
+            console.log("Grupos/Categorías cargados:", grupos);
+            setGruposOptions(grupos);
+        } catch (e) {
+            console.error("Error cargando grupos", e);
+        }
+    };
+
 
     
     // Lista de Compañias
@@ -182,9 +198,16 @@ const ComparacionSiesa = () => {
                 throw new Error("No hay datos de inventario finalizado para esta bodega.");
             }
 
+            // Filtrar por grupo si está seleccionado
+            let filteredLocalData = rawLocalData;
+            if (selectedGrupo) {
+                filteredLocalData = rawLocalData.filter(item => item.item_grupo === selectedGrupo || item.grupo === selectedGrupo);
+                console.log(`[FILTRO] De ${rawLocalData.length} items, ${filteredLocalData.length} pertenecen al grupo "${selectedGrupo}"`);
+            }
+
             // Agrupar Local por Código Item
             const localMap = {};
-            rawLocalData.forEach(item => {
+            filteredLocalData.forEach(item => {
                 const codigo = String(item.item).trim();
                 const cant = parseFloat(item.conteo_cantidad) || 0;
                 if (!localMap[codigo]) {
@@ -328,6 +351,14 @@ const ComparacionSiesa = () => {
                     <select value={selectedSiesaBodega} onChange={e => setSelectedSiesaBodega(e.target.value)}>
                         <option value="">-- Todas / Sin Filtro --</option>
                         {siesaBodegasOptions.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+                    </select>
+                </div>
+
+                <div className="comp-siesa-control-group">
+                    <label>Categoría/Grupo:</label>
+                    <select value={selectedGrupo} onChange={e => setSelectedGrupo(e.target.value)}>
+                        <option value="">-- Todas las categorías --</option>
+                        {gruposOptions.map((g, idx) => <option key={idx} value={g}>{g}</option>)}
                     </select>
                 </div>
 

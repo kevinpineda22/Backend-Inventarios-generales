@@ -12,6 +12,9 @@ const router = express.Router();
 // Buscar items (Sugerencias) - DEBE IR ANTES DE /:companiaId
 router.get('/search/query', ItemController.search);
 
+// Obtener grupos (categorías) únicos por compañía
+router.get('/grupos/:companiaId', ItemController.getGrupos);
+
 // Buscar item por código de barras
 router.get('/barcode/:codigoBarra/:companiaId', ItemController.getByBarcode);
 

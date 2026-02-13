@@ -843,7 +843,7 @@ class ConteoService {
       
       const { data, error } = await supabase
         .from('v_inventario_consolidado_completo')
-        .select('item_sku, item_nombre, bodega, cantidad_total')
+        .select('item_sku, item_nombre, bodega, cantidad_total, item_grupo')
         .eq('bodega_id', bodegaId)
         .eq('compania_id', companiaId) // ✅ FILTRO CRÍTICO DE SEGURIDAD
         .eq('nivel', 'ubicacion');

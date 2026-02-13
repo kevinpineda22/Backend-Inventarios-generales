@@ -1,4 +1,6 @@
 import React from 'react';
+import * as XLSX from 'xlsx';
+import Swal from 'sweetalert2';
 import '../HistorialConteos.css';
 
 const ComparativaModal = ({ 
@@ -9,14 +11,16 @@ const ComparativaModal = ({
     manualValues, 
     setManualValues, 
     handleGuardarAjuste, 
-    loadingComparison 
+    loadingComparison,
+    selectedBodega
 }) => {
     const [editMode, setEditMode] = React.useState(false);
 
-    // Calcular si hay items finalizados o estamos en modo "Solo Finalizados"
+    // Calcular si hay items finalizados - verificar si la ubicación tiene conteo final guardado
     const hasFinalData = React.useMemo(() => {
-        if (!comparisonData || !comparisonData.items) return false;
-        return comparisonData.items.some(i => i.c4 > 0);
+        if (!comparisonData || !comparisonData.location) return false;
+        // Verificar si existe c4 o final en la ubicación (indica ajuste final guardado)
+        return !!(comparisonData.location.c4 || comparisonData.location.final);
     }, [comparisonData]);
 
     // Función para seleccionar toda una columna
@@ -40,6 +44,97 @@ const ComparativaModal = ({
         setManualValues(newManualValues);
     };
 
+    // Función para exportar esta ubicación a Excel
+    const handleExportarUbicacion = async () => {
+        if (!comparisonData || !comparisonData.items) return;
+
+        // Pedir consecutivo al usuario
+        const { value: consecutivo } = await Swal.fire({
+            title: 'Exportar Ubicación',
+            html: `
+                <p style="margin-bottom: 10px;">Ubicación: <strong>${comparisonData.location.zona} - ${comparisonData.location.pasillo} - ${comparisonData.location.ubicacion}</strong></p>
+                <p style="margin-bottom: 10px; font-size: 0.9rem; color: #666;">Total items: ${comparisonData.items.length}</p>
+            `,
+            input: 'text',
+            inputLabel: 'Número de Consecutivo (ERP)',
+            inputPlaceholder: 'Ej: 10054',
+            showCancelButton: true,
+            confirmButtonText: '📥 Exportar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#27ae60',
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'Debe ingresar un número de consecutivo';
+                }
+            }
+        });
+
+        if (!consecutivo) return;
+
+        try {
+            // Construir datos para Excel
+            const excelData = comparisonData.items.map(item => {
+                const diff = item.c1 - item.c2;
+                let cantidadFinal = 0;
+
+                // LÓGICA DE CONSENSO DEL BACKEND (idéntica a calcularInventarioUbicacion)
+                // Prioridad: C4 > C3 > Consenso C1=C2 > C2 > C1
+                if (item.c4 > 0) {
+                    cantidadFinal = item.c4;
+                } else if (item.c3 > 0) {
+                    cantidadFinal = item.c3;
+                } else if (item.c1 === item.c2 && item.c1 > 0) {
+                    cantidadFinal = item.c1;
+                } else if (item.c2 > 0) {
+                    cantidadFinal = item.c2;
+                } else if (item.c1 > 0) {
+                    cantidadFinal = item.c1;
+                } else {
+                    // Safety net: rescatar si hay historial positivo
+                    const maxH = Math.max(item.c1 || 0, item.c2 || 0, item.c3 || 0, item.c4 || 0);
+                    if (maxH > 0) {
+                        cantidadFinal = maxH;
+                    }
+                }
+
+                return {
+                    NRO_INVENTARIO_BODEGA: consecutivo,
+                    ITEM: item.codigo,
+                    BODEGA: selectedBodega || comparisonData.location.bodega || 'N/A',
+                    CANT_11ENT_PUNTO_4DECIMALES: parseFloat(cantidadFinal).toFixed(4)
+                };
+            }).filter(row => parseFloat(row.CANT_11ENT_PUNTO_4DECIMALES) > 0); // Solo cantidades mayores a 0
+
+            if (excelData.length === 0) {
+                Swal.fire('Info', 'No hay items con cantidad mayor a 0 para exportar', 'info');
+                return;
+            }
+
+            // Generar Excel
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Físico');
+
+            // Nombre del archivo
+            const fileName = `inventario_${comparisonData.location.zona}_${comparisonData.location.pasillo}_${comparisonData.location.ubicacion}_${consecutivo}.xlsx`.replace(/\s+/g, '_');
+
+            // Descargar
+            XLSX.writeFile(wb, fileName);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Exportado',
+                text: `${excelData.length} items exportados correctamente`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+
+        } catch (error) {
+            console.error('Error al exportar:', error);
+            Swal.fire('Error', `No se pudo exportar: ${error.message}`, 'error');
+        }
+    };
+
     if (!comparisonData) return null;
 
     return (
@@ -51,6 +146,27 @@ const ComparativaModal = ({
                   {hasFinalData && <span className="badge-finalizado" style={{marginLeft:'10px', fontSize:'0.7em', background:'#27ae60', color:'white', padding:'2px 6px', borderRadius:'4px'}}>FINALIZADO</span>}
               </h3>
               <div style={{display:'flex', gap:'10px'}}>
+                  {hasFinalData && (
+                    <button 
+                      onClick={handleExportarUbicacion}
+                      className="hc-btn-export-ubicacion"
+                      title="Exportar esta ubicación a Excel"
+                      style={{
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          border: '1px solid #27ae60',
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                      }}
+                    >
+                      📥 Exportar Excel
+                    </button>
+                  )}
                   <button 
                     onClick={() => setEditMode(!editMode)} 
                     className="hc-btn-edit"
