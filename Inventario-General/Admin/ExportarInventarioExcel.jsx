@@ -303,7 +303,7 @@ const ExportarInventarioExcel = () => {
       </div>
 
       <div className="export-info">
-        <strong>Nota:</strong> Se generará el archivo de inventario consolidado. El sistema selecciona automáticamente el registro definitivo para cada ubicación (priorizando Ajustes Finales y Reconteos validados) y agrupa las cantidades por código de item.
+        <strong>Nota:</strong> Para visualizar en el Excel el conteo de todas las ubicaciones, es necesario <strong>cerrar los pasillos</strong>, <strong>cerrar las zonas</strong> y por último <strong>cerrar la bodega</strong>. Esto garantiza que se consolide y se visualice el conteo final de todo el inventario.
       </div>
     </div>
   );

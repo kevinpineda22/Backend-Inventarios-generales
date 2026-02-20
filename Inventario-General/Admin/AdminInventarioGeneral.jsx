@@ -8,6 +8,7 @@ import CreacionInventario from "./CreacionInventario";
 import HistorialConteos from "./HistorialConteos";
 import ExportarInventarioExcel from "./ExportarInventarioExcel";
 import ComparacionSiesa from "./ComparacionSiesa";
+import ReconteoSiesaAdmin from "./ReconteoSiesaAdmin";
 import GeneradorReporteIA from "./GeneradorReporteIA";
 import "./AdminInventarioGeneral.css";
 
@@ -28,6 +29,8 @@ const AdminInventarioGeneral = () => {
         return <ExportarInventarioExcel />;
       case "siesa":
         return <ComparacionSiesa />;
+      case "reconteo-siesa":
+        return <ReconteoSiesaAdmin />;
       default:
         return <CargaMaestraExcel />;
     }
@@ -39,6 +42,7 @@ const AdminInventarioGeneral = () => {
     { id: "historial", label: "Historial de Conteos" },
     { id: "exportar", label: "Exportar Inventario" },
     { id: "siesa", label: "Comparación SIESA" },
+    { id: "reconteo-siesa", label: "Reconteos SIESA" },
   ];
 
   return (

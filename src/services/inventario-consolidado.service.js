@@ -79,14 +79,15 @@ class InventarioConsolidadoService {
    */
   static async calcularInventarioUbicacion(ubicacionId) {
     try {
-      // Obtener conteos de esta ubicación (C1, C2, C3, C4)
+      // Obtener conteos de esta ubicación (C1, C2, C3, C4, C5)
       const conteos = await ConteoModel.findByUbicacion(ubicacionId);
 
       const conteosPorTipo = {
         c1: conteos.find(c => c.tipo_conteo === 1),
         c2: conteos.find(c => c.tipo_conteo === 2),
         c3: conteos.find(c => c.tipo_conteo === 3),
-        c4: conteos.find(c => c.tipo_conteo === 4)
+        c4: conteos.find(c => c.tipo_conteo === 4),
+        c5: conteos.find(c => c.tipo_conteo === 5)
       };
 
       // Obtener items de cada conteo
@@ -99,7 +100,7 @@ class InventarioConsolidadoService {
         items.forEach(item => {
           const key = item.item_id;
           if (!itemsMap.has(key)) {
-            itemsMap.set(key, { q1: 0, q2: 0, q3: 0, q4: 0 });
+            itemsMap.set(key, { q1: 0, q2: 0, q3: 0, q4: 0, q5: 0 });
           }
 
           const data = itemsMap.get(key);
@@ -109,16 +110,19 @@ class InventarioConsolidadoService {
           else if (tipo === 'c2') data.q2 += qty;
           else if (tipo === 'c3') data.q3 += qty;
           else if (tipo === 'c4') data.q4 += qty;
+          else if (tipo === 'c5') data.q5 += qty;
         });
       }
 
-      // Aplicar lógica de consenso (misma lógica que exportarBodega)
+      // Aplicar lógica de consenso
       const resultado = [];
       for (const [itemId, counts] of itemsMap) {
         let cantidadFinal = 0;
 
-        // Prioridad: C4 > C3 > Consenso C1=C2 > C2 > C1
-        if (counts.q4 > 0) {
+        // Prioridad: C5 (Reconteo SIESA) > C4 > C3 > Consenso C1=C2 > C2 > C1
+        if (counts.q5 > 0) {
+          cantidadFinal = counts.q5;
+        } else if (counts.q4 > 0) {
           cantidadFinal = counts.q4;
         } else if (counts.q3 > 0) {
           cantidadFinal = counts.q3;
@@ -132,7 +136,7 @@ class InventarioConsolidadoService {
 
         // Safety net: rescatar si hay historial positivo
         if (cantidadFinal === 0) {
-          const maxH = Math.max(counts.q1 || 0, counts.q2 || 0, counts.q3 || 0);
+          const maxH = Math.max(counts.q1 || 0, counts.q2 || 0, counts.q3 || 0, counts.q5 || 0);
           if (maxH > 0) {
             cantidadFinal = maxH;
           }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import ConteoPorUbicacion from "./ConteoPorUbicacion";
 import PanelReconteoDiferencias from "./PanelReconteoDiferencias";
+import ReconteoSiesaEmpleado from "./ReconteoSiesaEmpleado";
 import "./EmpleadoInventarioGeneral.css";
 import { inventarioGeneralService as inventarioService } from "../../services/inventarioGeneralService";
 import { useAuth } from "../../hooks/useAuth";
@@ -54,6 +55,7 @@ const EmpleadoInventarioGeneral = ({
 
   const [mostrarConteo, setMostrarConteo] = useState(false);
   const [mostrarReconteo, setMostrarReconteo] = useState(false); // Nuevo estado para reconteo
+  const [mostrarReconteoSiesa, setMostrarReconteoSiesa] = useState(false); // Reconteo SIESA
   const [mostrarPasswordModal, setMostrarPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [ubicacionActual, setUbicacionActual] = useState(null);
@@ -352,6 +354,17 @@ const EmpleadoInventarioGeneral = ({
     cargarEstructuraCompleta();
   };
 
+  if (mostrarReconteoSiesa) {
+    return (
+      <ReconteoSiesaEmpleado
+        usuarioId={usuarioId}
+        usuarioNombre={usuarioNombre}
+        usuarioEmail={usuarioEmail}
+        onCerrar={() => setMostrarReconteoSiesa(false)}
+      />
+    );
+  }
+
   if (mostrarReconteo) {
     return (
       <PanelReconteoDiferencias
@@ -470,6 +483,24 @@ const EmpleadoInventarioGeneral = ({
               onClick={() => setMostrarPasswordModal(true)}
             >
               ⚠️ Recontar Diferencias
+            </button>
+            <button
+              className="btn-diferencias"
+              style={{
+                backgroundColor: "#2563eb",
+                color: "white",
+                padding: "10px 20px",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+              onClick={() => setMostrarReconteoSiesa(true)}
+            >
+              📋 Reconteos SIESA
             </button>
           </div>
         )}

@@ -1,0 +1,577 @@
+/* =====================================================
+   ESTILOS: RECONTEO SIESA ADMIN
+   ===================================================== */
+
+.rsa-container {
+  padding: 1.5rem;
+  max-width: 100%;
+}
+
+/* Stepper */
+.rsa-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.rsa-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: transparent;
+  border: none;
+  font-size: 0.95rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.rsa-step:hover {
+  background: #f1f5f9;
+}
+
+.rsa-step.active {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.rsa-step.completed {
+  color: #16a34a;
+}
+
+.rsa-step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: #e2e8f0;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.rsa-step.active .rsa-step-number {
+  background: #2563eb;
+  color: white;
+}
+
+.rsa-step.completed .rsa-step-number {
+  background: #16a34a;
+  color: white;
+}
+
+.rsa-step-connector {
+  width: 60px;
+  height: 2px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.rsa-step-connector.active {
+  background: #2563eb;
+}
+
+/* Panels */
+.rsa-panel {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.rsa-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rsa-panel-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #1e293b;
+}
+
+/* Controls */
+.rsa-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.rsa-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+  flex: 1;
+}
+
+.rsa-control-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rsa-control-group select,
+.rsa-control-group input {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 0.9rem;
+  background: white;
+}
+
+.rsa-control-group select:focus,
+.rsa-control-group input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+/* Buttons */
+.rsa-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.rsa-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rsa-btn-primary {
+  background: #2563eb;
+  color: white;
+}
+
+.rsa-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.rsa-btn-success {
+  background: #16a34a;
+  color: white;
+}
+
+.rsa-btn-success:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.rsa-btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.rsa-btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.rsa-btn-outline {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.rsa-btn-outline:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.rsa-btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+/* Summary cards */
+.rsa-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.rsa-stat-card {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+}
+
+.rsa-stat-card .label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rsa-stat-card .value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin-top: 4px;
+}
+
+.rsa-stat-card.highlight {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.rsa-stat-card.success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.rsa-stat-card.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.rsa-stat-card.danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* Zona sections */
+.rsa-zona-section {
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.rsa-zona-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+
+.rsa-zona-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #334155;
+}
+
+.rsa-zona-body {
+  padding: 12px;
+}
+
+/* Ubicación cards */
+.rsa-ubicacion-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.rsa-ubicacion-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.rsa-ubicacion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #fafbfc;
+  border-bottom: 1px solid #f1f5f9;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rsa-ubicacion-path {
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.rsa-ubicacion-path span {
+  color: #94a3b8;
+  margin: 0 4px;
+}
+
+/* Items table */
+.rsa-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.rsa-items-table th {
+  background: #f8fafc;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rsa-items-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.rsa-items-table tr:hover td {
+  background: #f8fafc;
+}
+
+/* Status badges */
+.rsa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.rsa-badge-pendiente {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.rsa-badge-asignado {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.rsa-badge-en_progreso {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.rsa-badge-finalizado {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.rsa-badge-aprobado {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.rsa-badge-rechazado {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Diff colors */
+.rsa-diff-positive {
+  color: #ea580c;
+  font-weight: 700;
+}
+
+.rsa-diff-negative {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.rsa-diff-zero {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+/* Assignment input */
+.rsa-assign-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #eff6ff;
+  border-radius: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.rsa-assign-row input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  font-size: 0.9rem;
+}
+
+/* Checkbox */
+.rsa-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+/* Progress bar */
+.rsa-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.rsa-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Loading */
+.rsa-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem;
+  color: #64748b;
+}
+
+.rsa-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: rsa-spin 0.8s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes rsa-spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.rsa-empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #94a3b8;
+}
+
+.rsa-empty-state .icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+/* Approval card */
+.rsa-approval-card {
+  border: 1px solid #d1fae5;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.rsa-approval-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f0fdf4;
+  border-bottom: 1px solid #d1fae5;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rsa-approval-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fafbfc;
+  justify-content: flex-end;
+}
+
+/* Filter bar */
+.rsa-filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rsa-filter-bar select,
+.rsa-filter-bar input {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .rsa-container {
+    padding: 0.5rem;
+  }
+
+  .rsa-stepper {
+    flex-direction: column;
+    gap: 4px;
+    padding: 1rem;
+  }
+
+  .rsa-step-connector {
+    width: 2px;
+    height: 20px;
+  }
+
+  .rsa-controls {
+    flex-direction: column;
+  }
+
+  .rsa-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .rsa-ubicacion-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rsa-items-table {
+    font-size: 0.78rem;
+  }
+
+  .rsa-items-table th,
+  .rsa-items-table td {
+    padding: 6px 8px;
+  }
+}

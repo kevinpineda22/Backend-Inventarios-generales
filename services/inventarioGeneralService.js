@@ -495,6 +495,127 @@ const inventarioGeneralService = {
     const result = await response.json();
     return result.data;
   },
+
+  // =====================================================
+  // RECONTEO SIESA
+  // =====================================================
+
+  generarReconteosSiesa: async (data) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/generar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al generar reconteos"); }
+    return response.json();
+  },
+
+  obtenerReconteosSiesa: async (bodegaId, filters = {}) => {
+    const query = new URLSearchParams(filters).toString();
+    const response = await fetch(`${API_URL}/reconteo-siesa/bodega/${bodegaId}?${query}`);
+    if (!response.ok) throw new Error("Error al obtener reconteos SIESA");
+    const data = await response.json();
+    return data.data;
+  },
+
+  obtenerReconteosSiesaEmpleado: async (correo, filters = {}) => {
+    const query = new URLSearchParams(filters).toString();
+    const response = await fetch(`${API_URL}/reconteo-siesa/empleado/${encodeURIComponent(correo)}?${query}`);
+    if (!response.ok) throw new Error("Error al obtener reconteos del empleado");
+    const data = await response.json();
+    return data.data;
+  },
+
+  obtenerReconteosSiesaUbicacion: async (ubicacionId, filters = {}) => {
+    const query = new URLSearchParams(filters).toString();
+    const response = await fetch(`${API_URL}/reconteo-siesa/ubicacion/${ubicacionId}?${query}`);
+    if (!response.ok) throw new Error("Error al obtener reconteos de ubicación");
+    const data = await response.json();
+    return data.data;
+  },
+
+  asignarReconteosSiesa: async (reconteoIds, correoEmpleado) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/asignar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reconteoIds, correoEmpleado })
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al asignar reconteos"); }
+    return response.json();
+  },
+
+  asignarUbicacionReconteoSiesa: async (ubicacionId, correoEmpleado, loteId) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/asignar-ubicacion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ubicacionId, correoEmpleado, loteId })
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al asignar ubicación"); }
+    return response.json();
+  },
+
+  iniciarReconteoSiesa: async (data) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/iniciar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al iniciar reconteo"); }
+    return response.json();
+  },
+
+  registrarCantidadReconteoSiesa: async (reconteoId, data) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/${reconteoId}/cantidad`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al registrar cantidad"); }
+    return response.json();
+  },
+
+  finalizarReconteoSiesa: async (data) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/finalizar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al finalizar reconteo"); }
+    return response.json();
+  },
+
+  aprobarReconteosSiesa: async (reconteoIds) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/aprobar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reconteoIds })
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al aprobar reconteos"); }
+    return response.json();
+  },
+
+  rechazarReconteosSiesa: async (reconteoIds, motivo) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/rechazar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reconteoIds, motivo })
+    });
+    if (!response.ok) { const error = await response.json(); throw new Error(error.message || "Error al rechazar reconteos"); }
+    return response.json();
+  },
+
+  obtenerResumenReconteoSiesa: async (bodegaId) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/resumen/${bodegaId}`);
+    if (!response.ok) throw new Error("Error al obtener resumen");
+    const data = await response.json();
+    return data.data;
+  },
+
+  eliminarLoteReconteoSiesa: async (loteId) => {
+    const response = await fetch(`${API_URL}/reconteo-siesa/lote/${loteId}`, { method: "DELETE" });
+    if (!response.ok) throw new Error("Error al eliminar lote");
+    return response.json();
+  },
 };
 
 // Exportar como inventarioGeneralService (nombre original)
