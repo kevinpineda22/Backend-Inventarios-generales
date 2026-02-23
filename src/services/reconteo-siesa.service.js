@@ -69,7 +69,7 @@ class ReconteoSiesaService {
           ubicacion_id: row.ubicacion_id,
           item_id: row.item_id,
           item_codigo: codigo,
-          item_descripcion: diffInfo.descripcion || row.item_nombre,
+          item_descripcion: row.item_nombre || diffInfo.descripcion || '',
           cantidad_fisica: Number(row.cantidad_total) || 0,
           cantidad_siesa: diffInfo.siesa,
           diferencia: (Number(row.cantidad_total) || 0) - diffInfo.siesa,

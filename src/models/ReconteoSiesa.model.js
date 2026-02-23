@@ -29,7 +29,7 @@ export class ReconteoSiesaModel {
   static async findByLote(loteId) {
     try {
       const { data, error } = await supabase
-        .from(VIEW)
+        .from(TABLE)
         .select('*')
         .eq('lote_id', loteId)
         .order('zona_nombre', { ascending: true })
@@ -46,7 +46,7 @@ export class ReconteoSiesaModel {
   static async findByBodega(bodegaId, filters = {}) {
     try {
       let query = supabase
-        .from(VIEW)
+        .from(TABLE)
         .select('*')
         .eq('bodega_id', bodegaId);
 
@@ -74,7 +74,7 @@ export class ReconteoSiesaModel {
   static async findByEmpleado(correoEmpleado, filters = {}) {
     try {
       let query = supabase
-        .from(VIEW)
+        .from(TABLE)
         .select('*')
         .eq('asignado_a', correoEmpleado);
 
@@ -100,7 +100,7 @@ export class ReconteoSiesaModel {
   static async findById(id) {
     try {
       const { data, error } = await supabase
-        .from(VIEW)
+        .from(TABLE)
         .select('*')
         .eq('id', id)
         .single();
