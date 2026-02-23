@@ -39,6 +39,9 @@ const ReconteoSiesaAdmin = () => {
   const [filterEstado, setFilterEstado] = useState('');
   const [loteActivo, setLoteActivo] = useState('');
   const [lotes, setLotes] = useState([]);
+  const [step2View, setStep2View] = useState('summary'); // 'summary' | 'detail'
+  const [selectedItemForDetail, setSelectedItemForDetail] = useState(null);
+  const [filterTextStep2, setFilterTextStep2] = useState('');
 
   // === (Step 3 removido - los reconteos finalizados van directo a Historial Conteos) ===
 
@@ -370,6 +373,66 @@ const ReconteoSiesaAdmin = () => {
 
     return zonaMap;
   }, [reconteos, filterEstado]);
+
+  // Agrupar reconteos por item_codigo (vista resumen)
+  const getItemsSummary = useCallback(() => {
+    let data = [...reconteos];
+    if (filterEstado) {
+      data = data.filter(r => r.estado === filterEstado);
+    }
+
+    const itemMap = new Map();
+    data.forEach(r => {
+      const code = r.item_codigo || 'SIN_CODIGO';
+      if (!itemMap.has(code)) {
+        itemMap.set(code, {
+          codigo: code,
+          descripcion: r.item_descripcion || 'Sin descripción',
+          totalFisico: 0,
+          totalSiesa: r.cantidad_siesa || 0,
+          totalReconteo: 0,
+          hasReconteo: false,
+          ubicaciones: [],
+          estados: { pendiente: 0, asignado: 0, en_progreso: 0, finalizado: 0 }
+        });
+      }
+      const entry = itemMap.get(code);
+      entry.totalFisico += Number(r.cantidad_fisica) || 0;
+      if (r.cantidad_reconteo != null && r.cantidad_reconteo !== undefined) {
+        entry.totalReconteo += Number(r.cantidad_reconteo) || 0;
+        entry.hasReconteo = true;
+      }
+      if (entry.estados[r.estado] !== undefined) entry.estados[r.estado]++;
+      entry.ubicaciones.push(r);
+    });
+
+    let items = Array.from(itemMap.values());
+    items.forEach(it => {
+      it.diferencia = it.totalFisico - it.totalSiesa;
+      it.diferenciaReconteo = it.hasReconteo ? (it.totalReconteo - it.totalSiesa) : null;
+      it.totalUbicaciones = it.ubicaciones.length;
+      // Estado general
+      const total = it.ubicaciones.length;
+      if (it.estados.finalizado === total) it.estadoGeneral = 'finalizado';
+      else if (it.estados.pendiente === total) it.estadoGeneral = 'pendiente';
+      else if (it.estados.en_progreso > 0) it.estadoGeneral = 'en_progreso';
+      else if (it.estados.asignado > 0) it.estadoGeneral = 'parcial';
+      else it.estadoGeneral = 'pendiente';
+    });
+
+    // Filtro de texto
+    if (filterTextStep2) {
+      const lower = filterTextStep2.toLowerCase();
+      items = items.filter(it =>
+        it.codigo.toLowerCase().includes(lower) ||
+        it.descripcion.toLowerCase().includes(lower)
+      );
+    }
+
+    // Ordenar por diferencia absoluta descendente
+    items.sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia));
+    return items;
+  }, [reconteos, filterEstado, filterTextStep2]);
 
   const handleAsignarUbicacion = async (ubicacionId, ubItems) => {
     if (!asignacionEmail.trim()) {
@@ -742,6 +805,7 @@ const ReconteoSiesaAdmin = () => {
     }
 
     const agrupados = getReconteosAgrupados();
+    const itemsSummary = getItemsSummary();
 
     return (
       <div>
@@ -771,13 +835,29 @@ const ReconteoSiesaAdmin = () => {
           </div>
         )}
 
-        {/* Filtros y asignación */}
+        {/* Filtros y controles */}
         <div className="rsa-panel" style={{ marginBottom: '16px' }}>
           <div className="rsa-panel-header">
-            <h3>🏗️ Asignar Reconteos por Ubicación</h3>
-            <button className="rsa-btn rsa-btn-outline rsa-btn-sm" onClick={cargarDatosStep2} disabled={loading}>
-              🔄 Refrescar
-            </button>
+            <h3>📋 Reconteos SIESA</h3>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div className="rsa-view-toggle">
+                <button
+                  className={`rsa-view-btn ${step2View === 'summary' ? 'active' : ''}`}
+                  onClick={() => { setStep2View('summary'); setSelectedItemForDetail(null); }}
+                >
+                  📊 Resumen por Item
+                </button>
+                <button
+                  className={`rsa-view-btn ${step2View === 'location' ? 'active' : ''}`}
+                  onClick={() => setStep2View('location')}
+                >
+                  📍 Por Ubicación
+                </button>
+              </div>
+              <button className="rsa-btn rsa-btn-outline rsa-btn-sm" onClick={cargarDatosStep2} disabled={loading}>
+                🔄 Refrescar
+              </button>
+            </div>
           </div>
 
           <div className="rsa-filter-bar">
@@ -797,31 +877,43 @@ const ReconteoSiesaAdmin = () => {
                 ))}
               </select>
             )}
+
+            {step2View === 'summary' && (
+              <input
+                type="text"
+                placeholder="Buscar código o descripción..."
+                value={filterTextStep2}
+                onChange={e => setFilterTextStep2(e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '0.85rem', minWidth: '220px' }}
+              />
+            )}
           </div>
 
-          {/* Asignación masiva */}
-          <div className="rsa-assign-row">
-            <input
-              type="email"
-              placeholder="Correo del empleado para asignar..."
-              value={asignacionEmail}
-              onChange={e => setAsignacionEmail(e.target.value)}
-            />
-            <button
-              className="rsa-btn rsa-btn-primary rsa-btn-sm"
-              onClick={handleAsignarSeleccionadas}
-              disabled={loading || selectedUbicaciones.size === 0}
-            >
-              📍 Ubicaciones {selectedUbicaciones.size > 0 ? `(${selectedUbicaciones.size})` : ''}
-            </button>
-            <button
-              className="rsa-btn rsa-btn-success rsa-btn-sm"
-              onClick={handleAsignarItemsSeleccionados}
-              disabled={loading || selectedReconteoItems.size === 0}
-            >
-              📦 Items {selectedReconteoItems.size > 0 ? `(${selectedReconteoItems.size})` : ''}
-            </button>
-          </div>
+          {/* Asignación masiva - solo en vista por ubicación */}
+          {step2View === 'location' && (
+            <div className="rsa-assign-row">
+              <input
+                type="email"
+                placeholder="Correo del empleado para asignar..."
+                value={asignacionEmail}
+                onChange={e => setAsignacionEmail(e.target.value)}
+              />
+              <button
+                className="rsa-btn rsa-btn-primary rsa-btn-sm"
+                onClick={handleAsignarSeleccionadas}
+                disabled={loading || selectedUbicaciones.size === 0}
+              >
+                📍 Ubicaciones {selectedUbicaciones.size > 0 ? `(${selectedUbicaciones.size})` : ''}
+              </button>
+              <button
+                className="rsa-btn rsa-btn-success rsa-btn-sm"
+                onClick={handleAsignarItemsSeleccionados}
+                disabled={loading || selectedReconteoItems.size === 0}
+              >
+                📦 Items {selectedReconteoItems.size > 0 ? `(${selectedReconteoItems.size})` : ''}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Lotes management */}
@@ -880,115 +972,291 @@ const ReconteoSiesaAdmin = () => {
           </div>
         )}
 
-        {/* Zonas con ubicaciones */}
-        {loading ? (
-          <div className="rsa-loading"><div className="rsa-spinner"></div><p>Cargando reconteos...</p></div>
-        ) : agrupados.size === 0 ? (
-          <div className="rsa-panel">
-            <div className="rsa-empty-state">
-              <div className="icon">📋</div>
-              <h3>No hay reconteos generados</h3>
-              <p>Vuelva al Paso 1 para comparar con SIESA y generar reconteos.</p>
-            </div>
-          </div>
-        ) : (
-          Array.from(agrupados.values()).map(zona => (
-            <div className="rsa-zona-section" key={zona.zona_id}>
-              <div className="rsa-zona-header" onClick={() => toggleZona(zona.zona_id)}>
-                <h4>📍 {zona.zona_nombre}</h4>
-                <span>{expandedZonas.has(zona.zona_id) ? '▼' : '▶'}</span>
+        {/* ========= VISTA RESUMEN POR ITEM ========= */}
+        {step2View === 'summary' && (
+          loading ? (
+            <div className="rsa-loading"><div className="rsa-spinner"></div><p>Cargando reconteos...</p></div>
+          ) : itemsSummary.length === 0 ? (
+            <div className="rsa-panel">
+              <div className="rsa-empty-state">
+                <div className="icon">📋</div>
+                <h3>No hay reconteos generados</h3>
+                <p>Vuelva al Paso 1 para comparar con SIESA y generar reconteos.</p>
               </div>
-
-              {expandedZonas.has(zona.zona_id) && (
-                <div className="rsa-zona-body">
-                  {Array.from(zona.pasillos.values()).map(pasillo => (
-                    <div key={pasillo.pasillo_id} style={{ marginBottom: '8px' }}>
-                      <div style={{ padding: '6px 10px', background: '#f1f5f9', borderRadius: '6px', fontWeight: 600, fontSize: '0.85rem', marginBottom: '6px' }}>
-                        🚶 {pasillo.pasillo_nombre}
+            </div>
+          ) : (
+            <>
+              {/* Modal de detalle de item */}
+              {selectedItemForDetail && (
+                <div className="rsa-detail-overlay" onClick={() => setSelectedItemForDetail(null)}>
+                  <div className="rsa-detail-modal" onClick={e => e.stopPropagation()}>
+                    <div className="rsa-detail-modal-header">
+                      <div>
+                        <h3 style={{ margin: 0 }}>📦 {selectedItemForDetail.codigo}</h3>
+                        <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>{selectedItemForDetail.descripcion}</p>
                       </div>
-                      {Array.from(pasillo.ubicaciones.values()).map(ub => (
-                        <div className="rsa-ubicacion-card" key={ub.ubicacion_id}>
-                          <div className="rsa-ubicacion-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <input
-                                type="checkbox"
-                                checked={selectedUbicaciones.has(ub.ubicacion_id)}
-                                onChange={() => toggleUbicacionSelection(ub.ubicacion_id)}
-                                className="rsa-checkbox"
-                                disabled={ub.estado !== 'pendiente'}
-                              />
-                              <span className="rsa-ubicacion-path">
-                                {zona.zona_nombre} <span>/</span> {pasillo.pasillo_nombre} <span>/</span> {ub.ubicacion_nombre}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {renderBadge(ub.estado)}
-                              {ub.asignado_a && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>👤 {ub.asignado_a}</span>}
-                              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{ub.items.length} items</span>
-                              {ub.estado === 'pendiente' && (
-                                <button
-                                  className="rsa-btn rsa-btn-primary rsa-btn-sm"
-                                  onClick={() => handleAsignarUbicacion(ub.ubicacion_id, ub.items)}
-                                  disabled={loading || !asignacionEmail.trim()}
-                                  title={ub.items.some(i => selectedReconteoItems.has(i.id)) ? 'Asignar items seleccionados' : 'Asignar toda la ubicación'}
-                                >
-                                  👤 {ub.items.some(i => selectedReconteoItems.has(i.id))
-                                    ? `Asignar (${ub.items.filter(i => selectedReconteoItems.has(i.id)).length} items)`
-                                    : 'Asignar todo'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Items table */}
-                          <table className="rsa-items-table">
-                            <thead>
-                              <tr>
-                                <th style={{ width: '40px' }}></th>
-                                <th>Código</th>
-                                <th>Descripción</th>
-                                <th>Físico</th>
-                                <th>SIESA</th>
-                                <th>Diff</th>
-                                <th>Reconteo</th>
-                                <th>Estado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {ub.items.map(item => (
-                                <tr key={item.id}>
-                                  <td>
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedReconteoItems.has(item.id)}
-                                      onChange={() => toggleReconteoItemSelection(item.id)}
-                                      className="rsa-checkbox"
-                                      disabled={item.estado !== 'pendiente'}
-                                    />
-                                  </td>
-                                  <td style={{ fontWeight: 600 }}>{item.item_codigo}</td>
-                                  <td>{item.item_descripcion || 'Sin descripción'}</td>
-                                  <td>{item.cantidad_fisica}</td>
-                                  <td>{item.cantidad_siesa}</td>
-                                  <td className={item.diferencia === 0 ? 'rsa-diff-zero' : item.diferencia > 0 ? 'rsa-diff-positive' : 'rsa-diff-negative'}>
-                                    {item.diferencia > 0 ? `+${item.diferencia}` : item.diferencia}
-                                  </td>
-                                  <td style={{ fontWeight: 700 }}>
-                                    {item.cantidad_reconteo !== null && item.cantidad_reconteo !== undefined ? item.cantidad_reconteo : '-'}
-                                  </td>
-                                  <td>{renderBadge(item.estado)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ))}
+                      <button className="rsa-detail-close" onClick={() => setSelectedItemForDetail(null)}>✕</button>
                     </div>
-                  ))}
+
+                    {/* Resumen del item en el modal */}
+                    <div className="rsa-detail-summary">
+                      <div className="rsa-detail-stat">
+                        <span className="label">Total Físico</span>
+                        <span className="value">{selectedItemForDetail.totalFisico}</span>
+                      </div>
+                      <div className="rsa-detail-stat">
+                        <span className="label">SIESA</span>
+                        <span className="value">{selectedItemForDetail.totalSiesa}</span>
+                      </div>
+                      <div className="rsa-detail-stat">
+                        <span className="label">Diferencia</span>
+                        <span className={`value ${selectedItemForDetail.diferencia > 0 ? 'positive' : selectedItemForDetail.diferencia < 0 ? 'negative' : ''}`}>
+                          {selectedItemForDetail.diferencia > 0 ? `+${selectedItemForDetail.diferencia}` : selectedItemForDetail.diferencia}
+                        </span>
+                      </div>
+                      {selectedItemForDetail.hasReconteo && (
+                        <div className="rsa-detail-stat">
+                          <span className="label">Total Reconteo</span>
+                          <span className="value" style={{ color: '#8b5cf6', fontWeight: 700 }}>{selectedItemForDetail.totalReconteo}</span>
+                        </div>
+                      )}
+                      <div className="rsa-detail-stat">
+                        <span className="label">Ubicaciones</span>
+                        <span className="value">{selectedItemForDetail.totalUbicaciones}</span>
+                      </div>
+                    </div>
+
+                    {/* Asignación rápida */}
+                    <div className="rsa-assign-row" style={{ margin: '12px 0' }}>
+                      <input
+                        type="email"
+                        placeholder="Correo del empleado para asignar..."
+                        value={asignacionEmail}
+                        onChange={e => setAsignacionEmail(e.target.value)}
+                      />
+                      <button
+                        className="rsa-btn rsa-btn-success rsa-btn-sm"
+                        onClick={handleAsignarItemsSeleccionados}
+                        disabled={loading || selectedReconteoItems.size === 0}
+                      >
+                        👤 Asignar {selectedReconteoItems.size > 0 ? `(${selectedReconteoItems.size})` : ''}
+                      </button>
+                    </div>
+
+                    {/* Tabla detalle por ubicación */}
+                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                      <table className="rsa-items-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '35px' }}></th>
+                            <th>Zona</th>
+                            <th>Pasillo</th>
+                            <th>Ubicación</th>
+                            <th>Conteo Físico</th>
+                            <th>Reconteo</th>
+                            <th>Estado</th>
+                            <th>Asignado a</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedItemForDetail.ubicaciones.map(ub => (
+                            <tr key={ub.id}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedReconteoItems.has(ub.id)}
+                                  onChange={() => toggleReconteoItemSelection(ub.id)}
+                                  className="rsa-checkbox"
+                                  disabled={ub.estado !== 'pendiente'}
+                                />
+                              </td>
+                              <td>{ub.zona_nombre}</td>
+                              <td>{ub.pasillo_nombre}</td>
+                              <td style={{ fontWeight: 600 }}>{ub.ubicacion_nombre}</td>
+                              <td>{ub.cantidad_fisica}</td>
+                              <td style={{ fontWeight: 700, color: ub.cantidad_reconteo != null ? '#8b5cf6' : '#94a3b8' }}>
+                                {ub.cantidad_reconteo != null ? ub.cantidad_reconteo : '-'}
+                              </td>
+                              <td>{renderBadge(ub.estado)}</td>
+                              <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{ub.asignado_a || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               )}
+
+              {/* Tabla resumen por item */}
+              <div className="rsa-panel">
+                <div className="rsa-panel-header">
+                  <h3>📊 Resumen por Item ({itemsSummary.length})</h3>
+                </div>
+                <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                  <table className="rsa-items-table">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Total Físico</th>
+                        <th>SIESA</th>
+                        <th>Diferencia</th>
+                        <th>Reconteo</th>
+                        <th>Ubic.</th>
+                        <th>Estado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemsSummary.map(item => (
+                        <tr key={item.codigo}>
+                          <td style={{ fontWeight: 600 }}>{item.codigo}</td>
+                          <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.descripcion}</td>
+                          <td>{item.totalFisico}</td>
+                          <td>{item.totalSiesa}</td>
+                          <td className={item.diferencia === 0 ? 'rsa-diff-zero' : item.diferencia > 0 ? 'rsa-diff-positive' : 'rsa-diff-negative'}>
+                            {item.diferencia > 0 ? `+${item.diferencia}` : item.diferencia}
+                          </td>
+                          <td style={{ fontWeight: 700, color: item.hasReconteo ? '#8b5cf6' : '#94a3b8' }}>
+                            {item.hasReconteo ? item.totalReconteo : '-'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600 }}>
+                              {item.totalUbicaciones}
+                            </span>
+                          </td>
+                          <td>{renderBadge(item.estadoGeneral)}</td>
+                          <td>
+                            <button
+                              className="rsa-btn rsa-btn-outline rsa-btn-sm"
+                              onClick={() => { setSelectedReconteoItems(new Set()); setSelectedItemForDetail(item); }}
+                              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                            >
+                              🔍 Ver Detalle
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )
+        )}
+
+        {/* ========= VISTA POR UBICACIÓN (original) ========= */}
+        {step2View === 'location' && (
+          loading ? (
+            <div className="rsa-loading"><div className="rsa-spinner"></div><p>Cargando reconteos...</p></div>
+          ) : agrupados.size === 0 ? (
+            <div className="rsa-panel">
+              <div className="rsa-empty-state">
+                <div className="icon">📋</div>
+                <h3>No hay reconteos generados</h3>
+                <p>Vuelva al Paso 1 para comparar con SIESA y generar reconteos.</p>
+              </div>
             </div>
-          ))
+          ) : (
+            Array.from(agrupados.values()).map(zona => (
+              <div className="rsa-zona-section" key={zona.zona_id}>
+                <div className="rsa-zona-header" onClick={() => toggleZona(zona.zona_id)}>
+                  <h4>📍 {zona.zona_nombre}</h4>
+                  <span>{expandedZonas.has(zona.zona_id) ? '▼' : '▶'}</span>
+                </div>
+
+                {expandedZonas.has(zona.zona_id) && (
+                  <div className="rsa-zona-body">
+                    {Array.from(zona.pasillos.values()).map(pasillo => (
+                      <div key={pasillo.pasillo_id} style={{ marginBottom: '8px' }}>
+                        <div style={{ padding: '6px 10px', background: '#f1f5f9', borderRadius: '6px', fontWeight: 600, fontSize: '0.85rem', marginBottom: '6px' }}>
+                          🚶 {pasillo.pasillo_nombre}
+                        </div>
+                        {Array.from(pasillo.ubicaciones.values()).map(ub => (
+                          <div className="rsa-ubicacion-card" key={ub.ubicacion_id}>
+                            <div className="rsa-ubicacion-header">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedUbicaciones.has(ub.ubicacion_id)}
+                                  onChange={() => toggleUbicacionSelection(ub.ubicacion_id)}
+                                  className="rsa-checkbox"
+                                  disabled={ub.estado !== 'pendiente'}
+                                />
+                                <span className="rsa-ubicacion-path">
+                                  {zona.zona_nombre} <span>/</span> {pasillo.pasillo_nombre} <span>/</span> {ub.ubicacion_nombre}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {renderBadge(ub.estado)}
+                                {ub.asignado_a && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>👤 {ub.asignado_a}</span>}
+                                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{ub.items.length} items</span>
+                                {ub.estado === 'pendiente' && (
+                                  <button
+                                    className="rsa-btn rsa-btn-primary rsa-btn-sm"
+                                    onClick={() => handleAsignarUbicacion(ub.ubicacion_id, ub.items)}
+                                    disabled={loading || !asignacionEmail.trim()}
+                                    title={ub.items.some(i => selectedReconteoItems.has(i.id)) ? 'Asignar items seleccionados' : 'Asignar toda la ubicación'}
+                                  >
+                                    👤 {ub.items.some(i => selectedReconteoItems.has(i.id))
+                                      ? `Asignar (${ub.items.filter(i => selectedReconteoItems.has(i.id)).length} items)`
+                                      : 'Asignar todo'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Items table */}
+                            <table className="rsa-items-table">
+                              <thead>
+                                <tr>
+                                  <th style={{ width: '40px' }}></th>
+                                  <th>Código</th>
+                                  <th>Descripción</th>
+                                  <th>Físico</th>
+                                  <th>SIESA</th>
+                                  <th>Diff</th>
+                                  <th>Reconteo</th>
+                                  <th>Estado</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ub.items.map(item => (
+                                  <tr key={item.id}>
+                                    <td>
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedReconteoItems.has(item.id)}
+                                        onChange={() => toggleReconteoItemSelection(item.id)}
+                                        className="rsa-checkbox"
+                                        disabled={item.estado !== 'pendiente'}
+                                      />
+                                    </td>
+                                    <td style={{ fontWeight: 600 }}>{item.item_codigo}</td>
+                                    <td>{item.item_descripcion || 'Sin descripción'}</td>
+                                    <td>{item.cantidad_fisica}</td>
+                                    <td>{item.cantidad_siesa}</td>
+                                    <td className={item.diferencia === 0 ? 'rsa-diff-zero' : item.diferencia > 0 ? 'rsa-diff-positive' : 'rsa-diff-negative'}>
+                                      {item.diferencia > 0 ? `+${item.diferencia}` : item.diferencia}
+                                    </td>
+                                    <td style={{ fontWeight: 700 }}>
+                                      {item.cantidad_reconteo !== null && item.cantidad_reconteo !== undefined ? item.cantidad_reconteo : '-'}
+                                    </td>
+                                    <td>{renderBadge(item.estado)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )
         )}
       </div>
     );

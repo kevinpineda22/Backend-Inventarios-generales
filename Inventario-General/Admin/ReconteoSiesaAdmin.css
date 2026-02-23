@@ -574,4 +574,140 @@
   .rsa-items-table td {
     padding: 6px 8px;
   }
+
+  .rsa-detail-modal {
+    width: 98vw;
+    max-height: 90vh;
+  }
+}
+
+/* =====================================================
+   VIEW TOGGLE (Resumen por Item / Por Ubicación)
+   ===================================================== */
+
+.rsa-view-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.rsa-view-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.rsa-view-btn:hover {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.rsa-view-btn.active {
+  background: white;
+  color: #1e40af;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* =====================================================
+   DETAIL MODAL (Ver Detalle por Item)
+   ===================================================== */
+
+.rsa-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.rsa-detail-modal {
+  background: white;
+  border-radius: 16px;
+  width: 900px;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+
+.rsa-detail-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  background: white;
+  border-radius: 16px 16px 0 0;
+  z-index: 2;
+}
+
+.rsa-detail-close {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.rsa-detail-close:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.rsa-detail-summary {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.rsa-detail-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 18px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  min-width: 100px;
+}
+
+.rsa-detail-stat .label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rsa-detail-stat .value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-top: 2px;
+}
+
+.rsa-detail-stat .value.positive {
+  color: #16a34a;
+}
+
+.rsa-detail-stat .value.negative {
+  color: #dc2626;
 }
