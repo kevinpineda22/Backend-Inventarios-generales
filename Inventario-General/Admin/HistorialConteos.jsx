@@ -523,6 +523,52 @@ const HistorialConteos = () => {
       items = Object.values(itemMap);
     }
 
+    // Inyectar datos C5 (Reconteo SIESA aprobado) si existen para esta ubicación
+    if (ubicacionId) {
+      try {
+        const reconteosSiesa = await inventarioService.obtenerReconteosSiesaUbicacion(ubicacionId, { estado: 'aprobado' });
+        if (reconteosSiesa && reconteosSiesa.length > 0) {
+          // Crear mapa de cantidades C5 por item_codigo
+          const c5Map = {};
+          reconteosSiesa.forEach(r => {
+            const codigo = String(r.item_codigo).trim();
+            const qty = r.cantidad_reconteo != null ? Number(r.cantidad_reconteo) : Number(r.cantidad_fisica);
+            c5Map[codigo] = (c5Map[codigo] || 0) + (isNaN(qty) ? 0 : qty);
+          });
+
+          // Merge C5 en items existentes
+          items.forEach(item => {
+            const codigo = String(item.codigo).trim();
+            if (c5Map[codigo] !== undefined) {
+              item.c5 = c5Map[codigo];
+              delete c5Map[codigo];
+            } else {
+              item.c5 = 0;
+            }
+          });
+
+          // Agregar items que solo existen en C5 (no en C1-C4)
+          Object.entries(c5Map).forEach(([codigo, qty]) => {
+            const reconteo = reconteosSiesa.find(r => String(r.item_codigo).trim() === codigo);
+            items.push({
+              id: reconteo?.item_id || codigo,
+              codigo: codigo,
+              descripcion: reconteo?.item_descripcion || codigo,
+              barra: codigo,
+              c1: 0, c2: 0, c3: 0, c4: 0,
+              c5: qty
+            });
+          });
+        } else {
+          // Sin C5: marcar todos como 0
+          items.forEach(item => { item.c5 = 0; });
+        }
+      } catch (c5Error) {
+        console.warn('No se pudieron cargar reconteos SIESA para comparativa:', c5Error);
+        items.forEach(item => { item.c5 = 0; });
+      }
+    }
+
     // Analizar resolución
     const initialSelection = {};
     const initialManualValues = {};
@@ -762,6 +808,7 @@ const HistorialConteos = () => {
         if (selection === 'c1') finalQty = item.c1;
         else if (selection === 'c2') finalQty = item.c2;
         else if (selection === 'c3') finalQty = item.c3;
+        else if (selection === 'c5') finalQty = item.c5;
         else if (selection === 'manual' ) finalQty = Number(manualValues[item.codigo]);
       }
 

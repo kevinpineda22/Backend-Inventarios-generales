@@ -67,7 +67,7 @@ class ConteoService {
       // 2. Resolver cantidad final para cada ubicación (Lógica de Consenso)
       const locations = Object.values(locationGroups).map(group => {
           const items = group.items;
-          let q1 = null, q2 = null, q3 = null, q4 = null, q5 = null;
+          let q1 = null, q2 = null, q3 = null, q4 = null;
           
           items.forEach(i => {
               // Robustez: Asegurar que conteo existe y tipos son correctos
@@ -81,21 +81,15 @@ class ConteoService {
               else if (type === 2) q2 = (q2 === null ? 0 : q2) + qty;
               else if (type === 3) q3 = (q3 === null ? 0 : q3) + qty;
               else if (type === 4) q4 = (q4 === null ? 0 : q4) + qty;
-              else if (type === 5) q5 = (q5 === null ? 0 : q5) + qty;
           });
 
           let finalQty = 0;
           let status = 'N/A';
 
-          // Prioridad: C5 (Reconteo SIESA) > Ajuste > Consenso C1=C2 > Reconteo > C2 > C1
-          // C5 tiene la máxima prioridad ya que es validación contra SIESA
-          if (q5 !== null) {
-              finalQty = q5;
-              status = 'Reconteo SIESA';
-          }
+          // Prioridad: Ajuste > Consenso C1=C2 > Reconteo > C2 > C1
           // FIX ROBUSTO V2: Priorizar valores positivos sobre ceros accidentales
           // Si tenemos un ajuste final positivo, es ley.
-          else if (q4 !== null && q4 > 0) { 
+          if (q4 !== null && q4 > 0) { 
               finalQty = q4; 
               status = 'Ajuste Final'; 
           }
@@ -128,7 +122,7 @@ class ConteoService {
 
           // SAFETY NET FINAL: Si por alguna razón sigue siendo 0 y hay historia, sacar el máximo
           if (finalQty === 0) {
-              const maxH = Math.max(q1 || 0, q2 || 0, q3 || 0, q5 || 0);
+              const maxH = Math.max(q1 || 0, q2 || 0, q3 || 0);
               if (maxH > 0) {
                   finalQty = maxH;
                   status = 'Histórico Recuperado';

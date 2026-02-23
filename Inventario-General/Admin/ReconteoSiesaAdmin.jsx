@@ -560,7 +560,7 @@ const ReconteoSiesaAdmin = () => {
   const handleAprobar = async (reconteoIds) => {
     const { isConfirmed } = await Swal.fire({
       title: 'Aprobar Reconteos',
-      html: `Se aprobarán <strong>${reconteoIds.length}</strong> reconteos y se re-consolidará el inventario.`,
+      html: `Se aprobarán <strong>${reconteoIds.length}</strong> reconteos finalizados.`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Aprobar',
@@ -570,7 +570,7 @@ const ReconteoSiesaAdmin = () => {
 
     try {
       setLoading(true);
-      setProgress('Aprobando y re-consolidando...');
+      setProgress('Aprobando reconteos...');
       const result = await inventarioGeneralService.aprobarReconteosSiesa(reconteoIds);
       if (result.success) {
         Swal.fire('Aprobado', result.message, 'success');
@@ -1208,7 +1208,7 @@ const ReconteoSiesaAdmin = () => {
                     onClick={() => handleAprobar(ub.items.map(i => i.id))}
                     disabled={loading}
                   >
-                    ✅ Aprobar y Re-consolidar
+                    ✅ Aprobar
                   </button>
                 </div>
               </div>

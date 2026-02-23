@@ -179,7 +179,6 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
                                                 <th>Pasillo</th>
                                                 <th>Ubicación</th>
                                                 <th>Cantidad</th>
-                                                <th>Origen</th>
                                                 <th>Fecha</th>
                                                 <th>Acción</th>
                                             </tr>
@@ -192,11 +191,6 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
                                                     <td>{loc.pasillo}</td>
                                                     <td>{loc.ubicacion}</td>
                                                     <td><span className="adv-qty-badge">{loc.cantidad}</span></td>
-                                                    <td>
-                                                        <span className={`adv-tipo-badge ${loc.tipo_conteo === 'Reconteo SIESA' ? 'adv-tipo-siesa' : ''}`}>
-                                                            {loc.tipo_conteo === 'Reconteo SIESA' ? '🔄 SIESA' : loc.tipo_conteo || '-'}
-                                                        </span>
-                                                    </td>
                                                     <td>{new Date(loc.fecha).toLocaleDateString()}</td>
                                                     <td>
                                                         <button 

@@ -3,10 +3,7 @@
 // =====================================================
 
 import ReconteoSiesaModel from '../models/ReconteoSiesa.model.js';
-import ConteoModel from '../models/Conteo.model.js';
-import ConteoItemModel from '../models/ConteoItem.model.js';
 import UbicacionModel from '../models/Ubicacion.model.js';
-import InventarioConsolidadoService from './inventario-consolidado.service.js';
 import { supabase } from '../config/supabase.js';
 
 class ReconteoSiesaService {
@@ -378,13 +375,9 @@ class ReconteoSiesaService {
   }
 
   /**
-   * Aprobar reconteos y re-consolidar inventario.
-   * FLUJO CRÍTICO:
-   * 1. Marcar reconteos como 'aprobado' en inv_general_reconteo_siesa
-   * 2. Crear/actualizar registros C5 en inv_general_conteos + inv_general_conteo_items
-   *    (esto es el PUENTE para que la consolidación los encuentre)
-   * 3. Re-consolidar ubicación → pasillo → zona → bodega
-   * 4. El export lee de v_inventario_consolidado_completo → C5 ya está reflejado
+   * Aprobar reconteos finalizados.
+   * Solo marca como 'aprobado' en inv_general_reconteo_siesa.
+   * El admin decide el valor final manualmente en la Comparativa.
    */
   static async aprobarReconteos(reconteoIds) {
     try {
@@ -403,7 +396,7 @@ class ReconteoSiesaService {
         return { success: false, message: 'No hay reconteos finalizados para aprobar' };
       }
 
-      // 1. Aprobar reconteos en la tabla de reconteo SIESA
+      // Marcar como aprobado
       await ReconteoSiesaModel.updateBatch(
         reconteos.map(r => r.id),
         {
@@ -412,133 +405,11 @@ class ReconteoSiesaService {
         }
       );
 
-      // 2. PUENTE CRÍTICO: Insertar/actualizar C5 en inv_general_conteos + inv_general_conteo_items
-      // Agrupamos por ubicación para crear UN conteo C5 por ubicación
-      const ubicacionesMap = new Map();
-      reconteos.forEach(r => {
-        if (!ubicacionesMap.has(r.ubicacion_id)) {
-          ubicacionesMap.set(r.ubicacion_id, {
-            ubicacion_id: r.ubicacion_id,
-            asignado_a: r.asignado_a,
-            items: []
-          });
-        }
-        ubicacionesMap.get(r.ubicacion_id).items.push({
-          item_id: r.item_id,
-          cantidad: r.cantidad_reconteo != null ? Number(r.cantidad_reconteo) : Number(r.cantidad_fisica),
-          usuario_email: r.asignado_a
-        });
-      });
-
-      const conteosC5Creados = [];
-      for (const [ubicacionId, ubData] of ubicacionesMap) {
-        try {
-          // Buscar si ya existe un conteo C5 para esta ubicación
-          const existingC5 = await ConteoModel.findByUbicacionAndTipo(ubicacionId, 5);
-
-          let conteoC5;
-          if (existingC5) {
-            // Ya existe C5 → actualizar estado y limpiar items anteriores
-            conteoC5 = await ConteoModel.update(existingC5.id, {
-              estado: 'finalizado',
-              fecha_fin: new Date().toISOString(),
-              correo_empleado: ubData.asignado_a || 'reconteo-siesa'
-            });
-            // Eliminar items anteriores para re-insertar con datos actualizados
-            await ConteoItemModel.deleteByConteo(existingC5.id);
-            conteoC5 = existingC5;
-          } else {
-            // Crear nuevo conteo C5
-            conteoC5 = await ConteoModel.create({
-              ubicacion_id: ubicacionId,
-              tipo_conteo: 5,
-              estado: 'finalizado',
-              usuario_id: ubData.asignado_a || 'reconteo-siesa',
-              correo_empleado: ubData.asignado_a || 'reconteo-siesa'
-            });
-          }
-
-          // Insertar items del reconteo aprobado
-          for (const item of ubData.items) {
-            await ConteoItemModel.create({
-              conteo_id: conteoC5.id,
-              item_id: item.item_id,
-              cantidad: item.cantidad,
-              usuario_email: item.usuario_email
-            });
-          }
-
-          conteosC5Creados.push(conteoC5.id);
-        } catch (e) {
-          console.error(`Error creando conteo C5 para ubicación ${ubicacionId}:`, e);
-        }
-      }
-
-      console.log(`[APROBAR] Creados ${conteosC5Creados.length} conteos C5 en inv_general_conteos`);
-
-      // 3. Re-consolidar las ubicaciones afectadas
-      const ubicacionesAfectadas = [...ubicacionesMap.keys()];
-      const reconsolidadas = [];
-
-      for (const ubicacionId of ubicacionesAfectadas) {
-        try {
-          await InventarioConsolidadoService.consolidarInventario('ubicacion', ubicacionId);
-          reconsolidadas.push(ubicacionId);
-        } catch (e) {
-          console.error(`Error reconsolidando ubicación ${ubicacionId}:`, e);
-        }
-      }
-
-      // Re-consolidar pasillos, zonas y bodegas afectados
-      const pasillosAfectados = [...new Set(reconteos.map(r => r.pasillo_id).filter(Boolean))];
-      for (const pasilloId of pasillosAfectados) {
-        try {
-          const itemsConsolidados = await InventarioConsolidadoService.sumarInventarioHijos('ubicacion', 'pasillo_id', pasilloId);
-          const jerarquia = await InventarioConsolidadoService.getJerarquiaPasillo(pasilloId);
-          if (itemsConsolidados.length > 0) {
-            const { default: InventarioConsolidadoModel } = await import('../models/InventarioConsolidado.model.js');
-            await InventarioConsolidadoModel.upsertBatch(itemsConsolidados, 'pasillo', pasilloId, jerarquia);
-          }
-        } catch (e) {
-          console.error(`Error reconsolidando pasillo ${pasilloId}:`, e);
-        }
-      }
-
-      const zonasAfectadas = [...new Set(reconteos.map(r => r.zona_id).filter(Boolean))];
-      for (const zonaId of zonasAfectadas) {
-        try {
-          const itemsConsolidados = await InventarioConsolidadoService.sumarInventarioHijos('pasillo', 'zona_id', zonaId);
-          const jerarquia = await InventarioConsolidadoService.getJerarquiaZona(zonaId);
-          if (itemsConsolidados.length > 0) {
-            const { default: InventarioConsolidadoModel } = await import('../models/InventarioConsolidado.model.js');
-            await InventarioConsolidadoModel.upsertBatch(itemsConsolidados, 'zona', zonaId, jerarquia);
-          }
-        } catch (e) {
-          console.error(`Error reconsolidando zona ${zonaId}:`, e);
-        }
-      }
-
-      const bodegasAfectadas = [...new Set(reconteos.map(r => r.bodega_id).filter(Boolean))];
-      for (const bodegaId of bodegasAfectadas) {
-        try {
-          const itemsConsolidados = await InventarioConsolidadoService.sumarInventarioHijos('zona', 'bodega_id', bodegaId);
-          const jerarquia = await InventarioConsolidadoService.getJerarquiaBodega(bodegaId);
-          if (itemsConsolidados.length > 0) {
-            const { default: InventarioConsolidadoModel } = await import('../models/InventarioConsolidado.model.js');
-            await InventarioConsolidadoModel.upsertBatch(itemsConsolidados, 'bodega', bodegaId, jerarquia);
-          }
-        } catch (e) {
-          console.error(`Error reconsolidando bodega ${bodegaId}:`, e);
-        }
-      }
-
       return {
         success: true,
-        message: `${reconteos.length} reconteos aprobados, ${conteosC5Creados.length} conteos C5 creados y ${reconsolidadas.length} ubicaciones re-consolidadas`,
+        message: `${reconteos.length} reconteos aprobados correctamente`,
         data: {
-          aprobados: reconteos.length,
-          conteos_c5_creados: conteosC5Creados.length,
-          ubicaciones_reconsolidadas: reconsolidadas.length
+          aprobados: reconteos.length
         }
       };
     } catch (error) {

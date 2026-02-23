@@ -255,21 +255,7 @@
   display: inline-block;
 }
 
-.adv-tipo-badge {
-  font-size: 0.75rem;
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  background-color: #f1f5f9;
-  color: #475569;
-  white-space: nowrap;
-}
 
-.adv-tipo-badge.adv-tipo-siesa {
-  background-color: #dbeafe;
-  color: #1d4ed8;
-  border: 1px solid #93c5fd;
-}
 
 .adv-go-btn {
   background-color: #22c55e;

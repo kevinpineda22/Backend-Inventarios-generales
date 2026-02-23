@@ -34,6 +34,8 @@ const ComparativaModal = ({
             const diff = item.c1 - item.c2;
             // Solo seleccionar items con diferencias o en modo edición
             if (diff !== 0 || editMode) {
+                // Para C5, solo seleccionar si el item tiene valor de reconteo SIESA
+                if (column === 'c5' && !(item.c5 > 0)) return;
                 newSelection[item.codigo] = column;
                 // Limpiar valores manuales cuando se selecciona una columna
                 delete newManualValues[item.codigo];
@@ -245,6 +247,31 @@ const ComparativaModal = ({
                     </th>
                     <th className="hc-text-center">Diferencia</th>
                     <th className="hc-text-center">Reconteo</th>
+                    {comparisonData.items.some(i => i.c5 > 0) && (
+                    <th className="hc-text-center" style={{background: '#eff6ff'}}>
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center'}}>
+                        <span style={{color: '#1d4ed8'}}>🔄 Reconteo SIESA</span>
+                        <button
+                          onClick={() => handleSelectColumn('c5')}
+                          className="hc-btn-select-column"
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '0.75rem',
+                            borderRadius: '4px',
+                            border: '1px solid #3b82f6',
+                            background: 'white',
+                            color: '#3b82f6',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            transition: 'all 0.2s'
+                          }}
+                          title="Seleccionar toda esta columna"
+                        >
+                          ✓ Seleccionar todo
+                        </button>
+                      </div>
+                    </th>
+                    )}
                     <th className="hc-text-center">Conteo Final</th>
                   </tr>
                 </thead>
@@ -257,6 +284,7 @@ const ComparativaModal = ({
                     if (selectedSource === 'c1') finalValue = item.c1;
                     else if (selectedSource === 'c2') finalValue = item.c2;
                     else if (selectedSource === 'c3') finalValue = item.c3;
+                    else if (selectedSource === 'c5') finalValue = item.c5;
                     else if (selectedSource === 'manual') finalValue = manualValues[item.codigo] || '';
 
                     return (
@@ -335,6 +363,29 @@ const ComparativaModal = ({
                           ) : '-'
                           }
                         </td>
+                        {comparisonData.items.some(i => i.c5 > 0) && (
+                        <td className="hc-text-center" style={{background: '#f0f7ff'}}>
+                          {item.c5 > 0 ? (
+                            <label className="hc-radio-label" style={{color: '#1d4ed8', fontWeight: '600'}}>
+                              <input 
+                                type="radio" 
+                                name={`final-${item.codigo}`}
+                                checked={selectedSource === 'c5'}
+                                onChange={() => {
+                                  setFinalSelection(prev => ({...prev, [item.codigo]: 'c5'}));
+                                  setManualValues(prev => {
+                                    const next = {...prev};
+                                    delete next[item.codigo];
+                                    return next;
+                                  });
+                                }}
+                              />
+                              {item.c5}
+                            </label>
+                          ) : <span style={{color: '#94a3b8'}}>-</span>
+                          }
+                        </td>
+                        )}
                         <td className="hc-text-center">
                           {diff === 0 && !editMode ? (
                              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '30px'}}>
@@ -366,6 +417,7 @@ const ComparativaModal = ({
                                   if (selectedSource === 'c1') displayValue = item.c1;
                                   else if (selectedSource === 'c2') displayValue = item.c2;
                                   else if (selectedSource === 'c3') displayValue = item.c3;
+                                  else if (selectedSource === 'c5') displayValue = item.c5;
                                   else if (diff === 0) displayValue = item.c1;
                               }
 
