@@ -768,10 +768,6 @@ const ReconteoSiesaAdmin = () => {
               <div className="label">Finalizados</div>
               <div className="value">{resumen.finalizado || 0}</div>
             </div>
-            <div className="rsa-stat-card success">
-              <div className="label">Aprobados</div>
-              <div className="value">{resumen.aprobado || 0}</div>
-            </div>
           </div>
         )}
 

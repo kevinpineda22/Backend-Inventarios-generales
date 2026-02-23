@@ -388,12 +388,17 @@ const HistorialConteos = () => {
             pasillo.ubicaciones = pasillo.ubicaciones.filter(loc => !loc.final);
         }
 
+        // FILTRO: Solo ubicaciones con Reconteo SIESA
+        if (filtros.soloReconteoSiesa) {
+            pasillo.ubicaciones = pasillo.ubicaciones.filter(loc => loc.c5 != null);
+        }
+
         pasillo.ubicaciones.sort((a, b) => a.ubicacion.localeCompare(b.ubicacion, undefined, { numeric: true }));
         return pasillo;
       });
       
       // Limpiar pasillos que quedaron vacíos tras el filtro de usuario
-      if (filtros.usuario || filtros.soloPendientes) {
+      if (filtros.usuario || filtros.soloPendientes || filtros.soloReconteoSiesa) {
           zona.pasillos = zona.pasillos.filter(p => p.ubicaciones.length > 0);
       }
       

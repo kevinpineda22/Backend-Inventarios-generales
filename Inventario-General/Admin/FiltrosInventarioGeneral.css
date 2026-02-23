@@ -118,3 +118,9 @@
   border-color: #fdba74;
   color: #c2410c;
 }
+
+.fig-toggle-btn.fig-toggle-siesa.active {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}

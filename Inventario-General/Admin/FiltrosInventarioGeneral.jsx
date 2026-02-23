@@ -30,7 +30,8 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
       ubicacion: '',
       usuario: '',
       producto: '',
-      soloPendientes: false
+      soloPendientes: false,
+      soloReconteoSiesa: false
     });
   };
 
@@ -149,6 +150,14 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         title="Muestra ubicaciones con diferencias sin resolver o conteos en progreso"
       >
         ⚠️ Pendientes
+      </button>
+
+      <button
+        className={`fig-toggle-btn fig-toggle-siesa ${filtros.soloReconteoSiesa ? 'active' : ''}`}
+        onClick={() => handleChange('soloReconteoSiesa', !filtros.soloReconteoSiesa)}
+        title="Muestra solo ubicaciones que tienen Reconteo SIESA"
+      >
+        🔄 Reconteos SIESA
       </button>
 
       <div className="fig-input-wrapper">

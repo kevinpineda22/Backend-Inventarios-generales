@@ -464,7 +464,7 @@ const EmpleadoInventarioGeneral = ({
         {selectedCompany && (
           <div
             className="form-group"
-            style={{ display: "flex", alignItems: "flex-end" }}
+            style={{ display: "flex", alignItems: "flex-end", gap: "12px" }}
           >
             <button
               className="btn-diferencias"
@@ -473,30 +473,39 @@ const EmpleadoInventarioGeneral = ({
                 color: "white",
                 padding: "10px 20px",
                 border: "none",
-                borderRadius: "4px",
+                borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "bold",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
+                fontSize: "0.9rem",
+                boxShadow: "0 2px 6px rgba(231,76,60,0.3)",
+                transition: "all 0.2s",
               }}
               onClick={() => setMostrarPasswordModal(true)}
             >
               ⚠️ Recontar Diferencias
             </button>
+
+            <div style={{ width: '2px', height: '32px', backgroundColor: '#e2e8f0', borderRadius: '1px' }} />
+
             <button
-              className="btn-diferencias"
+              className="btn-reconteo-siesa"
               style={{
                 backgroundColor: "#2563eb",
                 color: "white",
                 padding: "10px 20px",
                 border: "none",
-                borderRadius: "4px",
+                borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "bold",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
+                fontSize: "0.9rem",
+                boxShadow: "0 2px 6px rgba(37,99,235,0.3)",
+                transition: "all 0.2s",
               }}
               onClick={() => setMostrarReconteoSiesa(true)}
             >
