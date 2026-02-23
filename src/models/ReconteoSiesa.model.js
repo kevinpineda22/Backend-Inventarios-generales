@@ -186,18 +186,24 @@ export class ReconteoSiesaModel {
     try {
       const { data, error } = await supabase
         .from(TABLE)
-        .select('lote_id, fecha_comparacion, compania_id')
+        .select('lote_id, fecha_comparacion, compania_id, estado')
         .eq('bodega_id', bodegaId)
         .not('lote_id', 'is', null)
         .order('fecha_comparacion', { ascending: false });
       if (error) throw error;
 
-      // Deduplicar por lote_id
+      // Deduplicar por lote_id y contar items
       const lotesMap = new Map();
       data.forEach(r => {
         if (!lotesMap.has(r.lote_id)) {
-          lotesMap.set(r.lote_id, r);
+          lotesMap.set(r.lote_id, {
+            lote_id: r.lote_id,
+            fecha_comparacion: r.fecha_comparacion,
+            compania_id: r.compania_id,
+            total: 0
+          });
         }
+        lotesMap.get(r.lote_id).total++;
       });
       return Array.from(lotesMap.values());
     } catch (error) { throw handleSupabaseError(error); }
@@ -256,7 +262,14 @@ export class ReconteoSiesaModel {
         .not('asignado_a', 'is', null);
       if (error) throw error;
 
-      return [...new Set(data.map(r => r.asignado_a).filter(Boolean))];
+      // Agrupar por empleado con conteo
+      const empMap = new Map();
+      data.forEach(r => {
+        if (r.asignado_a) {
+          empMap.set(r.asignado_a, (empMap.get(r.asignado_a) || 0) + 1);
+        }
+      });
+      return Array.from(empMap.entries()).map(([asignado_a, total]) => ({ asignado_a, total }));
     } catch (error) { throw handleSupabaseError(error); }
   }
 }

@@ -63,7 +63,7 @@ const ReconteoSiesaAdmin = () => {
     if (selectedBodega && currentStep >= 2) {
       cargarDatosStep2();
     }
-  }, [selectedBodega, currentStep]);
+  }, [selectedBodega, currentStep, loteActivo]);
 
   // Al cambiar a step 3, cargar finalizados
   useEffect(() => {
@@ -124,8 +124,10 @@ const ReconteoSiesaAdmin = () => {
   const cargarDatosStep2 = async () => {
     try {
       setLoading(true);
+      const filters = {};
+      if (loteActivo) filters.lote_id = loteActivo;
       const [reconteoData, resumenData] = await Promise.all([
-        inventarioGeneralService.obtenerReconteosSiesa(selectedBodega, { lote_id: loteActivo || undefined }),
+        inventarioGeneralService.obtenerReconteosSiesa(selectedBodega, filters),
         inventarioGeneralService.obtenerResumenReconteoSiesa(selectedBodega)
       ]);
       setReconteos(reconteoData || []);
@@ -792,11 +794,11 @@ const ReconteoSiesaAdmin = () => {
             </div>
             <div className="rsa-stat-card warning">
               <div className="label">Pendientes</div>
-              <div className="value">{resumen.pendientes || 0}</div>
+              <div className="value">{resumen.pendiente || 0}</div>
             </div>
             <div className="rsa-stat-card highlight">
               <div className="label">Asignados</div>
-              <div className="value">{resumen.asignados || 0}</div>
+              <div className="value">{resumen.asignado || 0}</div>
             </div>
             <div className="rsa-stat-card">
               <div className="label">En Progreso</div>
@@ -804,11 +806,11 @@ const ReconteoSiesaAdmin = () => {
             </div>
             <div className="rsa-stat-card success">
               <div className="label">Finalizados</div>
-              <div className="value">{resumen.finalizados || 0}</div>
+              <div className="value">{resumen.finalizado || 0}</div>
             </div>
             <div className="rsa-stat-card success">
               <div className="label">Aprobados</div>
-              <div className="value">{resumen.aprobados || 0}</div>
+              <div className="value">{resumen.aprobado || 0}</div>
             </div>
           </div>
         )}

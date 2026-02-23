@@ -5,6 +5,7 @@
 import ReconteoSiesaModel from '../models/ReconteoSiesa.model.js';
 import ConteoModel from '../models/Conteo.model.js';
 import ConteoItemModel from '../models/ConteoItem.model.js';
+import UbicacionModel from '../models/Ubicacion.model.js';
 import InventarioConsolidadoService from './inventario-consolidado.service.js';
 import { supabase } from '../config/supabase.js';
 
@@ -229,8 +230,14 @@ class ReconteoSiesaService {
   /**
    * Iniciar reconteo de una ubicación (empleado empieza a contar)
    */
-  static async iniciarReconteoUbicacion(ubicacionId, usuarioId, usuarioEmail) {
+  static async iniciarReconteoUbicacion(ubicacionId, usuarioId, usuarioEmail, clave) {
     try {
+      // Verificar la clave de la ubicación
+      const claveValida = await UbicacionModel.verifyClave(ubicacionId, clave);
+      if (!claveValida) {
+        return { success: false, message: 'Clave incorrecta' };
+      }
+
       // Buscar items asignados a este empleado en esta ubicación
       const items = await ReconteoSiesaModel.findByUbicacion(ubicacionId, { estado: 'asignado' });
       const misItems = items.filter(i => i.asignado_a === usuarioEmail);

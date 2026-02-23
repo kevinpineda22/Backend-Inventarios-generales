@@ -64,11 +64,14 @@ export class ReconteoSiesaController {
 
   static async iniciarReconteo(req, res) {
     try {
-      const { ubicacionId, usuarioId, usuarioEmail } = req.body;
+      const { ubicacionId, usuarioId, usuarioEmail, clave } = req.body;
       if (!ubicacionId || !usuarioId || !usuarioEmail) {
         return errorResponse(res, 'ubicacionId, usuarioId y usuarioEmail son requeridos', 400);
       }
-      const result = await ReconteoSiesaService.iniciarReconteoUbicacion(ubicacionId, usuarioId, usuarioEmail);
+      if (!clave) {
+        return errorResponse(res, 'La clave de la ubicación es requerida', 400);
+      }
+      const result = await ReconteoSiesaService.iniciarReconteoUbicacion(ubicacionId, usuarioId, usuarioEmail, clave);
       if (!result.success) return errorResponse(res, result.message, 400);
       return successResponse(res, result.data, result.message, 201);
     } catch (error) { return errorResponse(res, error.message, 500, error); }
