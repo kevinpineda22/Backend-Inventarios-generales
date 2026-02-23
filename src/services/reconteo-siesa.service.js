@@ -3,6 +3,8 @@
 // =====================================================
 
 import ReconteoSiesaModel from '../models/ReconteoSiesa.model.js';
+import ConteoModel from '../models/Conteo.model.js';
+import ConteoItemModel from '../models/ConteoItem.model.js';
 import UbicacionModel from '../models/Ubicacion.model.js';
 import { supabase } from '../config/supabase.js';
 
