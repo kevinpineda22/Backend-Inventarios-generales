@@ -338,11 +338,19 @@ const HistorialConteos = () => {
         zonasMap[c.zona].pasillos[c.pasillo].ubicaciones.push(locEntry);
       }
 
-      if (c.tipo_conteo === 1) locEntry.c1 = c;
-      if (c.tipo_conteo === 2) locEntry.c2 = c;
-      if (c.tipo_conteo === 3) locEntry.diff = c;
-      if (c.tipo_conteo === 4) locEntry.final = c;
-      if (c.tipo_conteo === 5) locEntry.c5 = c;
+      // Data viene ordenada por created_at DESC (más reciente primero).
+      // Usar asignación condicional para conservar SOLO el más reciente de cada tipo.
+      if (c.tipo_conteo === 1 && !locEntry.c1) locEntry.c1 = c;
+      if (c.tipo_conteo === 2 && !locEntry.c2) locEntry.c2 = c;
+      if (c.tipo_conteo === 3 && !locEntry.diff) locEntry.diff = c;
+      if (c.tipo_conteo === 4 && !locEntry.final) locEntry.final = c;
+      if (c.tipo_conteo === 5 && !locEntry.c5) {
+        // Solo mostrar C5 si tiene items o está activamente en progreso
+        // (Evita mostrar conteos huérfanos de reconteos eliminados)
+        const hasItems = (c.conteo_items && c.conteo_items.length > 0) || c.total_items > 0;
+        const isActive = c.estado === 'en_progreso';
+        if (hasItems || isActive) locEntry.c5 = c;
+      }
     });
 
     // Filtrar zonas y pasillos vacíos si hay filtros activos
