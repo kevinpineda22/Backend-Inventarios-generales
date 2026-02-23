@@ -523,11 +523,16 @@ const HistorialConteos = () => {
       items = Object.values(itemMap);
     }
 
-    // Inyectar datos C5 (Reconteo SIESA aprobado) si existen para esta ubicación
+    // Inyectar datos C5 (Reconteo SIESA finalizado) si existen para esta ubicación
     if (ubicacionId) {
       try {
-        const reconteosSiesa = await inventarioService.obtenerReconteosSiesaUbicacion(ubicacionId, { estado: 'aprobado' });
-        if (reconteosSiesa && reconteosSiesa.length > 0) {
+        // Buscar reconteos finalizados (ya no requieren aprobación)
+        const [reconteosFin, reconteosApr] = await Promise.all([
+          inventarioService.obtenerReconteosSiesaUbicacion(ubicacionId, { estado: 'finalizado' }),
+          inventarioService.obtenerReconteosSiesaUbicacion(ubicacionId, { estado: 'aprobado' })
+        ]);
+        const reconteosSiesa = [...(reconteosFin || []), ...(reconteosApr || [])];
+        if (reconteosSiesa.length > 0) {
           // Crear mapa de cantidades C5 por item_codigo
           const c5Map = {};
           reconteosSiesa.forEach(r => {
@@ -877,6 +882,17 @@ const HistorialConteos = () => {
   };
 
   const getLocationStatus = (loc) => {
+    // Si hay C5 (reconteo SIESA) finalizado DESPUÉS del ajuste final → vuelve a pendiente
+    if (loc.c5 && loc.final) {
+      // Comparar fechas: si C5 fue creado después del ajuste final, la ubicación necesita re-verificación
+      const c5Date = new Date(loc.c5.created_at || loc.c5.fecha_inicio || 0);
+      const finalDate = new Date(loc.final.created_at || loc.final.fecha_inicio || 0);
+      if (c5Date > finalDate) {
+        return { label: 'RECONTEO SIESA', class: 'hc-status-siesa' };
+      }
+      // C5 antes del final → ya fue procesado, mostrar finalizado
+      return { label: 'FINALIZADO', class: 'hc-status-finished' };
+    }
     if (loc.c5) {
       return { label: 'RECONTEO SIESA', class: 'hc-status-siesa' };
     }
@@ -1231,7 +1247,7 @@ const HistorialConteos = () => {
                                                             style={{padding:'2px 6px', fontSize:'0.75rem', marginLeft:'5px'}}
                                                             onClick={() => handleVerDetalleConteo(loc.c5, 5)}
                                                           >
-                                                            Ver ({getConteoQty(loc.c5)})
+                                                            Ver ({loc.c5.conteo_items?.length || loc.c5.total_items || '?'})
                                                           </button>
                                                       </div>
                                                   </div>

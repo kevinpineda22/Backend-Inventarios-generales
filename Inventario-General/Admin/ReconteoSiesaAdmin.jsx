@@ -7,8 +7,7 @@ import { getAllInventario, getSiesaStockBatch, getSiesaBodegas } from '../../ser
 
 const STEPS = [
   { id: 1, label: 'Generar Reconteos' },
-  { id: 2, label: 'Asignar a Empleados' },
-  { id: 3, label: 'Aprobar / Rechazar' }
+  { id: 2, label: 'Asignar a Empleados' }
 ];
 
 const ReconteoSiesaAdmin = () => {
@@ -41,8 +40,7 @@ const ReconteoSiesaAdmin = () => {
   const [loteActivo, setLoteActivo] = useState('');
   const [lotes, setLotes] = useState([]);
 
-  // === STEP 3 - Aprobar ===
-  const [reconteosFinalzados, setReconteosFinalzados] = useState([]);
+  // === (Step 3 removido - los reconteos finalizados van directo a Historial Conteos) ===
 
   const companies = [
     { id: '1', nombre: 'Merkahorro', ciaSiesa: '1' },
@@ -66,12 +64,6 @@ const ReconteoSiesaAdmin = () => {
     }
   }, [selectedBodega, currentStep, loteActivo]);
 
-  // Al cambiar a step 3, cargar finalizados
-  useEffect(() => {
-    if (selectedBodega && currentStep === 3) {
-      cargarFinalizados();
-    }
-  }, [currentStep, selectedBodega]);
 
   // Select all logic
   useEffect(() => {
@@ -144,17 +136,6 @@ const ReconteoSiesaAdmin = () => {
     }
   };
 
-  const cargarFinalizados = async () => {
-    try {
-      setLoading(true);
-      const data = await inventarioGeneralService.obtenerReconteosSiesa(selectedBodega, { estado: 'finalizado' });
-      setReconteosFinalzados(data || []);
-    } catch (error) {
-      console.error('Error cargando finalizados:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // =====================================================
   // STEP 1: GENERAR - Comparación SIESA
@@ -551,92 +532,6 @@ const ReconteoSiesaAdmin = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // =====================================================
-  // STEP 3: APROBAR / RECHAZAR
-  // =====================================================
-
-  const handleAprobar = async (reconteoIds) => {
-    const { isConfirmed } = await Swal.fire({
-      title: 'Aprobar Reconteos',
-      html: `Se aprobarán <strong>${reconteoIds.length}</strong> reconteos finalizados.`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Aprobar',
-      confirmButtonColor: '#16a34a'
-    });
-    if (!isConfirmed) return;
-
-    try {
-      setLoading(true);
-      setProgress('Aprobando reconteos...');
-      const result = await inventarioGeneralService.aprobarReconteosSiesa(reconteoIds);
-      if (result.success) {
-        Swal.fire('Aprobado', result.message, 'success');
-        cargarFinalizados();
-        if (selectedBodega) cargarDatosStep2();
-      }
-    } catch (error) {
-      Swal.fire('Error', error.message, 'error');
-    } finally {
-      setLoading(false);
-      setProgress('');
-    }
-  };
-
-  const handleRechazar = async (reconteoIds) => {
-    const { value: motivo } = await Swal.fire({
-      title: 'Rechazar Reconteos',
-      input: 'textarea',
-      inputLabel: 'Motivo del rechazo',
-      inputPlaceholder: 'Explique por qué se rechazan estos reconteos...',
-      showCancelButton: true,
-      confirmButtonText: 'Rechazar',
-      confirmButtonColor: '#ef4444'
-    });
-
-    if (motivo === undefined) return; // Cancelled
-
-    try {
-      setLoading(true);
-      const result = await inventarioGeneralService.rechazarReconteosSiesa(reconteoIds, motivo || '');
-      if (result.success) {
-        toast.success(result.message);
-        cargarFinalizados();
-      }
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAprobarTodos = async () => {
-    const ids = reconteosFinalzados.map(r => r.id);
-    if (ids.length === 0) return toast.error('No hay reconteos finalizados para aprobar');
-    await handleAprobar(ids);
-  };
-
-  // Agrupar finalizados por ubicación para la vista de aprobación
-  const getFinalizadosAgrupados = () => {
-    const ubicMap = new Map();
-    reconteosFinalzados.forEach(r => {
-      const key = r.ubicacion_id;
-      if (!ubicMap.has(key)) {
-        ubicMap.set(key, {
-          ubicacion_id: r.ubicacion_id,
-          ubicacion_nombre: r.ubicacion_nombre || 'Sin ubicación',
-          pasillo_nombre: r.pasillo_nombre || '',
-          zona_nombre: r.zona_nombre || '',
-          bodega_nombre: r.bodega_nombre || '',
-          asignado_a: r.asignado_a || '',
-          items: []
-        });
-      }
-      ubicMap.get(key).items.push(r);
-    });
-    return Array.from(ubicMap.values());
   };
 
   // =====================================================
@@ -1104,122 +999,6 @@ const ReconteoSiesaAdmin = () => {
   };
 
   // =====================================================
-  // RENDER: STEP 3
-  // =====================================================
-
-  const renderStep3 = () => {
-    if (!selectedBodega) {
-      return (
-        <div className="rsa-panel">
-          <div className="rsa-empty-state">
-            <div className="icon">📦</div>
-            <h3>Seleccione una bodega para ver reconteos finalizados</h3>
-          </div>
-        </div>
-      );
-    }
-
-    const agrupados = getFinalizadosAgrupados();
-
-    return (
-      <div>
-        <div className="rsa-panel">
-          <div className="rsa-panel-header">
-            <h3>✅ Aprobar / Rechazar Reconteos Finalizados</h3>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button className="rsa-btn rsa-btn-outline rsa-btn-sm" onClick={cargarFinalizados} disabled={loading}>
-                🔄 Refrescar
-              </button>
-              {reconteosFinalzados.length > 0 && (
-                <button className="rsa-btn rsa-btn-success rsa-btn-sm" onClick={handleAprobarTodos} disabled={loading}>
-                  ✅ Aprobar Todos ({reconteosFinalzados.length})
-                </button>
-              )}
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="rsa-loading"><div className="rsa-spinner"></div><p>Cargando...</p></div>
-          ) : agrupados.length === 0 ? (
-            <div className="rsa-empty-state">
-              <div className="icon">⏳</div>
-              <h3>No hay reconteos finalizados pendientes de aprobación</h3>
-              <p>Los empleados deben completar sus reconteos primero.</p>
-            </div>
-          ) : (
-            agrupados.map(ub => (
-              <div className="rsa-approval-card" key={ub.ubicacion_id}>
-                <div className="rsa-approval-header">
-                  <div>
-                    <span className="rsa-ubicacion-path">
-                      {ub.zona_nombre} <span>/ </span>{ub.pasillo_nombre} <span>/ </span>{ub.ubicacion_nombre}
-                    </span>
-                    {ub.asignado_a && <span style={{ marginLeft: '12px', fontSize: '0.8rem', color: '#64748b' }}>👤 {ub.asignado_a}</span>}
-                  </div>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{ub.items.length} items</span>
-                </div>
-
-                <table className="rsa-items-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Descripción</th>
-                      <th>Anterior</th>
-                      <th>SIESA</th>
-                      <th>Diff Original</th>
-                      <th>Reconteo</th>
-                      <th>Nueva Diff</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ub.items.map(item => {
-                      const newDiff = (item.cantidad_reconteo || 0) - (item.cantidad_siesa || 0);
-                      return (
-                        <tr key={item.id}>
-                          <td style={{ fontWeight: 600 }}>{item.item_codigo}</td>
-                          <td>{item.item_descripcion}</td>
-                          <td>{item.cantidad_fisica}</td>
-                          <td>{item.cantidad_siesa}</td>
-                          <td className={item.diferencia > 0 ? 'rsa-diff-positive' : 'rsa-diff-negative'}>
-                            {item.diferencia > 0 ? `+${item.diferencia}` : item.diferencia}
-                          </td>
-                          <td style={{ fontWeight: 700, color: '#2563eb' }}>
-                            {item.cantidad_reconteo ?? '-'}
-                          </td>
-                          <td className={newDiff === 0 ? 'rsa-diff-zero' : newDiff > 0 ? 'rsa-diff-positive' : 'rsa-diff-negative'}>
-                            {newDiff > 0 ? `+${newDiff}` : newDiff}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                <div className="rsa-approval-actions">
-                  <button
-                    className="rsa-btn rsa-btn-danger rsa-btn-sm"
-                    onClick={() => handleRechazar(ub.items.map(i => i.id))}
-                    disabled={loading}
-                  >
-                    ❌ Rechazar
-                  </button>
-                  <button
-                    className="rsa-btn rsa-btn-success rsa-btn-sm"
-                    onClick={() => handleAprobar(ub.items.map(i => i.id))}
-                    disabled={loading}
-                  >
-                    ✅ Aprobar
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // =====================================================
   // MAIN RENDER
   // =====================================================
 
@@ -1248,7 +1027,6 @@ const ReconteoSiesaAdmin = () => {
       {/* Step content */}
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
-      {currentStep === 3 && renderStep3()}
 
       {loading && progress && (
         <div style={{
