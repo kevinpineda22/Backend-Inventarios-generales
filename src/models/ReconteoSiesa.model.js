@@ -133,14 +133,14 @@ export class ReconteoSiesaModel {
   static async findByUbicacion(ubicacionId, filters = {}) {
     try {
       let query = supabase
-        .from(VIEW)
+        .from(TABLE)
         .select('*')
         .eq('ubicacion_id', ubicacionId);
 
       if (filters.estado) query = query.eq('estado', filters.estado);
       if (filters.lote_id) query = query.eq('lote_id', filters.lote_id);
 
-      query = query.order('item_sku', { ascending: true });
+      query = query.order('item_codigo', { ascending: true });
 
       const { data, error } = await query;
       if (error) throw error;

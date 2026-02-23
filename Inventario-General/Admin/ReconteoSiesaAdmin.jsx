@@ -390,25 +390,48 @@ const ReconteoSiesaAdmin = () => {
     return zonaMap;
   }, [reconteos, filterEstado]);
 
-  const handleAsignarUbicacion = async (ubicacionId) => {
+  const handleAsignarUbicacion = async (ubicacionId, ubItems) => {
     if (!asignacionEmail.trim()) {
       return toast.error('Ingrese el correo del empleado');
     }
-    try {
-      setLoading(true);
-      const result = await inventarioGeneralService.asignarUbicacionReconteoSiesa(
-        ubicacionId, asignacionEmail.trim(), loteActivo || undefined
-      );
-      if (result.success) {
-        toast.success(result.message);
-        cargarDatosStep2();
-      } else {
-        toast.error(result.message);
+    // Si hay items individuales seleccionados dentro de esta ubicación, asignar solo esos
+    const itemsEnUbicacion = ubItems.filter(i => selectedReconteoItems.has(i.id) && i.estado === 'pendiente');
+    if (itemsEnUbicacion.length > 0) {
+      try {
+        setLoading(true);
+        const result = await inventarioGeneralService.asignarReconteosSiesa(
+          itemsEnUbicacion.map(i => i.id), asignacionEmail.trim()
+        );
+        if (result.success) {
+          toast.success(result.message);
+          setSelectedReconteoItems(new Set());
+          cargarDatosStep2();
+        } else {
+          toast.error(result.message);
+        }
+      } catch (error) {
+        toast.error(error.message);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setLoading(false);
+    } else {
+      // Asignar toda la ubicación
+      try {
+        setLoading(true);
+        const result = await inventarioGeneralService.asignarUbicacionReconteoSiesa(
+          ubicacionId, asignacionEmail.trim(), loteActivo || undefined
+        );
+        if (result.success) {
+          toast.success(result.message);
+          cargarDatosStep2();
+        } else {
+          toast.error(result.message);
+        }
+      } catch (error) {
+        toast.error(error.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -1014,11 +1037,13 @@ const ReconteoSiesaAdmin = () => {
                               {ub.estado === 'pendiente' && (
                                 <button
                                   className="rsa-btn rsa-btn-primary rsa-btn-sm"
-                                  onClick={() => handleAsignarUbicacion(ub.ubicacion_id)}
+                                  onClick={() => handleAsignarUbicacion(ub.ubicacion_id, ub.items)}
                                   disabled={loading || !asignacionEmail.trim()}
-                                  title="Asignar esta ubicación"
+                                  title={ub.items.some(i => selectedReconteoItems.has(i.id)) ? 'Asignar items seleccionados' : 'Asignar toda la ubicación'}
                                 >
-                                  👤 Asignar
+                                  👤 {ub.items.some(i => selectedReconteoItems.has(i.id))
+                                    ? `Asignar (${ub.items.filter(i => selectedReconteoItems.has(i.id)).length} items)`
+                                    : 'Asignar todo'}
                                 </button>
                               )}
                             </div>
