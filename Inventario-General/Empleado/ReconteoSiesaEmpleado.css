@@ -244,6 +244,11 @@
   background: #f0fdf4;
 }
 
+.rse-item-row.active {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+}
+
 .rse-item-info {
   flex: 1;
   min-width: 150px;

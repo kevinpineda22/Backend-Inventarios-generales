@@ -403,55 +403,51 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
           <div className="rse-items-list">
             {reconteoItems.map(item => {
               const isSaved = savedItems.has(item.id);
-              const isEditing = editingItemId === item.id;
+              const isActive = editingItemId === item.id;
               const isSaving = savingItem === item.id;
+              const isUnlocked = isActive || isSaved;
 
               return (
                 <div
                   key={item.id}
                   id={`rse-item-${item.id}`}
-                  className={`rse-item-row ${isSaved ? 'done' : ''}`}
-                  onClick={() => !isSaving && setEditingItemId(item.id)}
+                  className={`rse-item-row ${isSaved ? 'done' : ''} ${isActive ? 'active' : ''}`}
                 >
                   <div className="rse-item-info">
-                    <div className="rse-item-code">
+                    <div className="rse-item-desc" style={{ fontWeight: 600, fontSize: '0.95rem' }}>
                       {isSaved && <FaCheck style={{ color: '#16a34a', marginRight: '6px' }} />}
-                      {item.item_codigo}
+                      {item.item_descripcion || 'Sin descripción'}
                     </div>
-                    <div className="rse-item-desc">{item.item_descripcion}</div>
-                  </div>
-
-                  <div className="rse-item-diff">
-                    <div className="rse-item-diff-label">Físico / SIESA</div>
-                    <div>
-                      <span style={{ fontWeight: 600 }}>{item.cantidad_fisica}</span>
-                      <span style={{ color: '#94a3b8', margin: '0 4px' }}>/</span>
-                      <span style={{ fontWeight: 600 }}>{item.cantidad_siesa}</span>
-                    </div>
-                    <div className={`rse-item-diff-value ${item.diferencia > 0 ? 'positive' : 'negative'}`}>
-                      {item.diferencia > 0 ? `+${item.diferencia}` : item.diferencia}
+                    <div className="rse-item-code" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      Código: {item.item_codigo}
                     </div>
                   </div>
 
                   <div className="rse-qty-group" onClick={e => e.stopPropagation()}>
-                    <input
-                      type="number"
-                      className={`rse-qty-input ${isSaved ? 'saved' : ''}`}
-                      placeholder="Qty"
-                      value={qtyInputs[item.id] || ''}
-                      onChange={e => setQtyInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
-                      onFocus={() => setEditingItemId(item.id)}
-                      onKeyPress={e => e.key === 'Enter' && handleGuardarCantidad(item)}
-                      min={0}
-                      disabled={isSaving}
-                    />
-                    <button
-                      className={`rse-btn-save-qty ${isSaved ? 'saved' : ''}`}
-                      onClick={() => handleGuardarCantidad(item)}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? '...' : isSaved ? '✓' : 'OK'}
-                    </button>
+                    {!isUnlocked ? (
+                      <span style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'center' }}>🔒 Escanee el item</span>
+                    ) : (
+                      <>
+                        <input
+                          type="number"
+                          className={`rse-qty-input ${isSaved ? 'saved' : ''}`}
+                          placeholder="Cantidad"
+                          value={qtyInputs[item.id] || ''}
+                          onChange={e => setQtyInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                          onKeyPress={e => e.key === 'Enter' && handleGuardarCantidad(item)}
+                          min={0}
+                          disabled={isSaving}
+                          autoFocus={isActive && !isSaved}
+                        />
+                        <button
+                          className={`rse-btn-save-qty ${isSaved ? 'saved' : ''}`}
+                          onClick={() => handleGuardarCantidad(item)}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? '...' : isSaved ? '✓' : 'OK'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

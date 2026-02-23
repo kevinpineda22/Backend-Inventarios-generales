@@ -238,7 +238,24 @@ class ReconteoSiesaService {
         return { success: false, message: 'Clave incorrecta' };
       }
 
-      // Buscar items asignados a este empleado en esta ubicación
+      // 1. Verificar si ya hay una sesión en progreso (recuperación tras F5 / reconexión)
+      const enProgreso = await ReconteoSiesaModel.findByUbicacion(ubicacionId, { estado: 'en_progreso' });
+      const misEnProgreso = enProgreso.filter(i => i.asignado_a === usuarioEmail);
+
+      if (misEnProgreso.length > 0 && misEnProgreso[0].conteo_id) {
+        // Sesión existente: recuperar conteo y devolver items con progreso actual
+        return {
+          success: true,
+          message: 'Sesión de reconteo recuperada',
+          data: {
+            conteo_id: misEnProgreso[0].conteo_id,
+            items: misEnProgreso,
+            total_items: misEnProgreso.length
+          }
+        };
+      }
+
+      // 2. Buscar items asignados (nuevo inicio)
       const items = await ReconteoSiesaModel.findByUbicacion(ubicacionId, { estado: 'asignado' });
       const misItems = items.filter(i => i.asignado_a === usuarioEmail);
 

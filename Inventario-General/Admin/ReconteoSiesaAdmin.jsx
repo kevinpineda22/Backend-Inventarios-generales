@@ -35,6 +35,7 @@ const ReconteoSiesaAdmin = () => {
   const [resumen, setResumen] = useState(null);
   const [asignacionEmail, setAsignacionEmail] = useState('');
   const [selectedUbicaciones, setSelectedUbicaciones] = useState(new Set());
+  const [selectedReconteoItems, setSelectedReconteoItems] = useState(new Set());
   const [expandedZonas, setExpandedZonas] = useState(new Set());
   const [filterEstado, setFilterEstado] = useState('');
   const [loteActivo, setLoteActivo] = useState('');
@@ -465,6 +466,47 @@ const ReconteoSiesaAdmin = () => {
     });
   };
 
+  const toggleReconteoItemSelection = (itemId) => {
+    setSelectedReconteoItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleAsignarItemsSeleccionados = async () => {
+    if (selectedReconteoItems.size === 0) return toast.error('Seleccione al menos un item');
+    if (!asignacionEmail.trim()) return toast.error('Ingrese el correo del empleado');
+
+    const { isConfirmed } = await Swal.fire({
+      title: 'Asignar Items Individuales',
+      html: `Se asignarán <strong>${selectedReconteoItems.size}</strong> items a <strong>${asignacionEmail}</strong>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Asignar'
+    });
+    if (!isConfirmed) return;
+
+    try {
+      setLoading(true);
+      const result = await inventarioGeneralService.asignarReconteosSiesa(
+        Array.from(selectedReconteoItems), asignacionEmail.trim()
+      );
+      if (result.success) {
+        toast.success(result.message);
+        setSelectedReconteoItems(new Set());
+        cargarDatosStep2();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEliminarLote = async (loteId) => {
     const { isConfirmed } = await Swal.fire({
       title: '¿Eliminar Lote?',
@@ -856,7 +898,14 @@ const ReconteoSiesaAdmin = () => {
               onClick={handleAsignarSeleccionadas}
               disabled={loading || selectedUbicaciones.size === 0}
             >
-              Asignar {selectedUbicaciones.size > 0 ? `(${selectedUbicaciones.size})` : ''} seleccionadas
+              📍 Ubicaciones {selectedUbicaciones.size > 0 ? `(${selectedUbicaciones.size})` : ''}
+            </button>
+            <button
+              className="rsa-btn rsa-btn-success rsa-btn-sm"
+              onClick={handleAsignarItemsSeleccionados}
+              disabled={loading || selectedReconteoItems.size === 0}
+            >
+              📦 Items {selectedReconteoItems.size > 0 ? `(${selectedReconteoItems.size})` : ''}
             </button>
           </div>
         </div>
@@ -979,6 +1028,7 @@ const ReconteoSiesaAdmin = () => {
                           <table className="rsa-items-table">
                             <thead>
                               <tr>
+                                <th style={{ width: '40px' }}></th>
                                 <th>Código</th>
                                 <th>Descripción</th>
                                 <th>Físico</th>
@@ -991,8 +1041,17 @@ const ReconteoSiesaAdmin = () => {
                             <tbody>
                               {ub.items.map(item => (
                                 <tr key={item.id}>
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedReconteoItems.has(item.id)}
+                                      onChange={() => toggleReconteoItemSelection(item.id)}
+                                      className="rsa-checkbox"
+                                      disabled={item.estado !== 'pendiente'}
+                                    />
+                                  </td>
                                   <td style={{ fontWeight: 600 }}>{item.item_codigo}</td>
-                                  <td>{item.item_descripcion}</td>
+                                  <td>{item.item_descripcion || 'Sin descripción'}</td>
                                   <td>{item.cantidad_fisica}</td>
                                   <td>{item.cantidad_siesa}</td>
                                   <td className={item.diferencia === 0 ? 'rsa-diff-zero' : item.diferencia > 0 ? 'rsa-diff-positive' : 'rsa-diff-negative'}>
