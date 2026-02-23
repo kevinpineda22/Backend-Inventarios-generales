@@ -469,20 +469,6 @@
   background: var(--hc-warning);
 }
 
-/* Estado Reconteo SIESA de la tarjeta */
-.hc-location-card.hc-status-siesa {
-  border-color: #93c5fd;
-  background: linear-gradient(to bottom right, #ffffff, #eff6ff);
-}
-.hc-location-card.hc-status-siesa::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: #2563eb;
-}
 
 .hc-card-header {
   padding: 1rem;
@@ -514,11 +500,6 @@
 .hc-status-badge-card.hc-status-pending-validation {
   background: #fef3c7;
   color: #b45309;
-}
-
-.hc-status-badge-card.hc-status-siesa {
-  background: #dbeafe;
-  color: #1d4ed8;
 }
 
 .hc-card-body {

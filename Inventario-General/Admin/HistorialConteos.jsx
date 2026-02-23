@@ -333,7 +333,7 @@ const HistorialConteos = () => {
           zona: c.zona,
           pasillo: c.pasillo,
           ubicacion: c.ubicacion,
-          c1: null, c2: null, diff: null, c5: null
+          c1: null, c2: null, diff: null
         };
         zonasMap[c.zona].pasillos[c.pasillo].ubicaciones.push(locEntry);
       }
@@ -344,13 +344,6 @@ const HistorialConteos = () => {
       if (c.tipo_conteo === 2 && !locEntry.c2) locEntry.c2 = c;
       if (c.tipo_conteo === 3 && !locEntry.diff) locEntry.diff = c;
       if (c.tipo_conteo === 4 && !locEntry.final) locEntry.final = c;
-      if (c.tipo_conteo === 5 && !locEntry.c5) {
-        // Solo mostrar C5 si tiene items o está activamente en progreso
-        // (Evita mostrar conteos huérfanos de reconteos eliminados)
-        const hasItems = (c.conteo_items && c.conteo_items.length > 0) || c.total_items > 0;
-        const isActive = c.estado === 'en_progreso';
-        if (hasItems || isActive) locEntry.c5 = c;
-      }
     });
 
     // Filtrar zonas y pasillos vacíos si hay filtros activos
@@ -377,9 +370,8 @@ const HistorialConteos = () => {
                 const inC2 = loc.c2 && (loc.c2.usuario_nombre === user || loc.c2.correo_empleado === user || loc.c2.usuario_id === user);
                 const inDiff = loc.diff && (loc.diff.usuario_nombre === user || loc.diff.correo_empleado === user || loc.diff.usuario_id === user);
                 const inFinal = loc.final && (loc.final.usuario_nombre === user || loc.final.correo_empleado === user || loc.final.usuario_id === user);
-                const inC5 = loc.c5 && (loc.c5.usuario_nombre === user || loc.c5.correo_empleado === user || loc.c5.usuario_id === user);
                 
-                return inC1 || inC2 || inDiff || inFinal || inC5;
+                return inC1 || inC2 || inDiff || inFinal;
             });
         }
 
@@ -388,17 +380,12 @@ const HistorialConteos = () => {
             pasillo.ubicaciones = pasillo.ubicaciones.filter(loc => !loc.final);
         }
 
-        // FILTRO: Solo ubicaciones con Reconteo SIESA
-        if (filtros.soloReconteoSiesa) {
-            pasillo.ubicaciones = pasillo.ubicaciones.filter(loc => loc.c5 != null);
-        }
-
         pasillo.ubicaciones.sort((a, b) => a.ubicacion.localeCompare(b.ubicacion, undefined, { numeric: true }));
         return pasillo;
       });
       
       // Limpiar pasillos que quedaron vacíos tras el filtro de usuario
-      if (filtros.usuario || filtros.soloPendientes || filtros.soloReconteoSiesa) {
+      if (filtros.usuario || filtros.soloPendientes) {
           zona.pasillos = zona.pasillos.filter(p => p.ubicaciones.length > 0);
       }
       
@@ -534,57 +521,6 @@ const HistorialConteos = () => {
       itemsC3.forEach(i => processItem(i, 'c3'));
       itemsC4.forEach(i => processItem(i, 'c4'));
       items = Object.values(itemMap);
-    }
-
-    // Inyectar datos C5 (Reconteo SIESA finalizado) si existen para esta ubicación
-    if (ubicacionId) {
-      try {
-        // Buscar reconteos finalizados (ya no requieren aprobación)
-        const [reconteosFin, reconteosApr] = await Promise.all([
-          inventarioService.obtenerReconteosSiesaUbicacion(ubicacionId, { estado: 'finalizado' }),
-          inventarioService.obtenerReconteosSiesaUbicacion(ubicacionId, { estado: 'aprobado' })
-        ]);
-        const reconteosSiesa = [...(reconteosFin || []), ...(reconteosApr || [])];
-        if (reconteosSiesa.length > 0) {
-          // Crear mapa de cantidades C5 por item_codigo
-          const c5Map = {};
-          reconteosSiesa.forEach(r => {
-            const codigo = String(r.item_codigo).trim();
-            const qty = r.cantidad_reconteo != null ? Number(r.cantidad_reconteo) : Number(r.cantidad_fisica);
-            c5Map[codigo] = (c5Map[codigo] || 0) + (isNaN(qty) ? 0 : qty);
-          });
-
-          // Merge C5 en items existentes
-          items.forEach(item => {
-            const codigo = String(item.codigo).trim();
-            if (c5Map[codigo] !== undefined) {
-              item.c5 = c5Map[codigo];
-              delete c5Map[codigo];
-            } else {
-              item.c5 = 0;
-            }
-          });
-
-          // Agregar items que solo existen en C5 (no en C1-C4)
-          Object.entries(c5Map).forEach(([codigo, qty]) => {
-            const reconteo = reconteosSiesa.find(r => String(r.item_codigo).trim() === codigo);
-            items.push({
-              id: reconteo?.item_id || codigo,
-              codigo: codigo,
-              descripcion: reconteo?.item_descripcion || codigo,
-              barra: codigo,
-              c1: 0, c2: 0, c3: 0, c4: 0,
-              c5: qty
-            });
-          });
-        } else {
-          // Sin C5: marcar todos como 0
-          items.forEach(item => { item.c5 = 0; });
-        }
-      } catch (c5Error) {
-        console.warn('No se pudieron cargar reconteos SIESA para comparativa:', c5Error);
-        items.forEach(item => { item.c5 = 0; });
-      }
     }
 
     // Analizar resolución
@@ -826,7 +762,6 @@ const HistorialConteos = () => {
         if (selection === 'c1') finalQty = item.c1;
         else if (selection === 'c2') finalQty = item.c2;
         else if (selection === 'c3') finalQty = item.c3;
-        else if (selection === 'c5') finalQty = item.c5;
         else if (selection === 'manual' ) finalQty = Number(manualValues[item.codigo]);
       }
 
@@ -895,20 +830,6 @@ const HistorialConteos = () => {
   };
 
   const getLocationStatus = (loc) => {
-    // Si hay C5 (reconteo SIESA) finalizado DESPUÉS del ajuste final → vuelve a pendiente
-    if (loc.c5 && loc.final) {
-      // Comparar fechas: si C5 fue creado después del ajuste final, la ubicación necesita re-verificación
-      const c5Date = new Date(loc.c5.created_at || loc.c5.fecha_inicio || 0);
-      const finalDate = new Date(loc.final.created_at || loc.final.fecha_inicio || 0);
-      if (c5Date > finalDate) {
-        return { label: 'RECONTEO SIESA', class: 'hc-status-siesa' };
-      }
-      // C5 antes del final → ya fue procesado, mostrar finalizado
-      return { label: 'FINALIZADO', class: 'hc-status-finished' };
-    }
-    if (loc.c5) {
-      return { label: 'RECONTEO SIESA', class: 'hc-status-siesa' };
-    }
     if (loc.final) {
       return { label: 'FINALIZADO', class: 'hc-status-finished' };
     }
@@ -1237,30 +1158,6 @@ const HistorialConteos = () => {
                                                             onClick={() => handleVerDetalleConteo(loc.diff, 3)}
                                                           >
                                                             Ver ({getConteoQty(loc.diff)})
-                                                          </button>
-                                                      </div>
-                                                  </div>
-                                              </div>
-                                            )}
-
-                                            {loc.c5 && (
-                                              <div className="hc-reconteo-info" style={{marginTop: '10px', padding: '8px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe'}}>
-                                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                                      <span style={{fontWeight:'bold', color:'#1d4ed8', fontSize:'0.85rem'}}>🔄 Reconteo SIESA</span>
-                                                      <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
-                                                          <span className="hc-user-avatar" style={{fontSize:'0.8rem'}}>👤</span>
-                                                          <span className="hc-user-name" style={{fontSize:'0.8rem'}} title={loc.c5.usuario_nombre}>
-                                                              {userMap[loc.c5.usuario_nombre] || loc.c5.usuario_nombre?.split('@')[0]}
-                                                          </span>
-                                                          <span className="hc-mini-status-badge" style={{backgroundColor: '#1d4ed8', fontSize: '0.7rem', padding: '1px 6px'}}>
-                                                            C5
-                                                          </span>
-                                                          <button 
-                                                            className="hc-btn-items"
-                                                            style={{padding:'2px 6px', fontSize:'0.75rem', marginLeft:'5px'}}
-                                                            onClick={() => handleVerDetalleConteo(loc.c5, 5)}
-                                                          >
-                                                            Ver ({loc.c5.conteo_items?.length || loc.c5.total_items || '?'})
                                                           </button>
                                                       </div>
                                                   </div>

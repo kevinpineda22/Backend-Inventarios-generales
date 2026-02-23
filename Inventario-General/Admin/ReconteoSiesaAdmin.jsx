@@ -608,7 +608,8 @@ const ReconteoSiesaAdmin = () => {
       en_progreso: '🔄 En Progreso',
       finalizado: '✅ Finalizado',
       aprobado: '✔ Aprobado',
-      rechazado: '❌ Rechazado'
+      rechazado: '❌ Rechazado',
+      parcial: '◐ Parcial'
     };
     return <span className={`rsa-badge rsa-badge-${estado}`}>{labels[estado] || estado}</span>;
   };
@@ -1027,7 +1028,7 @@ const ReconteoSiesaAdmin = () => {
                     </div>
 
                     {/* Asignación rápida */}
-                    <div className="rsa-assign-row" style={{ margin: '12px 0' }}>
+                    <div className="rsa-assign-row" style={{ margin: '0', padding: '16px 28px', borderBottom: '1px solid #e2e8f0', background: '#fafbfc' }}>
                       <input
                         type="email"
                         placeholder="Correo del empleado para asignar..."
@@ -1044,7 +1045,7 @@ const ReconteoSiesaAdmin = () => {
                     </div>
 
                     {/* Tabla detalle por ubicación */}
-                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '0 12px 16px' }}>
                       <table className="rsa-items-table">
                         <thead>
                           <tr>
