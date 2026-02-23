@@ -378,7 +378,13 @@ class ReconteoSiesaService {
   }
 
   /**
-   * Aprobar reconteos y re-consolidar inventario
+   * Aprobar reconteos y re-consolidar inventario.
+   * FLUJO CRÍTICO:
+   * 1. Marcar reconteos como 'aprobado' en inv_general_reconteo_siesa
+   * 2. Crear/actualizar registros C5 en inv_general_conteos + inv_general_conteo_items
+   *    (esto es el PUENTE para que la consolidación los encuentre)
+   * 3. Re-consolidar ubicación → pasillo → zona → bodega
+   * 4. El export lee de v_inventario_consolidado_completo → C5 ya está reflejado
    */
   static async aprobarReconteos(reconteoIds) {
     try {
@@ -397,7 +403,7 @@ class ReconteoSiesaService {
         return { success: false, message: 'No hay reconteos finalizados para aprobar' };
       }
 
-      // Aprobar reconteos
+      // 1. Aprobar reconteos en la tabla de reconteo SIESA
       await ReconteoSiesaModel.updateBatch(
         reconteos.map(r => r.id),
         {
@@ -406,8 +412,72 @@ class ReconteoSiesaService {
         }
       );
 
-      // Re-consolidar las ubicaciones afectadas
-      const ubicacionesAfectadas = [...new Set(reconteos.map(r => r.ubicacion_id))];
+      // 2. PUENTE CRÍTICO: Insertar/actualizar C5 en inv_general_conteos + inv_general_conteo_items
+      // Agrupamos por ubicación para crear UN conteo C5 por ubicación
+      const ubicacionesMap = new Map();
+      reconteos.forEach(r => {
+        if (!ubicacionesMap.has(r.ubicacion_id)) {
+          ubicacionesMap.set(r.ubicacion_id, {
+            ubicacion_id: r.ubicacion_id,
+            asignado_a: r.asignado_a,
+            items: []
+          });
+        }
+        ubicacionesMap.get(r.ubicacion_id).items.push({
+          item_id: r.item_id,
+          cantidad: r.cantidad_reconteo != null ? Number(r.cantidad_reconteo) : Number(r.cantidad_fisica),
+          usuario_email: r.asignado_a
+        });
+      });
+
+      const conteosC5Creados = [];
+      for (const [ubicacionId, ubData] of ubicacionesMap) {
+        try {
+          // Buscar si ya existe un conteo C5 para esta ubicación
+          const existingC5 = await ConteoModel.findByUbicacionAndTipo(ubicacionId, 5);
+
+          let conteoC5;
+          if (existingC5) {
+            // Ya existe C5 → actualizar estado y limpiar items anteriores
+            conteoC5 = await ConteoModel.update(existingC5.id, {
+              estado: 'finalizado',
+              fecha_fin: new Date().toISOString(),
+              correo_empleado: ubData.asignado_a || 'reconteo-siesa'
+            });
+            // Eliminar items anteriores para re-insertar con datos actualizados
+            await ConteoItemModel.deleteByConteo(existingC5.id);
+            conteoC5 = existingC5;
+          } else {
+            // Crear nuevo conteo C5
+            conteoC5 = await ConteoModel.create({
+              ubicacion_id: ubicacionId,
+              tipo_conteo: 5,
+              estado: 'finalizado',
+              usuario_id: ubData.asignado_a || 'reconteo-siesa',
+              correo_empleado: ubData.asignado_a || 'reconteo-siesa'
+            });
+          }
+
+          // Insertar items del reconteo aprobado
+          for (const item of ubData.items) {
+            await ConteoItemModel.create({
+              conteo_id: conteoC5.id,
+              item_id: item.item_id,
+              cantidad: item.cantidad,
+              usuario_email: item.usuario_email
+            });
+          }
+
+          conteosC5Creados.push(conteoC5.id);
+        } catch (e) {
+          console.error(`Error creando conteo C5 para ubicación ${ubicacionId}:`, e);
+        }
+      }
+
+      console.log(`[APROBAR] Creados ${conteosC5Creados.length} conteos C5 en inv_general_conteos`);
+
+      // 3. Re-consolidar las ubicaciones afectadas
+      const ubicacionesAfectadas = [...ubicacionesMap.keys()];
       const reconsolidadas = [];
 
       for (const ubicacionId of ubicacionesAfectadas) {
@@ -464,9 +534,10 @@ class ReconteoSiesaService {
 
       return {
         success: true,
-        message: `${reconteos.length} reconteos aprobados y ${reconsolidadas.length} ubicaciones re-consolidadas`,
+        message: `${reconteos.length} reconteos aprobados, ${conteosC5Creados.length} conteos C5 creados y ${reconsolidadas.length} ubicaciones re-consolidadas`,
         data: {
           aprobados: reconteos.length,
+          conteos_c5_creados: conteosC5Creados.length,
           ubicaciones_reconsolidadas: reconsolidadas.length
         }
       };

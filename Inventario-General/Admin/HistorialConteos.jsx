@@ -333,7 +333,7 @@ const HistorialConteos = () => {
           zona: c.zona,
           pasillo: c.pasillo,
           ubicacion: c.ubicacion,
-          c1: null, c2: null, diff: null
+          c1: null, c2: null, diff: null, c5: null
         };
         zonasMap[c.zona].pasillos[c.pasillo].ubicaciones.push(locEntry);
       }
@@ -342,6 +342,7 @@ const HistorialConteos = () => {
       if (c.tipo_conteo === 2) locEntry.c2 = c;
       if (c.tipo_conteo === 3) locEntry.diff = c;
       if (c.tipo_conteo === 4) locEntry.final = c;
+      if (c.tipo_conteo === 5) locEntry.c5 = c;
     });
 
     // Filtrar zonas y pasillos vacíos si hay filtros activos
@@ -368,8 +369,9 @@ const HistorialConteos = () => {
                 const inC2 = loc.c2 && (loc.c2.usuario_nombre === user || loc.c2.correo_empleado === user || loc.c2.usuario_id === user);
                 const inDiff = loc.diff && (loc.diff.usuario_nombre === user || loc.diff.correo_empleado === user || loc.diff.usuario_id === user);
                 const inFinal = loc.final && (loc.final.usuario_nombre === user || loc.final.correo_empleado === user || loc.final.usuario_id === user);
+                const inC5 = loc.c5 && (loc.c5.usuario_nombre === user || loc.c5.correo_empleado === user || loc.c5.usuario_id === user);
                 
-                return inC1 || inC2 || inDiff || inFinal;
+                return inC1 || inC2 || inDiff || inFinal || inC5;
             });
         }
 
@@ -828,6 +830,9 @@ const HistorialConteos = () => {
   };
 
   const getLocationStatus = (loc) => {
+    if (loc.c5) {
+      return { label: 'RECONTEO SIESA', class: 'hc-status-siesa' };
+    }
     if (loc.final) {
       return { label: 'FINALIZADO', class: 'hc-status-finished' };
     }
@@ -1156,6 +1161,30 @@ const HistorialConteos = () => {
                                                             onClick={() => handleVerDetalleConteo(loc.diff, 3)}
                                                           >
                                                             Ver ({getConteoQty(loc.diff)})
+                                                          </button>
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                            )}
+
+                                            {loc.c5 && (
+                                              <div className="hc-reconteo-info" style={{marginTop: '10px', padding: '8px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe'}}>
+                                                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                                      <span style={{fontWeight:'bold', color:'#1d4ed8', fontSize:'0.85rem'}}>🔄 Reconteo SIESA</span>
+                                                      <div style={{display:'flex', alignItems:'center', gap:'5px'}}>
+                                                          <span className="hc-user-avatar" style={{fontSize:'0.8rem'}}>👤</span>
+                                                          <span className="hc-user-name" style={{fontSize:'0.8rem'}} title={loc.c5.usuario_nombre}>
+                                                              {userMap[loc.c5.usuario_nombre] || loc.c5.usuario_nombre?.split('@')[0]}
+                                                          </span>
+                                                          <span className="hc-mini-status-badge" style={{backgroundColor: '#1d4ed8', fontSize: '0.7rem', padding: '1px 6px'}}>
+                                                            C5
+                                                          </span>
+                                                          <button 
+                                                            className="hc-btn-items"
+                                                            style={{padding:'2px 6px', fontSize:'0.75rem', marginLeft:'5px'}}
+                                                            onClick={() => handleVerDetalleConteo(loc.c5, 5)}
+                                                          >
+                                                            Ver ({getConteoQty(loc.c5)})
                                                           </button>
                                                       </div>
                                                   </div>
