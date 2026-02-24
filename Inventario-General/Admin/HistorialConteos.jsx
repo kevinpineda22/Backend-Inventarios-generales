@@ -197,7 +197,6 @@ const HistorialConteos = () => {
     if (!result.isConfirmed) return;
 
     try {
-      // Mostrar indicador de carga
       Swal.fire({
         title: 'Procesando...',
         text: `Cerrando ${tipo}, por favor espere...`,
@@ -208,7 +207,7 @@ const HistorialConteos = () => {
       });
 
       await config.action(id, selectedCompany);
-      await cargarEstadoJerarquia(); // Esperar actualización para reflejar cambios UI
+      await cargarEstadoJerarquia();
       
       Swal.fire({
         title: '¡Cerrado!',
@@ -219,6 +218,43 @@ const HistorialConteos = () => {
       });
     } catch (error) {
       Swal.fire('Error', `Error al cerrar ${tipo}: ` + error.message, 'error');
+    }
+  };
+
+  const handleAbrirBodega = async (bodegaId) => {
+    const result = await Swal.fire({
+      title: '¿Abrir Bodega?',
+      text: 'Esto reabrirá la bodega y permitirá realizar cambios nuevamente.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#16a34a',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Sí, abrir bodega',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      Swal.fire({
+        title: 'Procesando...',
+        text: 'Abriendo bodega, por favor espere...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+
+      await inventarioService.abrirBodega(bodegaId);
+      await cargarEstadoJerarquia();
+
+      Swal.fire({
+        title: '¡Abierta!',
+        text: 'La bodega ha sido reabierta correctamente.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } catch (error) {
+      Swal.fire('Error', 'Error al abrir bodega: ' + error.message, 'error');
     }
   };
 
@@ -1019,6 +1055,25 @@ const HistorialConteos = () => {
                   >
                     {hierarchyStatus?.bodega === 'cerrado' ? '🔒 Bodega Cerrada' : '🔒 Cerrar Bodega'}
                   </button>
+
+                  {hierarchyStatus?.bodega === 'cerrado' && (
+                    <button 
+                      className="hc-btn-close-level bodega"
+                      onClick={() => {
+                        const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
+                        if (bodegaId) handleAbrirBodega(bodegaId);
+                      }}
+                      title="Reabrir Bodega"
+                      style={{
+                        backgroundColor: '#dcfce7',
+                        color: '#15803d',
+                        borderColor: '#16a34a',
+                        marginLeft: '6px'
+                      }}
+                    >
+                      🔓 Abrir Bodega
+                    </button>
+                  )}
                 </div>
               </div>
 

@@ -125,6 +125,22 @@ export class InventarioController {
   }
 
   /**
+   * Abrir Bodega (reabrir una bodega cerrada)
+   * POST /api/inventario/abrir-bodega
+   */
+  static async abrirBodega(req, res) {
+    try {
+      const { bodegaId } = req.body;
+      if (!bodegaId) throw new Error('bodegaId es requerido');
+
+      const result = await BodegaModel.update(bodegaId, { estado: 'abierto' });
+      return successResponse(res, result, 'Bodega abierta correctamente');
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
    * Obtener Estado Jerarquía
    * GET /api/inventario/estado-jerarquia
    */

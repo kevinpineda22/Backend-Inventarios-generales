@@ -439,6 +439,16 @@ const inventarioGeneralService = {
     return response.json();
   },
 
+  abrirBodega: async (bodegaId) => {
+    const response = await fetch(`${API_URL}/inventario/abrir-bodega`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodegaId }),
+    });
+    if (!response.ok) throw new Error("Error al abrir bodega");
+    return response.json();
+  },
+
   obtenerEstadoJerarquia: async (bodegaNombre, companiaId) => {
     const response = await fetch(`${API_URL}/inventario/estado-jerarquia?bodega=${encodeURIComponent(bodegaNombre)}&companiaId=${companiaId}`, {
       method: "GET",

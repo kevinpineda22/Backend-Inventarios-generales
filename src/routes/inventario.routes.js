@@ -16,6 +16,9 @@ router.post('/cerrar-zona', InventarioController.cerrarZona);
 // Cerrar Bodega
 router.post('/cerrar-bodega', InventarioController.cerrarBodega);
 
+// Abrir Bodega
+router.post('/abrir-bodega', InventarioController.abrirBodega);
+
 // Obtener Estado Jerarquía
 router.get('/estado-jerarquia', InventarioController.getEstadoJerarquia);
 
