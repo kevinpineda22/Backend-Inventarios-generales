@@ -616,6 +616,21 @@ class ConteoService {
   /**
    * Obtener historial de conteos con filtros
    */
+  /**
+   * Obtener empleados que han realizado conteos en una bodega
+   */
+  static async getEmpleadosByBodega(bodegaId) {
+    try {
+      const empleados = await ConteoModel.getEmpleadosByBodega(bodegaId);
+      return {
+        success: true,
+        data: empleados
+      };
+    } catch (error) {
+      throw new Error(`Error al obtener empleados de bodega: ${error.message}`);
+    }
+  }
+
   static async getHistorial(filters) {
     try {
       const conteos = await ConteoModel.findAll(filters);

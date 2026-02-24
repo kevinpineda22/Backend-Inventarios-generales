@@ -42,6 +42,8 @@ const ReconteoSiesaAdmin = () => {
   const [step2View, setStep2View] = useState('summary'); // 'summary' | 'detail'
   const [selectedItemForDetail, setSelectedItemForDetail] = useState(null);
   const [filterTextStep2, setFilterTextStep2] = useState('');
+  const [empleadosBodega, setEmpleadosBodega] = useState([]);
+  const [copiedEmail, setCopiedEmail] = useState('');
 
   // === (Step 3 removido - los reconteos finalizados van directo a Historial Conteos) ===
 
@@ -64,6 +66,7 @@ const ReconteoSiesaAdmin = () => {
   useEffect(() => {
     if (selectedBodega && currentStep >= 2) {
       cargarDatosStep2();
+      cargarEmpleadosBodega();
     }
   }, [selectedBodega, currentStep, loteActivo]);
 
@@ -136,6 +139,15 @@ const ReconteoSiesaAdmin = () => {
       toast.error('Error al cargar reconteos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarEmpleadosBodega = async () => {
+    try {
+      const data = await inventarioGeneralService.obtenerEmpleadosBodega(selectedBodega);
+      setEmpleadosBodega(data || []);
+    } catch (error) {
+      console.error('Error cargando empleados de bodega:', error);
     }
   };
 
@@ -574,6 +586,132 @@ const ReconteoSiesaAdmin = () => {
     }
   };
 
+  // Toggle all pending ubicaciones of an item in the summary view
+  const toggleItemSummarySelection = (item) => {
+    const pendingIds = item.ubicaciones.filter(ub => ub.estado === 'pendiente').map(ub => ub.id);
+    if (pendingIds.length === 0) return;
+    setSelectedReconteoItems(prev => {
+      const next = new Set(prev);
+      const allSelected = pendingIds.every(id => next.has(id));
+      if (allSelected) {
+        pendingIds.forEach(id => next.delete(id));
+      } else {
+        pendingIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const isItemSummarySelected = (item) => {
+    const pendingIds = item.ubicaciones.filter(ub => ub.estado === 'pendiente').map(ub => ub.id);
+    return pendingIds.length > 0 && pendingIds.every(id => selectedReconteoItems.has(id));
+  };
+
+  const isItemSummaryPartial = (item) => {
+    const pendingIds = item.ubicaciones.filter(ub => ub.estado === 'pendiente').map(ub => ub.id);
+    if (pendingIds.length === 0) return false;
+    const someSelected = pendingIds.some(id => selectedReconteoItems.has(id));
+    const allSelected = pendingIds.every(id => selectedReconteoItems.has(id));
+    return someSelected && !allSelected;
+  };
+
+  const toggleAllItemsSummarySelection = (itemsSummary) => {
+    const allPendingIds = itemsSummary.flatMap(item =>
+      item.ubicaciones.filter(ub => ub.estado === 'pendiente').map(ub => ub.id)
+    );
+    if (allPendingIds.length === 0) return;
+    setSelectedReconteoItems(prev => {
+      const next = new Set(prev);
+      const allSelected = allPendingIds.every(id => next.has(id));
+      if (allSelected) {
+        allPendingIds.forEach(id => next.delete(id));
+      } else {
+        allPendingIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleCopyEmail = (correo) => {
+    navigator.clipboard.writeText(correo).then(() => {
+      setCopiedEmail(correo);
+      toast.success(`Correo copiado: ${correo}`);
+      setTimeout(() => setCopiedEmail(''), 2000);
+    }).catch(() => {
+      toast.error('No se pudo copiar');
+    });
+  };
+
+  const handleSelectEmail = (correo) => {
+    setAsignacionEmail(correo);
+    toast.info(`Correo seleccionado: ${correo}`);
+  };
+
+  const renderEmpleadosBodegaList = () => {
+    if (empleadosBodega.length === 0) return null;
+    return (
+      <div className="rsa-panel" style={{ marginBottom: '16px' }}>
+        <div className="rsa-panel-header">
+          <h3>📧 Empleados que han contado en esta bodega</h3>
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+            Clic para seleccionar · Doble clic para copiar
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '12px 16px' }}>
+          {empleadosBodega.map((emp, idx) => (
+            <div
+              key={idx}
+              onClick={() => handleSelectEmail(emp.correo)}
+              onDoubleClick={(e) => { e.stopPropagation(); handleCopyEmail(emp.correo); }}
+              style={{
+                padding: '6px 12px',
+                background: asignacionEmail === emp.correo ? '#dbeafe' : copiedEmail === emp.correo ? '#dcfce7' : '#f8fafc',
+                borderRadius: '20px',
+                border: asignacionEmail === emp.correo ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease',
+                userSelect: 'none'
+              }}
+              title={`Clic: seleccionar | Doble clic: copiar\n${emp.conteos} conteo(s) realizados`}
+            >
+              <span style={{ fontSize: '0.9rem' }}>👤</span>
+              <span style={{ fontWeight: 500 }}>{emp.nombre || emp.correo}</span>
+              {emp.nombre && <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>({emp.correo})</span>}
+              <span style={{
+                background: '#e2e8f0',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontSize: '0.7rem',
+                color: '#64748b',
+                fontWeight: 600
+              }}>
+                {emp.conteos}
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCopyEmail(emp.correo); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  padding: '0 2px',
+                  opacity: 0.6
+                }}
+                title="Copiar correo"
+              >
+                {copiedEmail === emp.correo ? '✅' : '📋'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const handleEliminarLote = async (loteId) => {
     const { isConfirmed } = await Swal.fire({
       title: '¿Eliminar Lote?',
@@ -973,6 +1111,30 @@ const ReconteoSiesaAdmin = () => {
           </div>
         )}
 
+        {/* Lista de empleados que han contado en la bodega */}
+        {renderEmpleadosBodegaList()}
+
+        {/* Asignación masiva - vista resumen por item */}
+        {step2View === 'summary' && selectedReconteoItems.size > 0 && (
+          <div className="rsa-panel" style={{ marginBottom: '16px' }}>
+            <div className="rsa-assign-row">
+              <input
+                type="email"
+                placeholder="Correo del empleado para asignar..."
+                value={asignacionEmail}
+                onChange={e => setAsignacionEmail(e.target.value)}
+              />
+              <button
+                className="rsa-btn rsa-btn-success rsa-btn-sm"
+                onClick={handleAsignarItemsSeleccionados}
+                disabled={loading || selectedReconteoItems.size === 0}
+              >
+                👤 Asignar {selectedReconteoItems.size} ubicaciones seleccionadas
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ========= VISTA RESUMEN POR ITEM ========= */}
         {step2View === 'summary' && (
           loading ? (
@@ -1098,6 +1260,15 @@ const ReconteoSiesaAdmin = () => {
                   <table className="rsa-items-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            className="rsa-checkbox"
+                            checked={itemsSummary.length > 0 && itemsSummary.flatMap(i => i.ubicaciones.filter(u => u.estado === 'pendiente').map(u => u.id)).every(id => selectedReconteoItems.has(id)) && itemsSummary.some(i => i.ubicaciones.some(u => u.estado === 'pendiente'))}
+                            onChange={() => toggleAllItemsSummarySelection(itemsSummary)}
+                            title="Seleccionar / Deseleccionar todos"
+                          />
+                        </th>
                         <th>Código</th>
                         <th>Descripción</th>
                         <th>Total Físico</th>
@@ -1111,7 +1282,18 @@ const ReconteoSiesaAdmin = () => {
                     </thead>
                     <tbody>
                       {itemsSummary.map(item => (
-                        <tr key={item.codigo}>
+                        <tr key={item.codigo} style={{ background: isItemSummarySelected(item) ? '#eff6ff' : isItemSummaryPartial(item) ? '#fefce8' : undefined }}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              className="rsa-checkbox"
+                              checked={isItemSummarySelected(item)}
+                              ref={el => { if (el) el.indeterminate = isItemSummaryPartial(item); }}
+                              onChange={() => toggleItemSummarySelection(item)}
+                              disabled={!item.ubicaciones.some(ub => ub.estado === 'pendiente')}
+                              title={`Seleccionar todas las ubicaciones pendientes de ${item.codigo}`}
+                            />
+                          </td>
                           <td style={{ fontWeight: 600 }}>{item.codigo}</td>
                           <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.descripcion}</td>
                           <td>{item.totalFisico}</td>

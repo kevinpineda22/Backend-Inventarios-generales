@@ -11,6 +11,23 @@ import {
 
 export class ConteoController {
   /**
+   * Obtener empleados que han realizado conteos en una bodega
+   * GET /api/conteos/empleados/:bodegaId
+   */
+  static async getEmpleadosByBodega(req, res) {
+    try {
+      const { bodegaId } = req.params;
+      if (!bodegaId) {
+        return errorResponse(res, 'Bodega ID es requerido', 400);
+      }
+      const result = await ConteoService.getEmpleadosByBodega(bodegaId);
+      return successResponse(res, result.data);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
    * Obtener ubicaciones de un item
    * GET /api/conteos/item-locations/:itemId/:companiaId
    */

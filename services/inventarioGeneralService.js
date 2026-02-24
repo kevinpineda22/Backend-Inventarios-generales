@@ -604,6 +604,13 @@ const inventarioGeneralService = {
     return response.json();
   },
 
+  obtenerEmpleadosBodega: async (bodegaId) => {
+    const response = await fetch(`${API_URL}/conteos/empleados/${bodegaId}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.data || [];
+  },
+
   obtenerResumenReconteoSiesa: async (bodegaId) => {
     const response = await fetch(`${API_URL}/reconteo-siesa/resumen/${bodegaId}`);
     if (!response.ok) throw new Error("Error al obtener resumen");

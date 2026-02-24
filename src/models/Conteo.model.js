@@ -429,6 +429,69 @@ export class ConteoModel {
   }
 
   /**
+   * Obtener empleados distintos que han realizado conteos en una bodega
+   */
+  static async getEmpleadosByBodega(bodegaId) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CONTEOS)
+        .select(`
+          correo_empleado,
+          usuario_id,
+          ubicacion:inv_general_ubicaciones!inner(
+            pasillo:inv_general_pasillos!inner(
+              zona:inv_general_zonas!inner(
+                bodega_id
+              )
+            )
+          )
+        `)
+        .eq('ubicacion.pasillo.zona.bodega_id', bodegaId)
+        .not('correo_empleado', 'is', null);
+
+      if (error) throw error;
+
+      // Extraer correos únicos
+      const emailSet = new Map();
+      (data || []).forEach(c => {
+        const email = c.correo_empleado?.trim();
+        if (email) {
+          if (!emailSet.has(email)) {
+            emailSet.set(email, { correo: email, conteos: 0, usuario_id: c.usuario_id });
+          }
+          emailSet.get(email).conteos++;
+        }
+      });
+
+      // Obtener nombres desde profiles
+      const userIds = [...new Set([...emailSet.values()].map(e => e.usuario_id).filter(Boolean))];
+      let namesMap = new Map();
+      if (userIds.length > 0) {
+        const profiles = await this.getNombresUsuarios(userIds);
+        namesMap = new Map(profiles.map(p => [p.correo, p.nombre]));
+      }
+
+      // Intentar también por correo
+      const correos = [...emailSet.keys()];
+      if (correos.length > 0) {
+        const profilesByCorreo = await this.getPerfilesPorCorreo(correos);
+        profilesByCorreo.forEach(p => {
+          if (p.nombre && p.correo) namesMap.set(p.correo, p.nombre);
+        });
+      }
+
+      return [...emailSet.values()].map(e => ({
+        correo: e.correo,
+        nombre: namesMap.get(e.correo) || null,
+        conteos: e.conteos
+      })).sort((a, b) => b.conteos - a.conteos);
+    } catch (error) {
+      console.warn('Error al obtener empleados por bodega:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Obtener nombres de usuarios desde la tabla profiles
    */
   static async getNombresUsuarios(ids) {

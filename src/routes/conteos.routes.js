@@ -7,6 +7,9 @@ import ConteoController from '../controllers/conteo.controller.js';
 
 const router = express.Router();
 
+// Obtener empleados que han contado en una bodega
+router.get('/empleados/:bodegaId', ConteoController.getEmpleadosByBodega);
+
 // Obtener ubicaciones de un item (Nuevo endpoint)
 router.get('/item-locations/:itemId/:companiaId', ConteoController.getItemLocations);
 
