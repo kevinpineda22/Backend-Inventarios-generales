@@ -642,75 +642,29 @@ const ReconteoSiesaAdmin = () => {
     });
   };
 
-  const handleSelectEmail = (correo) => {
-    setAsignacionEmail(correo);
-    toast.info(`Correo seleccionado: ${correo}`);
-  };
-
-  const renderEmpleadosBodegaList = () => {
-    if (empleadosBodega.length === 0) return null;
-    return (
-      <div className="rsa-panel" style={{ marginBottom: '16px' }}>
-        <div className="rsa-panel-header">
-          <h3>📧 Empleados que han contado en esta bodega</h3>
-          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-            Clic para seleccionar · Doble clic para copiar
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '12px 16px' }}>
-          {empleadosBodega.map((emp, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleSelectEmail(emp.correo)}
-              onDoubleClick={(e) => { e.stopPropagation(); handleCopyEmail(emp.correo); }}
-              style={{
-                padding: '6px 12px',
-                background: asignacionEmail === emp.correo ? '#dbeafe' : copiedEmail === emp.correo ? '#dcfce7' : '#f8fafc',
-                borderRadius: '20px',
-                border: asignacionEmail === emp.correo ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.2s ease',
-                userSelect: 'none'
-              }}
-              title={`Clic: seleccionar | Doble clic: copiar\n${emp.conteos} conteo(s) realizados`}
-            >
-              <span style={{ fontSize: '0.9rem' }}>👤</span>
-              <span style={{ fontWeight: 500 }}>{emp.nombre || emp.correo}</span>
-              {emp.nombre && <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>({emp.correo})</span>}
-              <span style={{
-                background: '#e2e8f0',
-                padding: '1px 6px',
-                borderRadius: '10px',
-                fontSize: '0.7rem',
-                color: '#64748b',
-                fontWeight: 600
-              }}>
-                {emp.conteos}
-              </span>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleCopyEmail(emp.correo); }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  padding: '0 2px',
-                  opacity: 0.6
-                }}
-                title="Copiar correo"
-              >
-                {copiedEmail === emp.correo ? '✅' : '📋'}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const renderEmailInput = (extraStyle = {}) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, ...extraStyle }}>
+      <input
+        type="email"
+        placeholder="Correo del empleado para asignar..."
+        value={asignacionEmail}
+        onChange={e => setAsignacionEmail(e.target.value)}
+        list="empleados-bodega-list"
+        autoComplete="off"
+        style={{ flex: 1 }}
+      />
+      {asignacionEmail && (
+        <button
+          onClick={() => handleCopyEmail(asignacionEmail)}
+          className="rsa-btn rsa-btn-outline rsa-btn-sm"
+          style={{ padding: '4px 8px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+          title="Copiar correo"
+        >
+          {copiedEmail === asignacionEmail ? '✅' : '📋'}
+        </button>
+      )}
+    </div>
+  );
 
   const handleEliminarLote = async (loteId) => {
     const { isConfirmed } = await Swal.fire({
@@ -1031,12 +985,7 @@ const ReconteoSiesaAdmin = () => {
           {/* Asignación masiva - solo en vista por ubicación */}
           {step2View === 'location' && (
             <div className="rsa-assign-row">
-              <input
-                type="email"
-                placeholder="Correo del empleado para asignar..."
-                value={asignacionEmail}
-                onChange={e => setAsignacionEmail(e.target.value)}
-              />
+              {renderEmailInput()}
               <button
                 className="rsa-btn rsa-btn-primary rsa-btn-sm"
                 onClick={handleAsignarSeleccionadas}
@@ -1111,19 +1060,11 @@ const ReconteoSiesaAdmin = () => {
           </div>
         )}
 
-        {/* Lista de empleados que han contado en la bodega */}
-        {renderEmpleadosBodegaList()}
-
         {/* Asignación masiva - vista resumen por item */}
         {step2View === 'summary' && selectedReconteoItems.size > 0 && (
           <div className="rsa-panel" style={{ marginBottom: '16px' }}>
             <div className="rsa-assign-row">
-              <input
-                type="email"
-                placeholder="Correo del empleado para asignar..."
-                value={asignacionEmail}
-                onChange={e => setAsignacionEmail(e.target.value)}
-              />
+              {renderEmailInput()}
               <button
                 className="rsa-btn rsa-btn-success rsa-btn-sm"
                 onClick={handleAsignarItemsSeleccionados}
@@ -1191,12 +1132,7 @@ const ReconteoSiesaAdmin = () => {
 
                     {/* Asignación rápida */}
                     <div className="rsa-assign-row" style={{ margin: '0', padding: '16px 28px', borderBottom: '1px solid #e2e8f0', background: '#fafbfc' }}>
-                      <input
-                        type="email"
-                        placeholder="Correo del empleado para asignar..."
-                        value={asignacionEmail}
-                        onChange={e => setAsignacionEmail(e.target.value)}
-                      />
+                      {renderEmailInput()}
                       <button
                         className="rsa-btn rsa-btn-success rsa-btn-sm"
                         onClick={handleAsignarItemsSeleccionados}
@@ -1474,6 +1410,15 @@ const ReconteoSiesaAdmin = () => {
       {/* Step content */}
       {currentStep === 1 && renderStep1()}
       {currentStep === 2 && renderStep2()}
+
+      {/* Datalist compartido para autocompletar correos */}
+      <datalist id="empleados-bodega-list">
+        {empleadosBodega.map((emp, idx) => (
+          <option key={idx} value={emp.correo}>
+            {emp.nombre ? `${emp.nombre} (${emp.conteos} conteos)` : `${emp.conteos} conteo(s)`}
+          </option>
+        ))}
+      </datalist>
 
       {loading && progress && (
         <div style={{

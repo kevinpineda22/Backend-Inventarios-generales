@@ -231,11 +231,6 @@ class ReconteoSiesaService {
    */
   static async iniciarReconteoUbicacion(ubicacionId, usuarioId, usuarioEmail, clave) {
     try {
-      // Verificar la clave de la ubicación
-      const claveValida = await UbicacionModel.verifyClave(ubicacionId, clave);
-      if (!claveValida) {
-        return { success: false, message: 'Clave incorrecta' };
-      }
 
       // 1. Verificar si ya hay una sesión en progreso (recuperación tras F5 / reconexión)
       const enProgreso = await ReconteoSiesaModel.findByUbicacion(ubicacionId, { estado: 'en_progreso' });

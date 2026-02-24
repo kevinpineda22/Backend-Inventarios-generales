@@ -12,7 +12,7 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   const [totalItems, setTotalItems] = useState(0);
 
   // Vista activa
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'clave' | 'recount'
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'recount'
   const [activeUbicacion, setActiveUbicacion] = useState(null);
   const [conteoId, setConteoId] = useState(null);
   const [reconteoItems, setReconteoItems] = useState([]);
@@ -27,9 +27,6 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   const [barcodeInput, setBarcodeInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const barcodeInputRef = useRef(null);
-
-  // Clave
-  const [claveInput, setClaveInput] = useState('');
 
   // Stable scan handler ref
   const handleScanRef = useRef(null);
@@ -66,43 +63,24 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   // SELECCIONAR UBICACIÓN
   // =====================================================
 
-  const handleSelectUbicacion = (ub) => {
+  const handleSelectUbicacion = async (ub) => {
     if (ub.estado_general === 'finalizado' || ub.estado_general === 'aprobado') {
       toast.info('Esta ubicación ya está finalizada');
       return;
     }
     setActiveUbicacion(ub);
-    setViewMode('clave');
-    setClaveInput('');
-  };
-
-  // =====================================================
-  // VERIFICAR CLAVE
-  // =====================================================
-
-  const handleVerificarClave = async () => {
-    if (!claveInput.trim()) {
-      toast.error('Ingrese la clave de la ubicación');
-      return;
-    }
-
+    // Iniciar reconteo directamente sin pedir clave
     try {
       setLoading(true);
-
-      // Iniciar el reconteo (esto crea el conteo tipo 5 en backend)
       const result = await inventarioService.iniciarReconteoSiesa({
-        ubicacionId: activeUbicacion.ubicacion_id,
+        ubicacionId: ub.ubicacion_id,
         usuarioId,
-        usuarioEmail,
-        clave: claveInput.trim()
+        usuarioEmail
       });
-
       if (result.success) {
         setConteoId(result.data.conteo_id);
         const items = result.data.items || [];
         setReconteoItems(items);
-
-        // Pre-populate qty inputs with existing recount values
         const preQty = {};
         const preSaved = new Set();
         items.forEach(item => {
@@ -113,16 +91,16 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
         });
         setQtyInputs(preQty);
         setSavedItems(preSaved);
-
         setViewMode('recount');
         toast.success('Reconteo iniciado');
       } else {
         toast.error(result.message || 'Error al iniciar reconteo');
+        setActiveUbicacion(null);
       }
     } catch (error) {
       console.error('Error:', error);
-      // If clave is wrong, the backend should return an error
-      toast.error(error.message || 'Error al iniciar reconteo. Verifique la clave.');
+      toast.error(error.message || 'Error al iniciar reconteo');
+      setActiveUbicacion(null);
     } finally {
       setLoading(false);
     }
@@ -280,47 +258,6 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   }
 
   // =====================================================
-  // RENDER: CLAVE VIEW
-  // =====================================================
-
-  if (viewMode === 'clave' && activeUbicacion) {
-    return (
-      <div className="rse-container">
-        <div className="rse-header">
-          <div>
-            <h2>📋 Verificación de Ubicación</h2>
-            <div className="rse-header-info">
-              <span>{activeUbicacion.zona_nombre} / {activeUbicacion.pasillo_nombre} / {activeUbicacion.ubicacion_nombre}</span>
-            </div>
-          </div>
-          <button className="rse-btn-back" onClick={() => { setViewMode('list'); setActiveUbicacion(null); }}>
-            <FaArrowLeft /> Volver
-          </button>
-        </div>
-
-        <div className="rse-clave-panel">
-          <h4>🔐 Ingrese la clave de la ubicación</h4>
-          <p>Para verificar que se encuentra físicamente en la ubicación correcta.</p>
-          <div>
-            <input
-              type="text"
-              className="rse-clave-input"
-              value={claveInput}
-              onChange={e => setClaveInput(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && handleVerificarClave()}
-              placeholder="Clave..."
-              autoFocus
-            />
-            <button className="rse-clave-btn" onClick={handleVerificarClave} disabled={loading}>
-              {loading ? '...' : 'Verificar e Iniciar'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // =====================================================
   // RENDER: RECOUNT VIEW
   // =====================================================
 
@@ -382,22 +319,21 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
                 onKeyDown={handleBarcodeKeyDown}
                 autoFocus
               />
-              {EscanerBarras && (
-                <button
-                  className="rse-scanner-btn rse-scanner-btn-camera"
-                  onClick={() => setIsScanning(!isScanning)}
-                >
-                  <FaCamera /> {isScanning ? 'Cerrar' : 'Cámara'}
-                </button>
-              )}
+              <button
+                className="rse-scanner-btn rse-scanner-btn-camera"
+                onClick={() => setIsScanning(!isScanning)}
+              >
+                <FaCamera /> {isScanning ? 'Cerrar' : 'Cámara'}
+              </button>
             </div>
-
-            {isScanning && EscanerBarras && (
-              <div style={{ marginTop: '10px', borderRadius: '8px', overflow: 'hidden' }}>
-                <EscanerBarras onDetected={stableScanHandler} />
-              </div>
-            )}
           </div>
+
+          {/* Componente de escáner de cámara */}
+          <EscanerBarras
+            isScanning={isScanning}
+            setIsScanning={setIsScanning}
+            onScan={stableScanHandler}
+          />
 
           {/* Items list */}
           <div className="rse-items-list">
