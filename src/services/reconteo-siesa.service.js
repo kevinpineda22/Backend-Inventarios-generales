@@ -337,8 +337,10 @@ class ReconteoSiesaService {
    */
   static async finalizarReconteoUbicacion(ubicacionId, conteoId) {
     try {
-      // Obtener items en progreso de esta ubicación
-      const items = await ReconteoSiesaModel.findByUbicacion(ubicacionId, { estado: 'en_progreso' });
+      // Obtener items en progreso de esta ubicación (filtrar por conteo_id si existe)
+      const filters = { estado: 'en_progreso' };
+      if (conteoId) filters.conteo_id = conteoId;
+      const items = await ReconteoSiesaModel.findByUbicacion(ubicacionId, filters);
 
       // Verificar que todos tienen cantidad_reconteo
       const sinContar = items.filter(i => i.cantidad_reconteo === null || i.cantidad_reconteo === undefined);

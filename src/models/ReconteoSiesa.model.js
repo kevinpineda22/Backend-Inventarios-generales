@@ -139,6 +139,7 @@ export class ReconteoSiesaModel {
 
       if (filters.estado) query = query.eq('estado', filters.estado);
       if (filters.lote_id) query = query.eq('lote_id', filters.lote_id);
+      if (filters.conteo_id) query = query.eq('conteo_id', filters.conteo_id);
 
       query = query.order('item_codigo', { ascending: true });
 

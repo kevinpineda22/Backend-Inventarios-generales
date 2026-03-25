@@ -735,6 +735,126 @@ const HistorialConteos = () => {
     }
   };
 
+  const handleExportarExcel = async () => {
+    if (!selectedBodega || hierarchicalLocations.length === 0) {
+      Swal.fire('Sin datos', 'No hay datos para exportar. Seleccione una bodega con conteos.', 'info');
+      return;
+    }
+
+    // Recopilar todas las ubicaciones visibles (respeta filtros activos)
+    const allLocations = [];
+    hierarchicalLocations.forEach(zona => {
+      zona.pasillos.forEach(pasillo => {
+        pasillo.ubicaciones.forEach(loc => {
+          if (loc.c1 || loc.c2 || loc.diff || loc.final) {
+            allLocations.push({
+              zonaNombre: zona.nombre,
+              pasilloNum: pasillo.numero,
+              ...loc
+            });
+          }
+        });
+      });
+    });
+
+    if (allLocations.length === 0) {
+      Swal.fire('Sin datos', 'No hay ubicaciones con conteos para exportar.', 'info');
+      return;
+    }
+
+    Swal.fire({
+      title: 'Exportando a Excel',
+      html: `Procesando 0 de ${allLocations.length} ubicaciones...<br>Por favor espere.`,
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+      const rows = [];
+
+      for (let i = 0; i < allLocations.length; i++) {
+        const loc = allLocations[i];
+
+        try {
+          const analysis = await fetchAndAnalyzeComparison(loc);
+
+          analysis.items.forEach(item => {
+            const c1Val = item.c1 || 0;
+            const c2Val = item.c2 || 0;
+            const diff = c1Val - c2Val;
+            rows.push({
+              'Zona': loc.zonaNombre,
+              'Pasillo': loc.pasilloNum,
+              'Ubicación': loc.ubicacion,
+              'Código Item': item.codigo,
+              'Descripción': item.descripcion || '',
+              'Conteo #1': c1Val,
+              'Conteo #2': c2Val,
+              'Diferencia': diff,
+              'Reconteo': item.c3 || 0,
+              'Conteo Final': item.c4 || 0,
+            });
+          });
+        } catch (e) {
+          console.warn(`Error procesando ubicación ${loc.ubicacion}:`, e);
+          rows.push({
+            'Zona': loc.zonaNombre,
+            'Pasillo': loc.pasilloNum,
+            'Ubicación': loc.ubicacion,
+            'Código Item': 'ERROR',
+            'Descripción': 'No se pudieron cargar los items de esta ubicación',
+            'Conteo #1': '',
+            'Conteo #2': '',
+            'Diferencia': '',
+            'Reconteo': '',
+            'Conteo Final': '',
+          });
+        }
+
+        // Actualizar progreso cada 3 ubicaciones
+        if (i % 3 === 0 || i === allLocations.length - 1) {
+          Swal.update({
+            html: `Procesando ${i + 1} de ${allLocations.length} ubicaciones...<br>Por favor espere.`
+          });
+        }
+        // Pequeña pausa para no saturar el servidor
+        await new Promise(r => setTimeout(r, 30));
+      }
+
+      if (rows.length === 0) {
+        Swal.fire('Sin items', 'No se encontraron items en las ubicaciones procesadas.', 'info');
+        return;
+      }
+
+      // Crear libro de Excel
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Auto-ajustar ancho de columnas
+      const colWidths = Object.keys(rows[0]).map(key => ({
+        wch: Math.max(key.length, ...rows.map(r => String(r[key] ?? '').length).slice(0, 200)) + 2
+      }));
+      ws['!cols'] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+
+      const fecha = new Date().toISOString().split('T')[0];
+      const fileName = `Inventario_${selectedBodega.replace(/[^a-zA-Z0-9]/g, '_')}_${fecha}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      Swal.fire({
+        title: '¡Exportado!',
+        text: `Se exportaron ${rows.length} registros de ${allLocations.length} ubicaciones correctamente.`,
+        icon: 'success',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    } catch (error) {
+      console.error('Error al exportar Excel:', error);
+      Swal.fire('Error', 'Error al exportar: ' + error.message, 'error');
+    }
+  };
+
   const handleVerDetalleConteo = async (conteo, numeroConteo) => {
     if (!conteo) return;
     
@@ -1037,6 +1157,27 @@ const HistorialConteos = () => {
                   </button>
 
                   <button 
+                    className="hc-btn-toggle-view"
+                    onClick={handleExportarExcel}
+                    title="Exportar todos los items con conteos a Excel"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #2563eb',
+                      background: '#dbeafe',
+                      color: '#1d4ed8',
+                      cursor: 'pointer',
+                      marginRight: '10px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    📥 Exportar Excel
+                  </button>
+
+                  <button 
                     onClick={() => cargarHistorial(true)} 
                     className="hc-btn-refresh" 
                     title="Actualizar datos"
@@ -1044,36 +1185,35 @@ const HistorialConteos = () => {
                     ↻
                   </button>
 
-                  <button 
-                    className={`hc-btn-close-level bodega ${hierarchyStatus?.bodega === 'cerrado' ? 'closed' : ''}`}
-                    onClick={() => {
-                      const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
-                      if (bodegaId) handleCerrarNivel('bodega', bodegaId);
-                    }}
-                    disabled={hierarchyStatus?.bodega === 'cerrado' || !hierarchyStatus}
-                    title="Cerrar Bodega completa"
-                  >
-                    {hierarchyStatus?.bodega === 'cerrado' ? '🔒 Bodega Cerrada' : '🔒 Cerrar Bodega'}
-                  </button>
-
-                  {hierarchyStatus?.bodega === 'cerrado' && (
-                    <button 
-                      className="hc-btn-close-level bodega"
-                      onClick={() => {
-                        const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
-                        if (bodegaId) handleAbrirBodega(bodegaId);
-                      }}
-                      title="Reabrir Bodega"
-                      style={{
-                        backgroundColor: '#dcfce7',
-                        color: '#15803d',
-                        borderColor: '#16a34a',
-                        marginLeft: '6px'
-                      }}
-                    >
-                      🔓 Abrir Bodega
-                    </button>
-                  )}
+                  <div className="hc-bodega-state-group">
+                    {hierarchyStatus?.bodega === 'cerrado' ? (
+                      <>
+                        <span className="hc-bodega-state-badge closed">🔒 Bodega Cerrada</span>
+                        <button 
+                          className="hc-btn-open-bodega"
+                          onClick={() => {
+                            const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
+                            if (bodegaId) handleAbrirBodega(bodegaId);
+                          }}
+                          title="Reabrir Bodega"
+                        >
+                          🔓 Abrir Bodega
+                        </button>
+                      </>
+                    ) : (
+                      <button 
+                        className="hc-btn-close-level bodega"
+                        onClick={() => {
+                          const bodegaId = conteos.find(c => c.bodega === selectedBodega)?.bodega_id || hierarchyStatus?.bodegaId;
+                          if (bodegaId) handleCerrarNivel('bodega', bodegaId);
+                        }}
+                        disabled={!hierarchyStatus}
+                        title="Cerrar Bodega completa"
+                      >
+                        🔒 Cerrar Bodega
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

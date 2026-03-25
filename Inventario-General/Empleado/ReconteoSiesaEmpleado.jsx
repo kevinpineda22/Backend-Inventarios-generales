@@ -146,14 +146,35 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   // SCANNER
   // =====================================================
 
-  const handleBarcodeScan = (code) => {
+  const handleBarcodeScan = async (code) => {
     if (!code) return;
     const cleanCode = String(code).trim();
 
-    // Find matching item
-    const found = reconteoItems.find(item =>
+    // 1. Buscar por item_codigo (SKU directo)
+    let found = reconteoItems.find(item =>
       String(item.item_codigo).trim() === cleanCode
     );
+
+    // 2. Si no coincide por SKU, buscar por código de barras en el backend
+    if (!found && reconteoItems.length > 0) {
+      try {
+        const companiaId = reconteoItems[0].compania_id;
+        if (companiaId) {
+          const result = await inventarioService.buscarItemPorCodigoBarra(cleanCode, companiaId);
+          if (result && result.success && result.data) {
+            const itemData = result.data;
+            // Intentar coincidir por item_id o por codigo del item encontrado
+            found = reconteoItems.find(item =>
+              item.item_id === itemData.id ||
+              String(item.item_codigo).trim() === String(itemData.codigo || itemData.item || '').trim()
+            );
+          }
+        }
+      } catch (err) {
+        // Si falla la búsqueda por barcode, continuamos con el resultado "no encontrado"
+        console.warn('Error buscando por código de barras:', err);
+      }
+    }
 
     if (found) {
       setEditingItemId(found.id);
@@ -366,6 +387,8 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
                       <>
                         <input
                           type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           className={`rse-qty-input ${isSaved ? 'saved' : ''}`}
                           placeholder="Cantidad"
                           value={qtyInputs[item.id] || ''}
