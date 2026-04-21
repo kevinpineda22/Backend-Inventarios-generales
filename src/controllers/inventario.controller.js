@@ -25,16 +25,23 @@ export class InventarioController {
       const result = await PasilloModel.update(pasilloId, { estado: 'cerrado' });
 
       // Consolidar inventario del pasillo
+      let consolidacionAdvertencia = null;
       try {
         console.log(`[CONSOLIDACIÓN] Consolidando pasillo ${pasilloId}`);
         await InventarioConsolidadoService.consolidarInventario('pasillo', pasilloId);
         console.log(`[CONSOLIDACIÓN] Pasillo ${pasilloId} consolidado exitosamente`);
       } catch (consolidacionError) {
         console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar pasillo ${pasilloId}:`, consolidacionError);
-        // No fallamos el cierre si falla la consolidación, solo logueamos
+        consolidacionAdvertencia = consolidacionError.message;
       }
 
-      return successResponse(res, result, 'Pasillo cerrado correctamente');
+      return successResponse(
+        res,
+        { ...result, consolidacion_advertencia: consolidacionAdvertencia },
+        consolidacionAdvertencia
+          ? `Pasillo cerrado, pero hubo un error en la consolidación: ${consolidacionAdvertencia}`
+          : 'Pasillo cerrado y consolidado correctamente'
+      );
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
     }
@@ -77,16 +84,23 @@ export class InventarioController {
       const result = await ZonaModel.update(zonaId, { estado: 'cerrado' });
 
       // Consolidar inventario de la zona
+      let consolidacionAdvertencia = null;
       try {
         console.log(`[CONSOLIDACIÓN] Consolidando zona ${zonaId}`);
         await InventarioConsolidadoService.consolidarInventario('zona', zonaId);
         console.log(`[CONSOLIDACIÓN] Zona ${zonaId} consolidada exitosamente`);
       } catch (consolidacionError) {
         console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar zona ${zonaId}:`, consolidacionError);
-        // No fallamos el cierre si falla la consolidación, solo logueamos
+        consolidacionAdvertencia = consolidacionError.message;
       }
 
-      return successResponse(res, result, 'Zona cerrada correctamente');
+      return successResponse(
+        res,
+        { ...result, consolidacion_advertencia: consolidacionAdvertencia },
+        consolidacionAdvertencia
+          ? `Zona cerrada, pero hubo un error en la consolidación: ${consolidacionAdvertencia}`
+          : 'Zona cerrada y consolidada correctamente'
+      );
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
     }
@@ -109,16 +123,23 @@ export class InventarioController {
       const result = await BodegaModel.update(bodegaId, { estado: 'cerrado' });
 
       // Consolidar inventario de la bodega
+      let consolidacionAdvertencia = null;
       try {
         console.log(`[CONSOLIDACIÓN] Consolidando bodega ${bodegaId}`);
         await InventarioConsolidadoService.consolidarInventario('bodega', bodegaId);
         console.log(`[CONSOLIDACIÓN] Bodega ${bodegaId} consolidada exitosamente`);
       } catch (consolidacionError) {
         console.error(`[ERROR CONSOLIDACIÓN] Error al consolidar bodega ${bodegaId}:`, consolidacionError);
-        // No fallamos el cierre si falla la consolidación, solo logueamos
+        consolidacionAdvertencia = consolidacionError.message;
       }
 
-      return successResponse(res, result, 'Bodega cerrada correctamente');
+      return successResponse(
+        res,
+        { ...result, consolidacion_advertencia: consolidacionAdvertencia },
+        consolidacionAdvertencia
+          ? `Bodega cerrada, pero hubo un error en la consolidación: ${consolidacionAdvertencia}`
+          : 'Bodega cerrada y consolidada correctamente'
+      );
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
     }
@@ -199,6 +220,27 @@ export class InventarioController {
 
       return successResponse(res, result, 'Estado obtenido');
     } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Re-consolidar Bodega (sin cambiar su estado)
+   * POST /api/inventario/reconsolidar-bodega
+   * Útil cuando cerrar-bodega tuvo un error de consolidación parcial
+   */
+  static async reconsolidarBodega(req, res) {
+    try {
+      const { bodegaId } = req.body;
+      if (!bodegaId) throw new Error('bodegaId es requerido');
+
+      console.log(`[RE-CONSOLIDACIÓN] Iniciando re-consolidación de bodega ${bodegaId}`);
+      const resultado = await InventarioConsolidadoService.consolidarInventario('bodega', bodegaId);
+      console.log(`[RE-CONSOLIDACIÓN] Completado: ${resultado.items_consolidados} items consolidados`);
+
+      return successResponse(res, resultado, `Re-consolidación completada: ${resultado.items_consolidados} items`);
+    } catch (error) {
+      console.error(`[RE-CONSOLIDACIÓN] Error:`, error);
       return errorResponse(res, error.message, 500, error);
     }
   }

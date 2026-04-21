@@ -449,6 +449,19 @@ const inventarioGeneralService = {
     return response.json();
   },
 
+  reconsolidarBodega: async (bodegaId) => {
+    const response = await fetch(`${API_URL}/inventario/reconsolidar-bodega`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodegaId }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Error al re-consolidar bodega");
+    }
+    return response.json();
+  },
+
   obtenerEstadoJerarquia: async (bodegaNombre, companiaId) => {
     const response = await fetch(`${API_URL}/inventario/estado-jerarquia?bodega=${encodeURIComponent(bodegaNombre)}&companiaId=${companiaId}`, {
       method: "GET",

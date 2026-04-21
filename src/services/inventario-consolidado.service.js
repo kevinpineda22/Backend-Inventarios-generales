@@ -165,12 +165,13 @@ class InventarioConsolidadoService {
    */
   static async consolidarUbicacionesDePasillo(pasilloId) {
     const ubicaciones = await UbicacionModel.findByPasillo(pasilloId);
-    
+    const errores = [];
+
     for (const ubicacion of ubicaciones) {
       try {
         const itemsConsolidados = await this.calcularInventarioUbicacion(ubicacion.id);
         const jerarquia = await this.getJerarquiaUbicacion(ubicacion.id);
-        
+
         if (itemsConsolidados.length > 0) {
           await InventarioConsolidadoModel.upsertBatch(
             itemsConsolidados,
@@ -181,8 +182,15 @@ class InventarioConsolidadoService {
         }
       } catch (error) {
         console.error(`Error consolidando ubicación ${ubicacion.id}:`, error);
-        // Continuar con la siguiente ubicación
+        errores.push({ id: ubicacion.id, error: error.message });
       }
+    }
+
+    if (errores.length > 0) {
+      throw new Error(
+        `Falló la consolidación de ${errores.length} ubicación(es) en pasillo ${pasilloId}: ` +
+        errores.map(e => `[${e.id}: ${e.error}]`).join(', ')
+      );
     }
   }
 
@@ -191,16 +199,17 @@ class InventarioConsolidadoService {
    */
   static async consolidarPasillosDeZona(zonaId) {
     const pasillos = await PasilloModel.findByZona(zonaId);
-    
+    const errores = [];
+
     for (const pasillo of pasillos) {
       try {
         // Consolidar ubicaciones del pasillo primero
         await this.consolidarUbicacionesDePasillo(pasillo.id);
-        
+
         // Luego consolidar el pasillo
         const itemsConsolidados = await this.sumarInventarioHijos('ubicacion', 'pasillo_id', pasillo.id);
         const jerarquia = await this.getJerarquiaPasillo(pasillo.id);
-        
+
         if (itemsConsolidados.length > 0) {
           await InventarioConsolidadoModel.upsertBatch(
             itemsConsolidados,
@@ -211,8 +220,15 @@ class InventarioConsolidadoService {
         }
       } catch (error) {
         console.error(`Error consolidando pasillo ${pasillo.id}:`, error);
-        // Continuar con el siguiente pasillo
+        errores.push({ id: pasillo.id, error: error.message });
       }
+    }
+
+    if (errores.length > 0) {
+      throw new Error(
+        `Falló la consolidación de ${errores.length} pasillo(s) en zona ${zonaId}: ` +
+        errores.map(e => `[${e.id}: ${e.error}]`).join(', ')
+      );
     }
   }
 
@@ -221,16 +237,17 @@ class InventarioConsolidadoService {
    */
   static async consolidarZonasDeBodega(bodegaId) {
     const zonas = await ZonaModel.findByBodega(bodegaId);
-    
+    const errores = [];
+
     for (const zona of zonas) {
       try {
         // Consolidar pasillos de la zona primero
         await this.consolidarPasillosDeZona(zona.id);
-        
+
         // Luego consolidar la zona
         const itemsConsolidados = await this.sumarInventarioHijos('pasillo', 'zona_id', zona.id);
         const jerarquia = await this.getJerarquiaZona(zona.id);
-        
+
         if (itemsConsolidados.length > 0) {
           await InventarioConsolidadoModel.upsertBatch(
             itemsConsolidados,
@@ -240,20 +257,28 @@ class InventarioConsolidadoService {
           );
         }
       } catch (error) {
-        console.error(`Error consolidando zona ${zona.id}:`, error);
-        // Continuar con la siguiente zona
+        console.error(`Error consolidando zona ${zona.id} (${zona.nombre}):`, error);
+        errores.push({ id: zona.id, nombre: zona.nombre, error: error.message });
       }
+    }
+
+    if (errores.length > 0) {
+      const detalle = errores.map(e => `Zona "${e.nombre}" [${e.id}]: ${e.error}`).join(' | ');
+      throw new Error(
+        `Falló la consolidación de ${errores.length} zona(s) en bodega ${bodegaId}: ${detalle}`
+      );
     }
   }
 
   /**
    * Obtener jerarquía completa de una ubicación
+   * Usa el join que ya trae UbicacionModel.findById en lugar de 4 queries separadas
    */
   static async getJerarquiaUbicacion(ubicacionId) {
     const ubicacion = await UbicacionModel.findById(ubicacionId);
-    const pasillo = await PasilloModel.findById(ubicacion.pasillo_id);
-    const zona = await ZonaModel.findById(pasillo.zona_id);
-    const bodega = await BodegaModel.findById(zona.bodega_id);
+    const pasillo = ubicacion.pasillo;
+    const zona = pasillo.zona;
+    const bodega = zona.bodega;
 
     return {
       compania_id: bodega.compania_id,
@@ -266,11 +291,12 @@ class InventarioConsolidadoService {
 
   /**
    * Obtener jerarquía completa de un pasillo
+   * Usa el join que ya trae PasilloModel.findById en lugar de 3 queries separadas
    */
   static async getJerarquiaPasillo(pasilloId) {
     const pasillo = await PasilloModel.findById(pasilloId);
-    const zona = await ZonaModel.findById(pasillo.zona_id);
-    const bodega = await BodegaModel.findById(zona.bodega_id);
+    const zona = pasillo.zona;
+    const bodega = zona.bodega;
 
     return {
       compania_id: bodega.compania_id,
@@ -283,10 +309,11 @@ class InventarioConsolidadoService {
 
   /**
    * Obtener jerarquía completa de una zona
+   * Usa el join que ya trae ZonaModel.findById en lugar de 2 queries separadas
    */
   static async getJerarquiaZona(zonaId) {
     const zona = await ZonaModel.findById(zonaId);
-    const bodega = await BodegaModel.findById(zona.bodega_id);
+    const bodega = zona.bodega;
 
     return {
       compania_id: bodega.compania_id,

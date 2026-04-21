@@ -8,7 +8,8 @@ import {
   Warehouse, 
   Hash,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import { inventarioGeneralService } from '../../services/inventarioGeneralService';
 import './ExportarInventarioExcel.css';
@@ -22,6 +23,7 @@ const ExportarInventarioExcel = () => {
   const [loadingBodegas, setLoadingBodegas] = useState(false);
   const [hierarchyStatus, setHierarchyStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [reconsolidando, setReconsolidando] = useState(false);
 
   const companies = [
     { id: '1', nombre: 'Merkahorro', color: '#10b981' },
@@ -90,6 +92,33 @@ const ExportarInventarioExcel = () => {
     });
 
     return { zonas: openZonas, pasillos: openPasillos };
+  };
+
+  const handleReconsolidar = async () => {
+    if (!hierarchyStatus?.bodegaId) return;
+
+    const confirm = await Swal.fire({
+      title: 'Re-consolidar inventario',
+      text: 'Esto volverá a calcular todos los totales de la bodega desde cero. Use esta opción si el inventario exportado salía descuadrado.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Sí, re-consolidar',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!confirm.isConfirmed) return;
+
+    setReconsolidando(true);
+    try {
+      const result = await inventarioGeneralService.reconsolidarBodega(hierarchyStatus.bodegaId);
+      const items = result?.data?.items_consolidados ?? '?';
+      Swal.fire('¡Listo!', `Re-consolidación completada: ${items} items procesados. Ahora puede exportar nuevamente.`, 'success');
+    } catch (error) {
+      Swal.fire('Error', `Error al re-consolidar: ${error.message}`, 'error');
+    } finally {
+      setReconsolidando(false);
+    }
   };
 
   const handleExport = async () => {
@@ -287,7 +316,7 @@ const ExportarInventarioExcel = () => {
           <button 
             className={`btn-export ${selectedBodega && consecutivo ? 'ready' : ''}`}
             onClick={handleExport}
-            disabled={loading || !selectedBodega || !consecutivo}
+            disabled={loading || reconsolidando || !selectedBodega || !consecutivo}
           >
             {loading ? (
               <>
@@ -299,6 +328,26 @@ const ExportarInventarioExcel = () => {
               </>
             )}
           </button>
+
+          {selectedBodega && (
+            <button
+              className="btn-export"
+              onClick={handleReconsolidar}
+              disabled={loading || reconsolidando || !hierarchyStatus?.bodegaId}
+              title="Vuelve a calcular todos los totales si el inventario exportado salía descuadrado"
+              style={{ marginTop: '10px', background: '#2563eb' }}
+            >
+              {reconsolidando ? (
+                <>
+                  <RefreshCw className="spin" size={18} /> Re-consolidando...
+                </>
+              ) : (
+                <>
+                  <RotateCcw size={18} /> Re-consolidar Bodega
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

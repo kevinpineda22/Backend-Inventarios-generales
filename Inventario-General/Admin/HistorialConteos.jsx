@@ -206,16 +206,31 @@ const HistorialConteos = () => {
         }
       });
 
-      await config.action(id, selectedCompany);
+      const response = await config.action(id, selectedCompany);
       await cargarEstadoJerarquia();
-      
-      Swal.fire({
-        title: '¡Cerrado!',
-        text: config.success,
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-      });
+
+      // Verificar si hubo advertencia de consolidación
+      const advertencia = response?.data?.consolidacion_advertencia;
+      if (advertencia) {
+        Swal.fire({
+          title: `${tipo.charAt(0).toUpperCase() + tipo.slice(1)} cerrado con advertencia`,
+          html: `
+            <p>El ${tipo} fue cerrado, pero hubo un problema en la consolidaci\u00f3n de inventario:</p>
+            <p style="color:#ef4444; font-size:0.85rem; background:#fef2f2; padding:10px; border-radius:6px; margin:10px 0; text-align:left; word-break:break-word;">${advertencia}</p>
+            <p><strong>Puede intentar re-consolidar desde el panel de exportaci\u00f3n.</strong></p>
+          `,
+          icon: 'warning',
+          confirmButtonText: 'Entendido'
+        });
+      } else {
+        Swal.fire({
+          title: '¡Cerrado!',
+          text: config.success,
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      }
     } catch (error) {
       Swal.fire('Error', `Error al cerrar ${tipo}: ` + error.message, 'error');
     }

@@ -19,6 +19,9 @@ router.post('/cerrar-bodega', InventarioController.cerrarBodega);
 // Abrir Bodega
 router.post('/abrir-bodega', InventarioController.abrirBodega);
 
+// Re-consolidar Bodega (sin cambiar estado, para corregir consolidaciones fallidas)
+router.post('/reconsolidar-bodega', InventarioController.reconsolidarBodega);
+
 // Obtener Estado Jerarquía
 router.get('/estado-jerarquia', InventarioController.getEstadoJerarquia);
 
