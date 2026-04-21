@@ -351,8 +351,8 @@ const HistorialConteos = () => {
     // NO filtramos por usuario aquí para no perder el contexto de la ubicación completa
     const filtered = conteos.filter(c => 
       c.bodega === selectedBodega &&
-      (!filtros.zona || c.zona.toLowerCase().includes(filtros.zona.toLowerCase())) &&
-      (!filtros.pasillo || String(c.pasillo).toLowerCase().includes(filtros.pasillo.toLowerCase())) &&
+      (!filtros.zona || c.zona.toLowerCase() === filtros.zona.toLowerCase()) &&
+      (!filtros.pasillo || String(c.pasillo).toLowerCase() === String(filtros.pasillo).toLowerCase()) &&
       (!filtros.ubicacion || String(c.ubicacion).toLowerCase() === String(filtros.ubicacion).toLowerCase())
     );
 
@@ -401,17 +401,17 @@ const HistorialConteos = () => {
     let result = Object.values(zonasMap);
     
     if (filtros.zona) {
-      result = result.filter(z => z.nombre.toLowerCase().includes(filtros.zona.toLowerCase()));
+      result = result.filter(z => z.nombre.toLowerCase() === filtros.zona.toLowerCase());
     }
 
     return result.sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true })).map(zona => {
       let pasillos = Object.values(zona.pasillos);
       
       if (filtros.pasillo) {
-        pasillos = pasillos.filter(p => p.numero.toLowerCase().includes(filtros.pasillo.toLowerCase()));
+        pasillos = pasillos.filter(p => String(p.numero).toLowerCase() === String(filtros.pasillo).toLowerCase());
       }
 
-      zona.pasillos = pasillos.sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true })).map(pasillo => {
+      zona.pasillos = pasillos.sort((a, b) => String(a.numero).localeCompare(String(b.numero), undefined, { numeric: true })).map(pasillo => {
         // AQUI APLICAMOS EL FILTRO DE USUARIO:
         // Solo mostramos ubicaciones donde el usuario seleccionado participó en ALGUNO de los conteos
         if (filtros.usuario) {

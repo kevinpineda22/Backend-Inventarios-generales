@@ -71,7 +71,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         if (filtros.zona) {
             const uniquePasillos = new Set(
                 sourceData
-                .filter(c => c.zona === filtros.zona)
+                .filter(c => String(c.zona) === String(filtros.zona))
                 .map(c => c.pasillo)
             );
             pasillos = [...uniquePasillos].sort();
@@ -84,7 +84,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         if (filtros.pasillo) {
             const uniqueUbicaciones = new Set(
                 sourceData
-                .filter(c => (!filtros.zona || c.zona === filtros.zona) && c.pasillo === filtros.pasillo)
+                .filter(c => (!filtros.zona || String(c.zona) === String(filtros.zona)) && String(c.pasillo) === String(filtros.pasillo))
                 .map(c => c.ubicacion)
             );
             ubicaciones = [...uniqueUbicaciones].sort((a, b) => {
@@ -101,7 +101,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         zonas = structure.map(z => z.nombre).sort();
         
         if (filtros.zona) {
-            const zonaObj = structure.find(z => z.nombre === filtros.zona);
+            const zonaObj = structure.find(z => String(z.nombre) === String(filtros.zona));
             if (zonaObj) {
                 pasillos = zonaObj.pasillos.map(p => p.numero).sort();
             }
@@ -119,7 +119,7 @@ const FiltrosInventarioGeneral = ({ filtros, setFiltros, viewMode, structure, co
         if (filtros.pasillo) {
             const uniqueUbicaciones = new Set(
                 sourceData
-                .filter(c => (!filtros.zona || c.zona === filtros.zona) && c.pasillo === filtros.pasillo)
+                .filter(c => (!filtros.zona || String(c.zona) === String(filtros.zona)) && String(c.pasillo) === String(filtros.pasillo))
                 .map(c => c.ubicacion)
             );
             ubicaciones = [...uniqueUbicaciones].sort((a, b) => {

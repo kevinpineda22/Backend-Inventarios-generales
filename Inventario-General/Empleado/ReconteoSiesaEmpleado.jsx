@@ -17,6 +17,13 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   const [conteoId, setConteoId] = useState(null);
   const [reconteoItems, setReconteoItems] = useState([]);
 
+  // Filtro de Fecha (Para no mostrar todo el historial de corrido)
+  const getTodayISO = () => {
+    const tzOffset = new Date().getTimezoneOffset() * 60000;
+    return new Date(Date.now() - tzOffset).toISOString().split('T')[0];
+  };
+  const [filterDate, setFilterDate] = useState(getTodayISO());
+
   // Editing
   const [editingItemId, setEditingItemId] = useState(null);
   const [qtyInputs, setQtyInputs] = useState({});
@@ -437,6 +444,20 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
   // RENDER: DEFAULT LIST
   // =====================================================
 
+  const filteredUbicaciones = ubicaciones.filter(ub => {
+    if (!filterDate) return true;
+    // Si la ubicación tiene fecha base desde el backend la utilizamos (más preciso para no mezclar conteos viejos con nuevos en la misma ubicación)
+    if (ub.fecha_asignacion) {
+      return ub.fecha_asignacion === filterDate;
+    }
+    const itemDate = ub.items?.[0]?.created_at;
+    if (itemDate) {
+      // Comparar solo la parte de la fecha YYYY-MM-DD
+      return itemDate.split('T')[0] === filterDate;
+    }
+    return false;
+  });
+
   return (
     <div className="rse-container">
       <div className="rse-header">
@@ -445,7 +466,7 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
           <div className="rse-header-info">
             <span>👤 {usuarioNombre || usuarioEmail}</span>
             <span>|</span>
-            <span>{ubicaciones.length} ubicaciones · {totalItems} items</span>
+            <span>{filteredUbicaciones.length} ubicaciones filtradas</span>
           </div>
         </div>
         <button className="rse-btn-back" onClick={onCerrar}>
@@ -453,21 +474,56 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
         </button>
       </div>
 
-      {ubicaciones.length === 0 ? (
+      <div className="rse-filters" style={{ margin: '15px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.9rem' }}>Filtro de fecha:</label>
+        <input 
+          type="date"
+          className="rse-date-filter"
+          value={filterDate}
+          onChange={(e) => setFilterDate(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+        />
+        <button 
+          className="rse-btn-clear" 
+          onClick={() => setFilterDate('')}
+          style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#e2e8f0', color: '#475569', cursor: 'pointer' }}
+          title="Ver todo el historial"
+        >
+          Ver Todos
+        </button>
+        {filterDate !== getTodayISO() && (
+           <button 
+             onClick={() => setFilterDate(getTodayISO())}
+             style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #bbf7d0', background: '#dcfce3', color: '#166534', cursor: 'pointer', fontSize: '0.85rem' }}
+           >
+             Ir a Hoy
+           </button>
+        )}
+      </div>
+
+      {filteredUbicaciones.length === 0 ? (
         <div className="rse-empty-state">
           <div className="icon">📭</div>
-          <h3>No tiene reconteos asignados</h3>
-          <p>El administrador debe asignarle ubicaciones para recontar.</p>
-          <button
-            onClick={cargarUbicaciones}
-            style={{ marginTop: '10px', padding: '8px 16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-          >
-            🔄 Refrescar
-          </button>
+          <h3>No tiene reconteos para esta fecha</h3>
+          <p>Intente limpiar el filtro para ver fechas anteriores o pedir nuevas asignaciones.</p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '10px' }}>
+            <button
+              onClick={() => setFilterDate('')}
+              style={{ padding: '8px 16px', background: '#64748b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+            >
+              🗓 Ver Todo
+            </button>
+            <button
+              onClick={cargarUbicaciones}
+              style={{ padding: '8px 16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+            >
+              🔄 Refrescar
+            </button>
+          </div>
         </div>
       ) : (
         <div className="rse-ubicacion-list">
-          {ubicaciones.map((ub, idx) => {
+          {filteredUbicaciones.map((ub, idx) => {
             const prog = getUbicacionProgress(ub);
             const isFinished = ub.estado_general === 'finalizado' || ub.estado_general === 'aprobado';
 

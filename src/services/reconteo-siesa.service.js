@@ -135,10 +135,14 @@ class ReconteoSiesaService {
     try {
       const data = await ReconteoSiesaModel.findByEmpleado(correoEmpleado, filters);
 
-      // Agrupar por ubicación para la UI del empleado
+      // Agrupar por ubicación y fecha para la UI del empleado
       const ubicacionesMap = new Map();
       data.forEach(r => {
-        const key = r.ubicacion_id;
+        // Agrupar no solo por ubicación sino también por el día de creación,
+        // así si le asignan la misma ubicación en inventarios/días distintos, salen separados.
+        const fecha = r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : 'sin_fecha';
+        const key = `${r.ubicacion_id}_${fecha}`;
+        
         if (!ubicacionesMap.has(key)) {
           ubicacionesMap.set(key, {
             ubicacion_id: r.ubicacion_id,
@@ -148,6 +152,7 @@ class ReconteoSiesaService {
             bodega_nombre: r.bodega_nombre,
             bodega_id: r.bodega_id,
             compania_id: r.compania_id,
+            fecha_asignacion: fecha, // Agregado para usarlo en el filtro del frontend
             items: [],
             total_items: 0,
             items_completados: 0,
