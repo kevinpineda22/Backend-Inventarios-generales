@@ -55,6 +55,9 @@ router.post('/:conteoId/aprobar', ConteoController.aprobar);
 // Rechazar conteo
 router.post('/:conteoId/rechazar', ConteoController.rechazar);
 
+// Reabrir conteo (Devolverlo a en_proceso)
+router.post('/:conteoId/reabrir', ConteoController.reabrir);
+
 // Eliminar item de conteo (registro específico)
 router.delete('/item/:id', ConteoController.eliminarItem);
 

@@ -368,6 +368,18 @@ const inventarioGeneralService = {
     return response.json();
   },
 
+  reabrirConteo: async (conteoId) => {
+    const response = await fetch(`${API_URL}/conteos/${conteoId}/reabrir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Error al reabrir conteo");
+    }
+    return response.json();
+  },
+
   obtenerDetalleConteo: async (conteoId) => {
     const response = await fetch(`${API_URL}/conteos/${conteoId}`, {
         method: "GET",

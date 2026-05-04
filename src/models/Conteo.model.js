@@ -256,6 +256,32 @@ export class ConteoModel {
   }
 
   /**
+   * Reabrir un conteo finalizado
+   */
+  static async reabrir(id) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.CONTEOS)
+        .update({
+          estado: 'en_proceso',
+          fecha_fin: null,
+          fecha_aprobacion: null,
+          fecha_rechazo: null,
+          motivo_rechazo: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      throw handleSupabaseError(error);
+    }
+  }
+
+  /**
    * Obtener historial de conteos por pasillo
    */
   static async getHistorialByPasillo(pasilloId) {

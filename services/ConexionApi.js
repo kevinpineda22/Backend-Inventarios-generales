@@ -56,7 +56,7 @@ async function fetchWithRetry(url, options = {}, retries = 2) {
         let msg = `${res.status} ${res.statusText}`;
         try {
           msg += `: ${await res.text()}`;
-        } catch {}
+        } catch (e) { /* ignore */ }
         throw new Error(msg);
       }
       await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt))); // 0.5s, 1s, 2s

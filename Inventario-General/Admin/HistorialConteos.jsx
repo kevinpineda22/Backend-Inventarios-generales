@@ -123,12 +123,10 @@ const HistorialConteos = () => {
       setViewMode('list'); // Reset view mode
       
       // Cargar historial general pasando null explícitamente para evitar usar el estado anterior
-      cargarHistorial(true, null);
+      // Se comenta cargarHistorial() para evitar llamada global a toda la compañia sin bodega seleccionada.
+      // cargarHistorial(true, null);
       
-      // Polling para actualización en tiempo real (cada 60 segundos)
-      interval = setInterval(() => {
-        cargarHistorial(false, null);
-      }, 60000);
+      // Polling para actualización en tiempo real se elimina de aquí para evitar borrar la data
     } else {
       setListaBodegas([]);
       setConteos([]);
@@ -279,23 +277,38 @@ const HistorialConteos = () => {
 
   // Efecto para recargar cuando cambia la bodega seleccionada (para obtener historial completo de esa bodega)
   useEffect(() => {
+    let interval;
     if (selectedBodega) {
       cargarHistorial(true);
+
+      // Polling para actualización en tiempo real (cada 60 segundos) solo de la bodega actual
+      interval = setInterval(() => {
+        cargarHistorial(false, selectedBodega);
+      }, 60000);
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [selectedBodega]);
 
   const cargarHistorial = async (showLoading = true, bodegaOverride = undefined) => {
     try {
+      const bodegaToUse = bodegaOverride !== undefined ? bodegaOverride : selectedBodega;
+      
+      // FIX: No cargar el historial completo si no hay una bodega seleccionada
+      // Esto evita el error 500 por timeout al intentar cargar decenas de miles de registros de toda la compañía
+      if (!bodegaToUse) {
+        setConteos([]);
+        return;
+      }
+
       if (showLoading) setLoading(true);
       
       const queryFilters = {};
       if (filtros.producto) queryFilters.producto = filtros.producto;
       
-      // Determinar qué bodega usar: el override (si se pasa) o el estado actual
-      // Si bodegaOverride es null, significa explícitamente "sin bodega"
-      const bodegaToUse = bodegaOverride !== undefined ? bodegaOverride : selectedBodega;
-
-      if (bodegaToUse) queryFilters.bodega = bodegaToUse;
+      queryFilters.bodega = bodegaToUse;
 
       const data = await inventarioService.obtenerHistorialConteos(selectedCompany, queryFilters);
       setConteos(data);
@@ -903,6 +916,46 @@ const HistorialConteos = () => {
   };
   const closeSingleDetail = () => setSingleDetail(null);
 
+  const handleReabrirConteo = async (conteoId) => {
+    const result = await Swal.fire({
+      title: '¿Reabrir esta ubicación?',
+      text: 'El operario podrá volver a editar este conteo y agregar ítems pendientes.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Sí, reabrir',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      Swal.fire({
+        title: 'Procesando...',
+        text: 'Reabriendo conteo, por favor espere...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+
+      const response = await inventarioService.reabrirConteo(conteoId);
+
+      if (response.success) {
+        Swal.fire({
+          title: '¡Reabierto!',
+          text: 'La ubicación ha sido reabierta correctamente.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
+        cargarHistorial(false); // Recargar la lista de conteos
+      }
+    } catch (error) {
+      console.error('Error al reabrir el conteo:', error);
+      Swal.fire('Error', error.message || 'Ocurrió un error al intentar reabrir la ubicación.', 'error');
+    }
+  };
+
   const handleGuardarAjuste = async () => {
     if (!comparisonData || !comparisonData.items) return;
 
@@ -1426,6 +1479,7 @@ const HistorialConteos = () => {
         singleDetail={singleDetail}
         closeSingleDetail={closeSingleDetail}
         refreshDetail={refreshDetail}
+        handleReabrirConteo={handleReabrirConteo}
       />
 
       {/* Bitácora Panel Removed */}

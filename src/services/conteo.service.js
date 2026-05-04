@@ -597,6 +597,32 @@ class ConteoService {
   }
 
   /**
+   * Reabrir conteo (Devolverlo a en_proceso)
+   */
+  static async reabrirConteo(conteoId) {
+    try {
+      const conteoExistente = await ConteoModel.findById(conteoId);
+      if (!conteoExistente) {
+        throw new Error('El conteo no existe');
+      }
+
+      if (conteoExistente.estado !== 'finalizado' && conteoExistente.estado !== 'rechazado') {
+        throw new Error(`No se puede reabrir un conteo en estado: ${conteoExistente.estado}`);
+      }
+
+      const conteo = await ConteoModel.reabrir(conteoId);
+      
+      return {
+        success: true,
+        data: conteo,
+        message: 'Conteo reabierto exitosamente. Ahora los usuarios pueden seguir contando en esta ubicación.'
+      };
+    } catch (error) {
+      throw new Error(`Error al reabrir conteo: ${error.message}`);
+    }
+  }
+
+  /**
    * Obtener conteos pendientes de aprobación
    */
   static async getConteosPendientes() {

@@ -575,7 +575,14 @@ const EmpleadoInventarioGeneral = ({
             <h3>4. Ubicación</h3>
             <div className="ubicaciones-grid">
               {seleccion.pasillo && ubicaciones.length > 0 ? (
-                ubicaciones.map((ubicacion) => {
+                // Ordenar ubicaciones numéricamente por el número
+                [...ubicaciones]
+                  .sort((a, b) => {
+                    const numA = parseInt(String(a.numero || "").replace(/\D/g, "")) || 0;
+                    const numB = parseInt(String(b.numero || "").replace(/\D/g, "")) || 0;
+                    return numA - numB;
+                  })
+                  .map((ubicacion) => {
                   // Lógica de estado visual
                   let estadoClase = "";
                   let estadoTexto = "Disponible";

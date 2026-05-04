@@ -1,7 +1,7 @@
 import React from 'react';
 import '../HistorialConteos.css';
 
-const DetalleConteoModal = ({ singleDetail, closeSingleDetail, refreshDetail }) => {
+const DetalleConteoModal = ({ singleDetail, closeSingleDetail, refreshDetail, handleReabrirConteo }) => {
     if (!singleDetail) return null;
 
     return (
@@ -17,6 +17,27 @@ const DetalleConteoModal = ({ singleDetail, closeSingleDetail, refreshDetail }) 
                 >
                   🔄
                 </button>
+                {singleDetail.conteo.estado === 'finalizado' && (
+                  <button 
+                    onClick={() => {
+                      handleReabrirConteo(singleDetail.conteo.id);
+                      closeSingleDetail();
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#f59e0b',
+                      color: 'white',
+                      border: '1px solid #d97706',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '0.85rem'
+                    }}
+                    title="Reabrir ubicación para seguir contando"
+                  >
+                    Reabrir Conteo
+                  </button>
+                )}
                 <button onClick={closeSingleDetail} className="hc-close-btn">×</button>
               </div>
             </div>

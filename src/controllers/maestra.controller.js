@@ -81,7 +81,7 @@ import validators from '../utils/validators.js';
 const normalizeKey = (k = '') =>
   String(k ?? '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[\s\._\-]+/g, '_').trim();
+    .toLowerCase().replace(/[\s._-]+/g, '_').trim();
 
 export const uploadMaestra = async (req, res) => {
   try {

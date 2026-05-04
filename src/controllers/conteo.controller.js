@@ -265,6 +265,22 @@ export class ConteoController {
   }
 
   /**
+   * Reabrir un conteo finalizado
+   * POST /api/conteos/:conteoId/reabrir
+   */
+  static async reabrir(req, res) {
+    try {
+      const { conteoId } = req.params;
+
+      const result = await ConteoService.reabrirConteo(conteoId);
+
+      return successResponse(res, result.data, result.message);
+    } catch (error) {
+      return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
    * Obtener conteos pendientes de aprobación
    * GET /api/conteos/pendientes
    */
