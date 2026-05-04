@@ -263,7 +263,7 @@ export class ConteoModel {
       const { data, error } = await supabase
         .from(TABLES.CONTEOS)
         .update({
-          estado: 'en_proceso',
+          estado: 'en_progreso',
           fecha_fin: null,
           fecha_aprobacion: null,
           fecha_rechazo: null,
