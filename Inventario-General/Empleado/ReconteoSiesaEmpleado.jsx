@@ -23,6 +23,7 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
     return new Date(Date.now() - tzOffset).toISOString().split('T')[0];
   };
   const [filterDate, setFilterDate] = useState(getTodayISO());
+  const [verTodosActivo, setVerTodosActivo] = useState(false);
 
   // Editing
   const [editingItemId, setEditingItemId] = useState(null);
@@ -50,10 +51,11 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
     if (handleScanRef.current) handleScanRef.current(code);
   }, []);
 
-  const cargarUbicaciones = async () => {
+  const cargarUbicaciones = async (verTodos = verTodosActivo) => {
     try {
       setLoading(true);
-      const result = await inventarioService.obtenerReconteosSiesaEmpleado(usuarioEmail);
+      const params = verTodos ? { ver_todos: true } : {};
+      const result = await inventarioService.obtenerReconteosSiesaEmpleado(usuarioEmail, params);
       if (result) {
         setUbicaciones(result.data || result || []);
         setTotalItems(result.total_items || 0);
@@ -485,7 +487,11 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
         />
         <button 
           className="rse-btn-clear" 
-          onClick={() => setFilterDate('')}
+          onClick={() => {
+            setFilterDate('');
+            setVerTodosActivo(true);
+            cargarUbicaciones(true);
+          }}
           style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#e2e8f0', color: '#475569', cursor: 'pointer' }}
           title="Ver todo el historial"
         >
@@ -493,7 +499,11 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
         </button>
         {filterDate !== getTodayISO() && (
            <button 
-             onClick={() => setFilterDate(getTodayISO())}
+             onClick={() => {
+               setFilterDate(getTodayISO());
+               setVerTodosActivo(false);
+               cargarUbicaciones(false);
+             }}
              style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #bbf7d0', background: '#dcfce3', color: '#166534', cursor: 'pointer', fontSize: '0.85rem' }}
            >
              Ir a Hoy
@@ -508,7 +518,11 @@ const ReconteoSiesaEmpleado = ({ usuarioId, usuarioNombre, usuarioEmail, onCerra
           <p>Intente limpiar el filtro para ver fechas anteriores o pedir nuevas asignaciones.</p>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '10px' }}>
             <button
-              onClick={() => setFilterDate('')}
+              onClick={() => {
+                setFilterDate('');
+                setVerTodosActivo(true);
+                cargarUbicaciones(true);
+              }}
               style={{ padding: '8px 16px', background: '#64748b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
             >
               🗓 Ver Todo

@@ -78,7 +78,17 @@ export class ReconteoSiesaModel {
         .select('*')
         .eq('asignado_a', correoEmpleado);
 
-      if (filters.estado) query = query.eq('estado', filters.estado);
+      if (filters.ver_todos === 'true' || filters.ver_todos === true) {
+        // Modo "Ver todos": No aplicamos filtro restrictivo por defecto
+        if (filters.estado) query = query.eq('estado', filters.estado);
+      } else if (filters.estado) {
+        // Si el frontend pide un estado específico, lo respetamos
+        query = query.eq('estado', filters.estado);
+      } else {
+        // COMPORTAMIENTO POR DEFECTO: Solo mostrar lo que el empleado debe trabajar
+        query = query.in('estado', ['asignado', 'en_progreso']);
+      }
+
       if (filters.compania_id) query = query.eq('compania_id', filters.compania_id);
       if (filters.bodega_id) query = query.eq('bodega_id', filters.bodega_id);
 

@@ -948,6 +948,7 @@ const HistorialConteos = () => {
           timer: 2000,
           showConfirmButton: false
         });
+        setSingleDetail(null); // Asegurarse de cerrar el modal por completo
         cargarHistorial(false); // Recargar la lista de conteos
       }
     } catch (error) {

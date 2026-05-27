@@ -53,7 +53,7 @@ const DetalleConteoModal = ({ singleDetail, closeSingleDetail, refreshDetail, ha
                 </div>
                 <div className="hc-detail-info-item">
                   <span className="hc-detail-label">Total Items</span>
-                  <span className="hc-detail-value">{singleDetail.loading ? '...' : singleDetail.items.length}</span>
+                  <span className="hc-detail-value">{singleDetail.loading ? '...' : (singleDetail.items ? singleDetail.items.length : 0)}</span>
                 </div>
               </div>
               
@@ -73,7 +73,7 @@ const DetalleConteoModal = ({ singleDetail, closeSingleDetail, refreshDetail, ha
                     </tr>
                   </thead>
                   <tbody>
-                    {singleDetail.items.map((item, idx) => (
+                    {(singleDetail.items || []).map((item, idx) => (
                       <tr key={idx}>
                         <td>{item.item_codigo}</td>
                         <td>{item.descripcion}</td>
