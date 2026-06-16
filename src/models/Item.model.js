@@ -152,52 +152,69 @@ export class ItemModel {
    */
   static async search(term, companiaId) {
     try {
+      // Normalizar: sin esto, una cadena vacía o con espacios busca cualquier cosa
+      const clean = (term || '').trim();
+      if (!clean) return [];
+
+      // Escapar los caracteres que rompen el filtro .or() de PostgREST (, ( ))
+      const safe = clean.replace(/[,()]/g, ' ').trim();
+      if (!safe) return [];
+      const pattern = `%${safe}%`;
+
       let query = supabase
         .from(TABLES.ITEMS)
-        .select('id, codigo, descripcion, grupo');
-        
+        .select('id, item, codigo, descripcion, grupo');
+
       if (companiaId) {
         query = query.eq('compania_id', companiaId);
       }
-        
-      query = query.or(`descripcion.ilike.%${term}%,codigo.ilike.%${term}%`)
-        .limit(50); // Aumentar el límite para poder ordenar mejor
+
+      // Buscar en las 3 columnas: SKU (item), código y descripción.
+      // Antes solo miraba codigo/descripcion, por eso los SKU cortos guardados
+      // en la columna `item` no aparecían.
+      query = query
+        .or(`item.ilike.${pattern},codigo.ilike.${pattern},descripcion.ilike.${pattern}`)
+        .limit(50); // margen para poder reordenar por relevancia
 
       const { data, error } = await query;
 
       if (error) throw error;
-      
-      // Ordenar resultados por relevancia en JavaScript
-      // Prioridad: 1) Coincidencia exacta de código, 2) Código empieza con término, 
-      // 3) Descripción empieza con término, 4) Resto
+
+      // Ordenar por relevancia en JavaScript
+      // Prioridad: 1) Coincidencia exacta (item o código), 2) empieza con el término
+      // (item/código), 3) descripción empieza con el término, 4) código más corto
+      const termLower = safe.toLowerCase();
       const sortedData = (data || []).sort((a, b) => {
-        const termLower = term.toLowerCase();
-        const aCodigoLower = (a.codigo || '').toLowerCase();
-        const bCodigoLower = (b.codigo || '').toLowerCase();
-        const aDescLower = (a.descripcion || '').toLowerCase();
-        const bDescLower = (b.descripcion || '').toLowerCase();
-        
-        // Coincidencia exacta de código tiene máxima prioridad
-        if (aCodigoLower === termLower && bCodigoLower !== termLower) return -1;
-        if (bCodigoLower === termLower && aCodigoLower !== termLower) return 1;
-        
-        // Código empieza con el término
-        const aStartsCode = aCodigoLower.startsWith(termLower);
-        const bStartsCode = bCodigoLower.startsWith(termLower);
-        if (aStartsCode && !bStartsCode) return -1;
-        if (bStartsCode && !aStartsCode) return 1;
-        
+        const aCode = (a.codigo || a.item || '').toLowerCase();
+        const bCode = (b.codigo || b.item || '').toLowerCase();
+        const aItem = (a.item || '').toLowerCase();
+        const bItem = (b.item || '').toLowerCase();
+        const aDesc = (a.descripcion || '').toLowerCase();
+        const bDesc = (b.descripcion || '').toLowerCase();
+
+        // Coincidencia exacta de código o SKU → máxima prioridad
+        const aExact = aCode === termLower || aItem === termLower;
+        const bExact = bCode === termLower || bItem === termLower;
+        if (aExact && !bExact) return -1;
+        if (bExact && !aExact) return 1;
+
+        // Código/SKU empieza con el término
+        const aStarts = aCode.startsWith(termLower) || aItem.startsWith(termLower);
+        const bStarts = bCode.startsWith(termLower) || bItem.startsWith(termLower);
+        if (aStarts && !bStarts) return -1;
+        if (bStarts && !aStarts) return 1;
+
         // Descripción empieza con el término
-        const aStartsDesc = aDescLower.startsWith(termLower);
-        const bStartsDesc = bDescLower.startsWith(termLower);
+        const aStartsDesc = aDesc.startsWith(termLower);
+        const bStartsDesc = bDesc.startsWith(termLower);
         if (aStartsDesc && !bStartsDesc) return -1;
         if (bStartsDesc && !aStartsDesc) return 1;
-        
-        // Por longitud de código (más corto primero, generalmente más relevante)
-        return (a.codigo || '').length - (b.codigo || '').length;
+
+        // Código más corto primero (suele ser el más relevante)
+        return aCode.length - bCode.length;
       });
-      
-      return sortedData.slice(0, 10); // Devolver top 10 más relevantes
+
+      return sortedData.slice(0, 10); // top 10 más relevantes
     } catch (error) {
       throw handleSupabaseError(error);
     }

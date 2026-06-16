@@ -21,14 +21,16 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
 
     // Search logic
     useEffect(() => {
-        if (query.length > 2 && !selectedItem) {
+        const termino = query.trim();
+        // Buscar desde 1 caracter para soportar items con codigos cortos (1-2 digitos)
+        if (termino.length >= 1 && !selectedItem) {
             setIsSearching(true);
             if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-            
+
             searchTimeoutRef.current = setTimeout(async () => {
-                console.log("Searching for:", query, "Company:", selectedCompany);
+                console.log("Searching for:", termino, "Company:", selectedCompany);
                 try {
-                    const items = await inventarioGeneralService.buscarItems(query, selectedCompany);
+                    const items = await inventarioGeneralService.buscarItems(termino, selectedCompany);
                     console.log("Search results:", items);
                     setSuggestions(items || []);
                 } catch (error) {
@@ -122,7 +124,7 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
                                 <li key={idx} className="adv-suggestion-item" onClick={() => handleSelect(item)}>
                                     <div className="adv-item-main">
                                         <span className="adv-item-desc">{item.descripcion}</span>
-                                        <span className="adv-item-code">{item.codigo}</span>
+                                        <span className="adv-item-code">{item.codigo || item.item}</span>
                                     </div>
                                     <span className="adv-item-group">{item.grupo || 'General'}</span>
                                 </li>
@@ -134,7 +136,7 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
                     {isSearching && <div className="adv-loading">Buscando productos...</div>}
 
                     {/* No Results State */}
-                    {!isSearching && query.length > 2 && suggestions.length === 0 && !selectedItem && (
+                    {!isSearching && query.trim().length >= 1 && suggestions.length === 0 && !selectedItem && (
                         <div className="adv-no-results">No se encontraron coincidencias.</div>
                     )}
 
@@ -144,7 +146,7 @@ const BusquedaAvanzada = ({ onClose, onNavigate, selectedCompany, selectedBodega
                             <div className="adv-product-header">
                                 <div className="adv-ph-item">
                                     <span className="adv-ph-label">Código</span>
-                                    <span className="adv-ph-value">{selectedItem.codigo}</span>
+                                    <span className="adv-ph-value">{selectedItem.codigo || selectedItem.item}</span>
                                 </div>
                                 <div className="adv-ph-item" style={{flex: 1}}>
                                     <span className="adv-ph-label">Descripción</span>
