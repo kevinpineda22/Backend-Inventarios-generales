@@ -874,14 +874,37 @@ class ConteoService {
       const companiaId = bodega.compania_id;
       console.log(`[EXPORT SECURITY] Bodega: ${bodegaId}, Compañía: ${companiaId}`);
       
-      const { data, error } = await supabase
-        .from('v_inventario_consolidado_completo')
-        .select('item_sku, item_nombre, bodega, cantidad_total, item_grupo')
-        .eq('bodega_id', bodegaId)
-        .eq('compania_id', companiaId) // ✅ FILTRO CRÍTICO DE SEGURIDAD
-        .eq('nivel', 'ubicacion');
+      // Paginación KEYSET por consolidado_id: sin esto Supabase devuelve solo
+      // las primeras 1000 filas (nivel 'ubicacion' tiene miles por bodega), y los
+      // items que quedan fuera de ese tope salían en 0 en el Excel.
+      const PAGE = 1000;
+      let lastId = null;
+      let hasMore = true;
+      const data = [];
 
-      if (error) throw error;
+      while (hasMore) {
+        let query = supabase
+          .from('v_inventario_consolidado_completo')
+          .select('consolidado_id, item_sku, item_nombre, bodega, cantidad_total, item_grupo')
+          .eq('bodega_id', bodegaId)
+          .eq('compania_id', companiaId) // ✅ FILTRO CRÍTICO DE SEGURIDAD
+          .eq('nivel', 'ubicacion')
+          .order('consolidado_id', { ascending: true })
+          .limit(PAGE);
+
+        if (lastId !== null) query = query.gt('consolidado_id', lastId);
+
+        const { data: page, error } = await query;
+        if (error) throw error;
+
+        if (page && page.length > 0) {
+          data.push(...page);
+          lastId = page[page.length - 1].consolidado_id;
+          if (page.length < PAGE) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
 
       if (!data || data.length === 0) {
         return {

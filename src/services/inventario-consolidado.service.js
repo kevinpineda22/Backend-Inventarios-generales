@@ -84,16 +84,21 @@ class InventarioConsolidadoService {
     const bodega = await BodegaModel.findById(bodegaId);
     const companiaId = bodega.compania_id;
 
-    // ── 2. Query única con paginación (para evitar límite de 1000 filas de Supabase) ────
+    // ── 2. Query única con paginación POR KEYSET (estable) ──────────────────────
+    // IMPORTANTE: se pagina por `id` con .order() + .gt(), NO con .range().
+    // Un OFFSET (.range) sin ORDER BY estable hace que Postgres devuelva las filas
+    // en orden indefinido entre páginas, saltándose y duplicando conteos. Eso dejaba
+    // ítems en 0 de forma aleatoria al cerrar/reconsolidar la bodega.
     let allConteos = [];
-    let from = 0;
+    let lastId = null;
     const step = 1000;
     let hasMore = true;
 
     while (hasMore) {
-      const { data: conteos, error } = await client
+      let query = client
         .from(TABLES.CONTEOS)
         .select(`
+          id,
           tipo_conteo,
           ubicacion_id,
           ubicacion:${TABLES.UBICACIONES}!inner(
@@ -115,13 +120,19 @@ class InventarioConsolidadoService {
         .eq('ubicacion.activo', true)
         .eq('ubicacion.pasillo.activo', true)
         .eq('ubicacion.pasillo.zona.activo', true)
-        .range(from, from + step - 1);
+        .order('id', { ascending: true })
+        .limit(step);
+
+      // Keyset: solo filas con id mayor a la última ya traída.
+      if (lastId !== null) query = query.gt('id', lastId);
+
+      const { data: conteos, error } = await query;
 
       if (error) throw new Error(`Error al obtener datos de la bodega: ${error.message}`);
-      
+
       if (conteos && conteos.length > 0) {
         allConteos.push(...conteos);
-        from += step;
+        lastId = conteos[conteos.length - 1].id;
         if (conteos.length < step) hasMore = false;
       } else {
         hasMore = false;

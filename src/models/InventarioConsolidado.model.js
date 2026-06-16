@@ -81,26 +81,41 @@ export class InventarioConsolidadoModel {
    */
   static async sumByParent(nivelHijo, campoFiltro, valorFiltro) {
     try {
-      const { data, error } = await supabase
-        .from('inv_general_inventario_consolidado')
-        .select('item_id, cantidad_total')
-        .eq('nivel', nivelHijo)
-        .eq(campoFiltro, valorFiltro);
-
-      if (error) throw error;
-
       // Agrupar por item_id y sumar
       const itemsMap = new Map();
-      data.forEach(row => {
-        const itemId = row.item_id;
-        const cantidad = Number(row.cantidad_total);
 
-        if (itemsMap.has(itemId)) {
-          itemsMap.set(itemId, itemsMap.get(itemId) + cantidad);
+      // Paginación KEYSET por id: sin esto Supabase devuelve solo las primeras
+      // 1000 filas hijas, dejando items incompletos al consolidar pasillo/zona.
+      const PAGE = 1000;
+      let lastId = null;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase
+          .from('inv_general_inventario_consolidado')
+          .select('id, item_id, cantidad_total')
+          .eq('nivel', nivelHijo)
+          .eq(campoFiltro, valorFiltro)
+          .order('id', { ascending: true })
+          .limit(PAGE);
+
+        if (lastId !== null) query = query.gt('id', lastId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          data.forEach(row => {
+            const itemId = row.item_id;
+            const cantidad = Number(row.cantidad_total);
+            itemsMap.set(itemId, (itemsMap.get(itemId) || 0) + cantidad);
+          });
+          lastId = data[data.length - 1].id;
+          if (data.length < PAGE) hasMore = false;
         } else {
-          itemsMap.set(itemId, cantidad);
+          hasMore = false;
         }
-      });
+      }
 
       // Convertir a array
       return Array.from(itemsMap).map(([item_id, cantidad]) => ({
