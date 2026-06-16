@@ -159,32 +159,42 @@ export class ItemModel {
       // Escapar los caracteres que rompen el filtro .or() de PostgREST (, ( ))
       const safe = clean.replace(/[,()]/g, ' ').trim();
       if (!safe) return [];
-      const pattern = `%${safe}%`;
 
-      let query = supabase
-        .from(TABLES.ITEMS)
-        .select('id, item, codigo, descripcion, grupo');
+      // Helper para construir la consulta base con el filtro de compañía
+      const base = () => {
+        let q = supabase.from(TABLES.ITEMS).select('id, item, codigo, descripcion, grupo');
+        if (companiaId) q = q.eq('compania_id', companiaId);
+        return q;
+      };
 
-      if (companiaId) {
-        query = query.eq('compania_id', companiaId);
+      // Búsqueda por NIVELES para que las coincidencias relevantes NUNCA se pierdan
+      // por el .limit() del nivel "contiene" (que con términos cortos coincide con
+      // cientos de filas y, sin orden estable, dejaba fuera el item exacto):
+      //   1) Exacto en item o codigo  → siempre incluido (resultado mínimo)
+      //   2) Empieza con el término   → alta relevancia
+      //   3) Contiene el término      → red amplia (item, codigo o descripcion)
+      const [exactRes, prefixRes, containsRes] = await Promise.all([
+        base().or(`item.eq.${safe},codigo.eq.${safe}`),
+        base().or(`item.ilike.${safe}%,codigo.ilike.${safe}%`).limit(50),
+        base().or(`item.ilike.%${safe}%,codigo.ilike.%${safe}%,descripcion.ilike.%${safe}%`).limit(80),
+      ]);
+
+      for (const r of [exactRes, prefixRes, containsRes]) {
+        if (r.error) throw r.error;
       }
 
-      // Buscar en las 3 columnas: SKU (item), código y descripción.
-      // Antes solo miraba codigo/descripcion, por eso los SKU cortos guardados
-      // en la columna `item` no aparecían.
-      query = query
-        .or(`item.ilike.${pattern},codigo.ilike.${pattern},descripcion.ilike.${pattern}`)
-        .limit(50); // margen para poder reordenar por relevancia
-
-      const { data, error } = await query;
-
-      if (error) throw error;
+      // Unir y deduplicar por id (el orden de inserción ya respeta la relevancia)
+      const byId = new Map();
+      for (const row of [...(exactRes.data || []), ...(prefixRes.data || []), ...(containsRes.data || [])]) {
+        if (!byId.has(row.id)) byId.set(row.id, row);
+      }
+      const data = Array.from(byId.values());
 
       // Ordenar por relevancia en JavaScript
       // Prioridad: 1) Coincidencia exacta (item o código), 2) empieza con el término
       // (item/código), 3) descripción empieza con el término, 4) código más corto
       const termLower = safe.toLowerCase();
-      const sortedData = (data || []).sort((a, b) => {
+      const sortedData = data.sort((a, b) => {
         const aCode = (a.codigo || a.item || '').toLowerCase();
         const bCode = (b.codigo || b.item || '').toLowerCase();
         const aItem = (a.item || '').toLowerCase();
