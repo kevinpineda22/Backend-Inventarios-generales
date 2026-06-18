@@ -3,10 +3,11 @@
 // =====================================================
 
 import EstructuraService from '../services/estructura.service.js';
-import { 
-  successResponse, 
-  errorResponse, 
-  notFoundResponse 
+import QrService from '../services/qr.service.js';
+import {
+  successResponse,
+  errorResponse,
+  notFoundResponse
 } from '../utils/responses.js';
 
 export class EstructuraController {
@@ -278,6 +279,54 @@ export class EstructuraController {
       return successResponse(res, result.data, 'Ubicación obtenida exitosamente');
     } catch (error) {
       return errorResponse(res, error.message, 500, error);
+    }
+  }
+
+  /**
+   * Obtener el QR de la clave de una ubicación.
+   * GET /api/ubicaciones/:id/qr            -> imagen PNG
+   * GET /api/ubicaciones/:id/qr?format=json -> { qr: dataURL, clave, ... }
+   */
+  static async getUbicacionQr(req, res) {
+    try {
+      const { id } = req.params;
+      const { format } = req.query;
+
+      if (format === 'json' || format === 'dataurl') {
+        const result = await QrService.generateUbicacionQrDataUrl(id);
+        return successResponse(res, result.data, 'QR generado exitosamente');
+      }
+
+      const { buffer } = await QrService.generateUbicacionQrBuffer(id);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(buffer);
+    } catch (error) {
+      const status = error.message?.includes('no encontrada') ? 404 : 500;
+      return errorResponse(res, error.message, status, error);
+    }
+  }
+
+  /**
+   * Descargar PDF con las claves (texto + QR) de las ubicaciones de un pasillo.
+   * GET /api/pasillos/:id/claves-pdf
+   */
+  static async getPasilloClavesPdf(req, res) {
+    try {
+      const { id } = req.params;
+
+      const pdfBuffer = await QrService.generatePasilloClavesPdf(id);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="claves-pasillo-${id}.pdf"`
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(pdfBuffer);
+    } catch (error) {
+      const status = error.message?.includes('no encontrado') ? 404 : 500;
+      return errorResponse(res, error.message, status, error);
     }
   }
 }

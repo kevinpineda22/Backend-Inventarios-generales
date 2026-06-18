@@ -13,6 +13,9 @@ router.post('/', EstructuraController.createUbicacion);
 // Crear múltiples ubicaciones
 router.post('/multiple', EstructuraController.createMultipleUbicaciones);
 
+// Obtener el QR de la clave de una ubicación (imagen PNG o ?format=json)
+router.get('/:id/qr', EstructuraController.getUbicacionQr);
+
 // Obtener ubicación por ID
 router.get('/:id', EstructuraController.getUbicacion);
 

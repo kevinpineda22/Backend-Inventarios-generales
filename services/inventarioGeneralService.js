@@ -658,6 +658,47 @@ const inventarioGeneralService = {
     if (!response.ok) throw new Error("Error al eliminar lote");
     return response.json();
   },
+
+  // =====================================================
+  // QR Y PDF DE CLAVES DE UBICACIONES
+  // =====================================================
+
+  // URL directa de la imagen PNG del QR (para usar en <img src=...>)
+  getQrUbicacionUrl: (ubicacionId) => `${API_URL}/ubicaciones/${ubicacionId}/qr`,
+
+  // Obtener el QR como Data URL + datos de la ubicación
+  obtenerQrUbicacion: async (ubicacionId) => {
+    const response = await fetch(`${API_URL}/ubicaciones/${ubicacionId}/qr?format=json`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || "Error al generar el QR de la ubicación");
+    }
+    const data = await response.json();
+    return data.data; // { ubicacion_id, numero, clave, qr }
+  },
+
+  // Descargar el PDF con las claves + QR de todas las ubicaciones de un pasillo
+  descargarClavesPasilloPdf: async (pasilloId, fileName) => {
+    const response = await fetch(`${API_URL}/pasillos/${pasilloId}/claves-pdf`);
+    if (!response.ok) {
+      let msg = "Error al generar el PDF de claves";
+      try {
+        const e = await response.json();
+        msg = e.message || msg;
+      } catch (_) { /* respuesta no-JSON */ }
+      throw new Error(msg);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName || `claves-pasillo-${pasilloId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    return true;
+  },
 };
 
 // Exportar como inventarioGeneralService (nombre original)

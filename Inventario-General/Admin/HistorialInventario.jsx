@@ -16,6 +16,8 @@ import {
   Copy,
   Grid3X3,
   MoreHorizontal,
+  QrCode,
+  FileDown,
 } from "lucide-react";
 import { inventarioGeneralService } from "../../services/inventarioGeneralService";
 import { generateLocationKey } from "../utils/keyGenerator";
@@ -121,7 +123,12 @@ const HistorialInventario = ({
     data: null,
   });
   const [modalInputValue, setModalInputValue] = useState("");
-  const [modalLocations, setModalLocations] = useState([]); // Array de objetos {numero, clave}
+  const [modalLocations, setModalLocations] = useState([]); // Array de objetos {id, numero, clave}
+
+  // Estado para descarga de PDF de claves y visor de QR
+  const [pdfLoadingId, setPdfLoadingId] = useState(null);
+  const [qrModal, setQrModal] = useState(null); // { numero, clave, qr } | null
+  const [qrLoading, setQrLoading] = useState(false);
 
   const fetchEstructura = async () => {
     if (!companiaId) return;
@@ -157,6 +164,7 @@ const HistorialInventario = ({
       // Cargar ubicaciones existentes
       setModalLocations(
         parentData.ubicaciones.map((u) => ({
+          id: u.id,
           numero: u.numero,
           clave: u.clave,
         })).sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true }))
@@ -290,12 +298,86 @@ const HistorialInventario = ({
     // Aquí podrías poner un toast
   };
 
+  // Descargar el PDF de claves (texto + QR) de un pasillo
+  const handleDescargarPdf = async (pasillo, contexto = {}) => {
+    if (!pasillo?.ubicaciones?.length) {
+      alert("Este pasillo no tiene ubicaciones para exportar.");
+      return;
+    }
+    setPdfLoadingId(pasillo.id);
+    try {
+      const partes = [contexto.bodegaName, contexto.zonaName, `Pasillo-${pasillo.numero}`]
+        .filter(Boolean)
+        .join("_")
+        .replace(/[^\w\-]+/g, "-");
+      await inventarioGeneralService.descargarClavesPasilloPdf(
+        pasillo.id,
+        `claves-${partes}.pdf`
+      );
+    } catch (error) {
+      console.error(error);
+      alert("Error al descargar el PDF: " + error.message);
+    } finally {
+      setPdfLoadingId(null);
+    }
+  };
+
+  // Abrir el visor del QR de una ubicación concreta
+  const openQr = async (ubicacion) => {
+    if (!ubicacion?.id) {
+      alert("Guarda la ubicación antes de generar su QR.");
+      return;
+    }
+    setQrLoading(true);
+    setQrModal({ numero: ubicacion.numero, clave: ubicacion.clave, qr: null });
+    try {
+      const data = await inventarioGeneralService.obtenerQrUbicacion(ubicacion.id);
+      setQrModal(data);
+    } catch (error) {
+      console.error(error);
+      alert("Error al generar el QR: " + error.message);
+      setQrModal(null);
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
   const filtered = estructura.filter((b) =>
     b.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="historial-layout">
+      {/* VISOR DE QR DE UBICACIÓN */}
+      {qrModal && (
+        <div className="qr-modal-backdrop" onClick={() => setQrModal(null)}>
+          <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="qr-modal-header">
+              <h3>
+                <QrCode size={16} /> Ubicación {qrModal.numero}
+              </h3>
+              <button className="btn-icon-close" onClick={() => setQrModal(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="qr-modal-body">
+              {qrLoading || !qrModal.qr ? (
+                <div className="qr-loading">Generando QR...</div>
+              ) : (
+                <img src={qrModal.qr} alt={`QR ${qrModal.numero}`} className="qr-img" />
+              )}
+              <div className="qr-clave">
+                <span>CLAVE</span>
+                <strong>{qrModal.clave}</strong>
+              </div>
+              <small className="qr-help">
+                Escanea el QR para leer la clave, o escríbela manualmente.
+              </small>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DE GESTIÓN */}
       <ManagementModal
         isOpen={modalConfig.open}
@@ -332,6 +414,21 @@ const HistorialInventario = ({
             <div className="manager-info">
               <Layers size={14} /> Pasillo:{" "}
               <strong>{modalConfig.data.numero}</strong>
+              {modalConfig.data?.ubicaciones?.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-pdf-claves"
+                  disabled={pdfLoadingId === modalConfig.data.id}
+                  onClick={() =>
+                    handleDescargarPdf(modalConfig.data, modalConfig.context)
+                  }
+                >
+                  <FileDown size={13} />
+                  {pdfLoadingId === modalConfig.data.id
+                    ? "Generando..."
+                    : "Descargar PDF de claves"}
+                </button>
+              )}
             </div>
             <div className="locations-input-area">
               <label>Ubicaciones (Existentes y Nuevas)</label>
@@ -340,6 +437,16 @@ const HistorialInventario = ({
                   <div key={idx} className="tag-item-key" title={loc.clave}>
                     <span className="tag-num">{loc.numero}</span>
                     <span className="tag-key">{loc.clave}</span>
+                    {loc.id && (
+                      <button
+                        type="button"
+                        className="tag-qr-btn"
+                        title="Ver QR"
+                        onClick={() => openQr(loc)}
+                      >
+                        <QrCode size={12} />
+                      </button>
+                    )}
                     <button
                       onClick={() =>
                         setModalLocations((prev) =>
@@ -527,14 +634,32 @@ const HistorialInventario = ({
                                       }
                                     />
                                   </div>
-                                  <button
-                                    className="ac-del"
-                                    onClick={() =>
-                                      handleDelete("Pasillo", pasillo.id)
-                                    }
-                                  >
-                                    ×
-                                  </button>
+                                  <div className="ac-head-actions">
+                                    {pasillo.ubicaciones?.length > 0 && (
+                                      <button
+                                        className="ac-pdf"
+                                        title="Descargar PDF de claves"
+                                        disabled={pdfLoadingId === pasillo.id}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDescargarPdf(pasillo, {
+                                            bodegaName: bodega.nombre,
+                                            zonaName: zona.nombre,
+                                          });
+                                        }}
+                                      >
+                                        <FileDown size={12} />
+                                      </button>
+                                    )}
+                                    <button
+                                      className="ac-del"
+                                      onClick={() =>
+                                        handleDelete("Pasillo", pasillo.id)
+                                      }
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
                                 </div>
                                 <div
                                   className="ac-body"

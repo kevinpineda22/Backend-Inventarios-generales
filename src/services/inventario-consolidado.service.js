@@ -221,13 +221,13 @@ class InventarioConsolidadoService {
         const itemId = row.item_id;
         const cantidad = Number(row.cantidad) || 0;
 
-        if (!itemsUbic.has(itemId)) itemsUbic.set(itemId, { q1: 0, q2: 0, q3: 0, q4: 0 });
+        if (!itemsUbic.has(itemId)) itemsUbic.set(itemId, { q1: null, q2: null, q3: null, q4: null });
         const counts = itemsUbic.get(itemId);
 
-        if (tipo === 1)      counts.q1 += cantidad;
-        else if (tipo === 2) counts.q2 += cantidad;
-        else if (tipo === 3) counts.q3 += cantidad;
-        else if (tipo === 4) counts.q4 += cantidad;
+        if (tipo === 1)      counts.q1 = counts.q1 === null ? cantidad : counts.q1 + cantidad;
+        else if (tipo === 2) counts.q2 = counts.q2 === null ? cantidad : counts.q2 + cantidad;
+        else if (tipo === 3) counts.q3 = counts.q3 === null ? cantidad : counts.q3 + cantidad;
+        else if (tipo === 4) counts.q4 = counts.q4 === null ? cantidad : counts.q4 + cantidad;
       }
     }
 
@@ -251,12 +251,12 @@ class InventarioConsolidadoService {
     };
 
     const _prioridad = (counts) => {
-      if (counts.q4 > 0) return counts.q4;
-      if (counts.q3 > 0) return counts.q3;
-      if (counts.q1 === counts.q2 && counts.q1 > 0) return counts.q1;
-      if (counts.q2 > 0) return counts.q2;
-      if (counts.q1 > 0) return counts.q1;
-      return Math.max(counts.q1, counts.q2, counts.q3, counts.q4);
+      if (counts.q4 !== null) return counts.q4;
+      if (counts.q3 !== null && counts.q3 > 0) return counts.q3;
+      if (counts.q1 !== null && counts.q2 !== null && counts.q1 === counts.q2 && counts.q1 > 0) return counts.q1;
+      if (counts.q2 !== null && counts.q2 > 0) return counts.q2;
+      if (counts.q1 !== null && counts.q1 > 0) return counts.q1;
+      return 0;
     };
 
     for (const [ubicId, itemsMap] of porUbicacion) {
@@ -264,7 +264,7 @@ class InventarioConsolidadoService {
 
       for (const [itemId, counts] of itemsMap) {
         const cantFinal = _prioridad(counts);
-        if (cantFinal <= 0) continue;
+        if (cantFinal <= 0 && counts.q4 === null) continue;
 
         // Registro nivel ubicación
         recordsUbicacion.push({
@@ -398,46 +398,40 @@ class InventarioConsolidadoService {
         items.forEach(item => {
           const key = item.item_id;
           if (!itemsMap.has(key)) {
-            itemsMap.set(key, { q1: 0, q2: 0, q3: 0, q4: 0 });
+            itemsMap.set(key, { q1: null, q2: null, q3: null, q4: null });
           }
 
           const data = itemsMap.get(key);
           const qty = Number(item.cantidad);
 
-          if (tipo === 'c1') data.q1 += qty;
-          else if (tipo === 'c2') data.q2 += qty;
-          else if (tipo === 'c3') data.q3 += qty;
-          else if (tipo === 'c4') data.q4 += qty;
+          if (tipo === 'c1') data.q1 = data.q1 === null ? qty : data.q1 + qty;
+          else if (tipo === 'c2') data.q2 = data.q2 === null ? qty : data.q2 + qty;
+          else if (tipo === 'c3') data.q3 = data.q3 === null ? qty : data.q3 + qty;
+          else if (tipo === 'c4') data.q4 = data.q4 === null ? qty : data.q4 + qty;
         });
       }
 
       // Aplicar lógica de consenso
       const resultado = [];
       for (const [itemId, counts] of itemsMap) {
-        let cantidadFinal = 0;
+        let cantidadFinal;
 
-        // Prioridad: C4 > C3 > Consenso C1=C2 > C2 > C1
-        if (counts.q4 > 0) {
+        // Prioridad: C4 manda siempre (incluso 0) > C3 > Consenso C1=C2 > C2 > C1
+        if (counts.q4 !== null) {
           cantidadFinal = counts.q4;
-        } else if (counts.q3 > 0) {
+        } else if (counts.q3 !== null && counts.q3 > 0) {
           cantidadFinal = counts.q3;
-        } else if (counts.q1 === counts.q2 && counts.q1 > 0) {
+        } else if (counts.q1 !== null && counts.q2 !== null && counts.q1 === counts.q2 && counts.q1 > 0) {
           cantidadFinal = counts.q1;
-        } else if (counts.q2 > 0) {
+        } else if (counts.q2 !== null && counts.q2 > 0) {
           cantidadFinal = counts.q2;
-        } else {
+        } else if (counts.q1 !== null && counts.q1 > 0) {
           cantidadFinal = counts.q1;
+        } else {
+          cantidadFinal = 0;
         }
 
-        // Safety net: rescatar si hay historial positivo
-        if (cantidadFinal === 0) {
-          const maxH = Math.max(counts.q1 || 0, counts.q2 || 0, counts.q3 || 0);
-          if (maxH > 0) {
-            cantidadFinal = maxH;
-          }
-        }
-
-        if (cantidadFinal > 0) {
+        if (cantidadFinal > 0 || counts.q4 !== null) {
           resultado.push({ item_id: itemId, cantidad: cantidadFinal });
         }
       }
