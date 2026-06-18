@@ -84,11 +84,10 @@ class InventarioConsolidadoService {
     const bodega = await BodegaModel.findById(bodegaId);
     const companiaId = bodega.compania_id;
 
-    // ── 2. Query única con paginación POR KEYSET (estable) ──────────────────────
-    // IMPORTANTE: se pagina por `id` con .order() + .gt(), NO con .range().
-    // Un OFFSET (.range) sin ORDER BY estable hace que Postgres devuelva las filas
-    // en orden indefinido entre páginas, saltándose y duplicando conteos. Eso dejaba
-    // ítems en 0 de forma aleatoria al cerrar/reconsolidar la bodega.
+    // ── 2. Obtener todos los conteos de la bodega (headers, sin items) ──────
+    // Paginación keyset por id. Los items se obtienen por separado en el paso 2b
+    // para evitar el truncamiento que PostgREST aplica a recursos embebidos
+    // (~200 filas máx por embed), que causaba items perdidos en conteos grandes.
     let allConteos = [];
     let lastId = null;
     const step = 1000;
@@ -110,10 +109,6 @@ class InventarioConsolidadoService {
                 bodega_id
               )
             )
-          ),
-          items:${TABLES.CONTEO_ITEMS}(
-            item_id,
-            cantidad
           )
         `)
         .eq('ubicacion.pasillo.zona.bodega_id', bodegaId)
@@ -123,7 +118,6 @@ class InventarioConsolidadoService {
         .order('id', { ascending: true })
         .limit(step);
 
-      // Keyset: solo filas con id mayor a la última ya traída.
       if (lastId !== null) query = query.gt('id', lastId);
 
       const { data: conteos, error } = await query;
@@ -141,6 +135,65 @@ class InventarioConsolidadoService {
 
     if (allConteos.length === 0) {
       return { success: true, items_consolidados: 0, nivel: 'bodega', referencia_id: bodegaId };
+    }
+
+    // ── 2b. Obtener TODOS los conteo_items de la bodega (con paginación keyset) ──
+    // Separado del embed de conteos porque PostgREST trunca los recursos embebidos
+    // a ~200 filas por padre. Con conteos de 270+ items, los últimos registros
+    // se pierden silenciosamente. Al paginar directamente sobre conteo_items
+    // con keyset, garantizamos que ningún registro se pierda.
+    const itemsPorConteo = new Map();
+    let lastItemId = null;
+    let hasMoreItems = true;
+
+    while (hasMoreItems) {
+      let query = client
+        .from(TABLES.CONTEO_ITEMS)
+        .select(`
+          id,
+          conteo_id,
+          item_id,
+          cantidad,
+          conteo:${TABLES.CONTEOS}!inner(
+            ubicacion:${TABLES.UBICACIONES}!inner(
+              pasillo:${TABLES.PASILLOS}!inner(
+                zona:${TABLES.ZONAS}!inner(
+                  bodega_id
+                )
+              )
+            )
+          )
+        `)
+        .eq('conteo.ubicacion.pasillo.zona.bodega_id', bodegaId)
+        .order('id', { ascending: true })
+        .limit(step);
+
+      if (lastItemId !== null) query = query.gt('id', lastItemId);
+
+      const { data: items, error } = await query;
+      if (error) throw new Error(`Error al obtener items de conteos: ${error.message}`);
+
+      if (items && items.length > 0) {
+        for (const row of items) {
+          if (!itemsPorConteo.has(row.conteo_id)) {
+            itemsPorConteo.set(row.conteo_id, []);
+          }
+          itemsPorConteo.get(row.conteo_id).push({
+            item_id: row.item_id,
+            cantidad: row.cantidad
+          });
+        }
+        lastItemId = items[items.length - 1].id;
+        if (items.length < step) hasMoreItems = false;
+      } else {
+        hasMoreItems = false;
+      }
+    }
+
+    // Asignar items a cada conteo (exactamente la misma estructura que si
+    // vinieran del embed, pero sin el límite de truncamiento de PostgREST)
+    for (const conteo of allConteos) {
+      conteo.items = itemsPorConteo.get(conteo.id) || [];
     }
 
     // ── 3. Procesar en memoria ───────────────────────────────────────────────
