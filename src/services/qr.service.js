@@ -1,25 +1,47 @@
 // =====================================================
-// SERVICIO: GENERACIÓN DE QR Y PDF DE CLAVES DE UBICACIONES
+// SERVICIO: GENERACIÓN DE CÓDIGO DE BARRA (CODE 128) Y PDF
 // =====================================================
 
-import QRCode from "qrcode";
+import bwipjs from "bwip-js";
 import PDFDocument from "pdfkit";
 
 import UbicacionModel from "../models/Ubicacion.model.js";
 import PasilloModel from "../models/Pasillo.model.js";
 
+const BARCODE_CFG = {
+  bcid: "code128",
+  scale: 3,
+  height: 10,
+  includetext: true,
+  textxalign: "center",
+  paddingwidth: 10,
+  paddingheight: 8,
+  backgroundcolor: "ffffff",
+  barcolor: "000000",
+};
+
+const BARCODE_CFG_PDF = {
+  bcid: "code128",
+  scale: 2,
+  height: 8,
+  includetext: true,
+  textxalign: "center",
+  paddingwidth: 6,
+  paddingheight: 4,
+  backgroundcolor: "ffffff",
+  barcolor: "000000",
+};
+
 export class QrService {
   /**
-   * Contenido que se codifica dentro del QR de una ubicación.
-   * Se codifica únicamente la clave para que cualquier lector de QR
-   * (incluido el de la app de conteo) obtenga directamente el valor.
+   * Contenido que se codifica dentro del código de barra de una ubicación.
    */
-  static buildQrPayload(ubicacion) {
+  static buildPayload(ubicacion) {
     return String(ubicacion.clave ?? "");
   }
 
   /**
-   * Generar el QR de una ubicación como Data URL (PNG en base64).
+   * Generar el código de barra de una ubicación como Data URL (PNG en base64).
    */
   static async generateUbicacionQrDataUrl(ubicacionId, options = {}) {
     const ubicacion = await UbicacionModel.findById(ubicacionId);
@@ -27,11 +49,13 @@ export class QrService {
       throw new Error("Ubicación no encontrada");
     }
 
-    const dataUrl = await QRCode.toDataURL(this.buildQrPayload(ubicacion), {
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: options.width || 320,
+    const buffer = await bwipjs.toBuffer({
+      ...BARCODE_CFG,
+      text: this.buildPayload(ubicacion),
+      scale: options.scale || 3,
     });
+
+    const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
 
     return {
       success: true,
@@ -45,7 +69,7 @@ export class QrService {
   }
 
   /**
-   * Generar el QR de una ubicación como buffer PNG (para enviar como imagen).
+   * Generar el código de barra de una ubicación como buffer PNG.
    */
   static async generateUbicacionQrBuffer(ubicacionId, options = {}) {
     const ubicacion = await UbicacionModel.findById(ubicacionId);
@@ -53,19 +77,18 @@ export class QrService {
       throw new Error("Ubicación no encontrada");
     }
 
-    const buffer = await QRCode.toBuffer(this.buildQrPayload(ubicacion), {
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: options.width || 320,
+    const buffer = await bwipjs.toBuffer({
+      ...BARCODE_CFG,
+      text: this.buildPayload(ubicacion),
+      scale: options.scale || 3,
     });
 
     return { ubicacion, buffer };
   }
 
   /**
-   * Generar un PDF con las claves (texto + QR) de todas las ubicaciones
-   * de un pasillo, ordenadas y de forma clara.
-   * Devuelve un Buffer con el contenido del PDF.
+   * Generar un PDF con las claves (texto + código de barra) de todas
+   * las ubicaciones de un pasillo, ordenadas y de forma clara.
    */
   static async generatePasilloClavesPdf(pasilloId) {
     const pasillo = await PasilloModel.findById(pasilloId);
@@ -78,7 +101,7 @@ export class QrService {
       throw new Error("El pasillo no tiene ubicaciones registradas");
     }
 
-    // Orden natural por número (soporta numéricos y alfanuméricos)
+    // Orden natural por número
     const ordenadas = [...ubicaciones].sort((a, b) => {
       const na = Number(a.numero);
       const nb = Number(b.numero);
@@ -88,13 +111,12 @@ export class QrService {
       });
     });
 
-    // Pre-generar todos los QR (como Data URL -> buffer)
-    const qrBuffers = await Promise.all(
+    // Pre-generar todos los códigos de barra (como buffer PNG)
+    const barcodeBuffers = await Promise.all(
       ordenadas.map((u) =>
-        QRCode.toBuffer(this.buildQrPayload(u), {
-          errorCorrectionLevel: "M",
-          margin: 1,
-          width: 200,
+        bwipjs.toBuffer({
+          ...BARCODE_CFG_PDF,
+          text: this.buildPayload(u),
         })
       )
     );
@@ -107,14 +129,17 @@ export class QrService {
       zona,
       bodega,
       ubicaciones: ordenadas,
-      qrBuffers,
+      barcodeBuffers,
     });
   }
 
-  /**
-   * Renderiza el documento PDF y resuelve con un Buffer.
-   */
-  static _renderPdf({ pasillo, zona, bodega, ubicaciones, qrBuffers }) {
+  static _renderPdf({
+    pasillo,
+    zona,
+    bodega,
+    ubicaciones,
+    barcodeBuffers,
+  }) {
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({
@@ -168,7 +193,7 @@ export class QrService {
         const usableWidth =
           doc.page.width - doc.page.margins.left - doc.page.margins.right;
         const cardWidth = (usableWidth - gap * (columns - 1)) / columns;
-        const cardHeight = 185;
+        const cardHeight = 165;
 
         let x = startX;
         let y = doc.y;
@@ -177,7 +202,6 @@ export class QrService {
         const bottomLimit = doc.page.height - doc.page.margins.bottom;
 
         ubicaciones.forEach((u, idx) => {
-          // Salto de página si no cabe la siguiente tarjeta
           if (y + cardHeight > bottomLimit) {
             doc.addPage();
             y = doc.page.margins.top;
@@ -192,7 +216,7 @@ export class QrService {
             height: cardHeight,
             numero: u.numero,
             clave: u.clave,
-            qrBuffer: qrBuffers[idx],
+            barcodeBuffer: barcodeBuffers[idx],
           });
 
           col += 1;
@@ -213,9 +237,9 @@ export class QrService {
   }
 
   /**
-   * Dibuja una tarjeta individual: número, QR y clave grande.
+   * Dibuja una tarjeta individual: número, código de barra y clave grande.
    */
-  static _drawCard(doc, { x, y, width, height, numero, clave, qrBuffer }) {
+  static _drawCard(doc, { x, y, width, height, numero, clave, barcodeBuffer }) {
     // Marco
     doc
       .roundedRect(x, y, width, height, 8)
@@ -228,38 +252,32 @@ export class QrService {
       .fontSize(11)
       .fillColor("#111827")
       .font("Helvetica-Bold")
-      .text(`Ubicación ${numero}`, x, y + 10, {
+      .text(`Ubicación ${numero}`, x, y + 8, {
         width,
         align: "center",
       });
 
-    // QR centrado
-    const qrSize = 95;
-    const qrX = x + (width - qrSize) / 2;
-    const qrY = y + 32;
-    if (qrBuffer) {
-      doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+    // Código de barra centrado
+    const barcodeW = width - 24;
+    const barcodeX = x + (width - barcodeW) / 2;
+    const barcodeY = y + 28;
+    if (barcodeBuffer) {
+      doc.image(barcodeBuffer, barcodeX, barcodeY, {
+        width: barcodeW,
+      });
     }
 
-    // Etiqueta "Clave"
+    // Clave grande debajo
     doc
-      .fontSize(8)
-      .font("Helvetica")
-      .fillColor("#6b7280")
-      .text("CLAVE", x, qrY + qrSize + 8, { width, align: "center" });
-
-    // Clave grande
-    doc
-      .fontSize(22)
+      .fontSize(20)
       .font("Helvetica-Bold")
       .fillColor("#111827")
-      .text(String(clave ?? "—"), x, qrY + qrSize + 18, {
+      .text(String(clave ?? "—"), x, y + height - 38, {
         width,
         align: "center",
         characterSpacing: 2,
       });
 
-    // Restablecer fuente por defecto
     doc.font("Helvetica");
   }
 }
