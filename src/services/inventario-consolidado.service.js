@@ -251,7 +251,14 @@ class InventarioConsolidadoService {
     };
 
     const _prioridad = (counts) => {
-      if (counts.q4 !== null) return counts.q4;
+      // C4 positivo manda siempre (Ajuste Final con valor real)
+      if (counts.q4 !== null && counts.q4 > 0) return counts.q4;
+      // C4=0 pero C1/C2 tienen historia: probable falso cero, recuperar de C2 o C1
+      if (counts.q4 === 0 && (counts.q1 > 0 || counts.q2 > 0)) {
+        return counts.q2 !== null && counts.q2 > 0 ? counts.q2 : (counts.q1 || 0);
+      }
+      // C4=0 genuino: no hay historia positiva en C1/C2, respetar el 0
+      if (counts.q4 === 0) return 0;
       if (counts.q3 !== null && counts.q3 > 0) return counts.q3;
       if (counts.q1 !== null && counts.q2 !== null && counts.q1 === counts.q2 && counts.q1 > 0) return counts.q1;
       if (counts.q2 !== null && counts.q2 > 0) return counts.q2;
@@ -416,9 +423,15 @@ class InventarioConsolidadoService {
       for (const [itemId, counts] of itemsMap) {
         let cantidadFinal;
 
-        // Prioridad: C4 manda siempre (incluso 0) > C3 > Consenso C1=C2 > C2 > C1
-        if (counts.q4 !== null) {
+        // Prioridad: C4 positivo manda siempre (Ajuste Final con valor real)
+        if (counts.q4 !== null && counts.q4 > 0) {
           cantidadFinal = counts.q4;
+        // C4=0 pero C1/C2 tienen historia: probable falso cero, recuperar de C2 o C1
+        } else if (counts.q4 === 0 && (counts.q1 > 0 || counts.q2 > 0)) {
+          cantidadFinal = counts.q2 !== null && counts.q2 > 0 ? counts.q2 : (counts.q1 || 0);
+        // C4=0 genuino: sin historia positiva, respetar el 0
+        } else if (counts.q4 === 0) {
+          cantidadFinal = 0;
         } else if (counts.q3 !== null && counts.q3 > 0) {
           cantidadFinal = counts.q3;
         } else if (counts.q1 !== null && counts.q2 !== null && counts.q1 === counts.q2 && counts.q1 > 0) {
