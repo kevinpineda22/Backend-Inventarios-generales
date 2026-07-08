@@ -374,7 +374,7 @@ export class QrService {
       .fontSize(16)
       .fillColor("#374151")
       .font("Helvetica-Bold")
-      .text(`Pasillo: ${pasillo}`, centerX, 80, {
+      .text(`Pasillo: ${pasillo}`, centerX, 60, {
         width,
         align: "center",
       });
@@ -384,7 +384,7 @@ export class QrService {
       .fontSize(24)
       .fillColor("#111827")
       .font("Helvetica-Bold")
-      .text(`Ubicación ${numero}`, centerX, 120, {
+      .text(`Ubicación ${numero}`, centerX, 100, {
         width,
         align: "center",
       });
@@ -392,15 +392,15 @@ export class QrService {
     // --- Codigo de barras ---
     const barcodeW = Math.min(width - 40, 280);
     const barcodeX = centerX + (width - barcodeW) / 2;
-    const barcodeY = 190;
+    const barcodeY = 180;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
       });
     }
 
-    // --- Clave ---
-    const claveLabelY = barcodeY + (barcodeBuffer ? 50 : 0);
+    // --- Clave (bien separada del codigo) ---
+    const claveLabelY = barcodeY + (barcodeBuffer ? 80 : 0);
     doc
       .fontSize(10)
       .fillColor("#94a3b8")
