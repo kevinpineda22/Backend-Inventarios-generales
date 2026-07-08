@@ -280,6 +280,173 @@ export class QrService {
 
     doc.font("Helvetica");
   }
+
+  // ────────────────────────────────────────────────────────────
+  // GENERAR ETIQUETAS PARA IMPRIMIR (Media Carta)
+  // ────────────────────────────────────────────────────────────
+
+  /**
+   * Generar PDF con etiquetas para imprimir en media carta.
+   * Cada etiqueta muestra: Pasillo, Ubicacion y codigo de barras Code 128.
+   * @param {Array<{id: string, numero: string, clave: string, pasillo: {numero: string, nombre?: string}}>} ubicaciones
+   */
+  static async generateEtiquetasPdf(ubicaciones) {
+    // Ordenar por pasillo, luego por ubicacion
+    const ordenadas = [...ubicaciones].sort((a, b) => {
+      const pa = String(a.pasillo?.numero ?? a.pasillo?.nombre ?? "");
+      const pb = String(b.pasillo?.numero ?? b.pasillo?.nombre ?? "");
+      const cmp = pa.localeCompare(pb, "es", { numeric: true });
+      if (cmp !== 0) return cmp;
+      const na = Number(a.numero);
+      const nb = Number(b.numero);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return String(a.numero).localeCompare(String(b.numero), "es", {
+        numeric: true,
+      });
+    });
+
+    // Pre-generar codigos de barra
+    const barcodeBuffers = await Promise.all(
+      ordenadas.map((u) =>
+        bwipjs.toBuffer({
+          ...BARCODE_CFG_PDF,
+          text: this.buildPayload(u),
+        })
+      )
+    );
+
+    return this._renderEtiquetasPdf(ordenadas, barcodeBuffers);
+  }
+
+  /**
+   * Renderizar PDF media carta (612 x 396 pts = half letter landscape).
+   * 2 columnas x 2 filas = 4 etiquetas por pagina.
+   */
+  static _renderEtiquetasPdf(ubicaciones, barcodeBuffers) {
+    return new Promise((resolve, reject) => {
+      try {
+        const PAGE_W = 612; // 8.5"
+        const PAGE_H = 396; // 5.5"
+        const MARGIN = 18;
+        const doc = new PDFDocument({
+          size: [PAGE_W, PAGE_H],
+          margin: MARGIN,
+          info: {
+            Title: "Etiquetas de Ubicaciones",
+            Author: "Backend Inventario General",
+          },
+        });
+
+        const chunks = [];
+        doc.on("data", (chunk) => chunks.push(chunk));
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+
+        const cols = 2;
+        const rows = 2;
+        const gapX = 12;
+        const gapY = 12;
+        const usableW = PAGE_W - MARGIN * 2;
+        const usableH = PAGE_H - MARGIN * 2;
+        const labelW = (usableW - gapX * (cols - 1)) / cols;
+        const labelH = (usableH - gapY * (rows - 1)) / rows;
+
+        let x = MARGIN;
+        let y = MARGIN;
+        let col = 0;
+        let row = 0;
+
+        ubicaciones.forEach((u, idx) => {
+          if (row >= rows) {
+            doc.addPage();
+            x = MARGIN;
+            y = MARGIN;
+            col = 0;
+            row = 0;
+          }
+
+          this._drawLabel(doc, {
+            x,
+            y,
+            width: labelW,
+            height: labelH,
+            pasillo: u.pasillo?.nombre || u.pasillo?.numero || "",
+            numero: u.numero,
+            clave: u.clave,
+            barcodeBuffer: barcodeBuffers[idx],
+          });
+
+          col += 1;
+          if (col >= cols) {
+            col = 0;
+            x = MARGIN;
+            y += labelH + gapY;
+            row += 1;
+          } else {
+            x += labelW + gapX;
+          }
+        });
+
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Dibuja una etiqueta individual: Pasillo, Ubicacion, codigo de barras.
+   */
+  static _drawLabel(doc, { x, y, width, height, pasillo, numero, clave, barcodeBuffer }) {
+    // Borde punteado suave para guia de corte
+    doc
+      .rect(x, y, width, height)
+      .lineWidth(0.5)
+      .strokeColor("#cbd5e1")
+      .stroke();
+
+    // Pasillo
+    doc
+      .fontSize(11)
+      .fillColor("#374151")
+      .font("Helvetica-Bold")
+      .text(`Pasillo: ${pasillo}`, x, y + 10, {
+        width,
+        align: "center",
+      });
+
+    // Ubicacion
+    doc
+      .fontSize(16)
+      .fillColor("#111827")
+      .font("Helvetica-Bold")
+      .text(`Ubicación ${numero}`, x, y + 30, {
+        width,
+        align: "center",
+      });
+
+    // Codigo de barras
+    const barcodeW = width - 28;
+    const barcodeX = x + (width - barcodeW) / 2;
+    const barcodeY = y + 58;
+    if (barcodeBuffer) {
+      doc.image(barcodeBuffer, barcodeX, barcodeY, {
+        width: barcodeW,
+      });
+    }
+
+    // Clave debajo del codigo (referencia)
+    doc
+      .fontSize(10)
+      .fillColor("#6b7280")
+      .font("Helvetica")
+      .text(String(clave ?? ""), x, barcodeY + (barcodeBuffer ? 28 : 0), {
+        width,
+        align: "center",
+      });
+
+    doc.font("Helvetica");
+  }
 }
 
 export default QrService;

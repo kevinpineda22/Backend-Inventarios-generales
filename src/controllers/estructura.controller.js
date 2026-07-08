@@ -4,6 +4,7 @@
 
 import EstructuraService from '../services/estructura.service.js';
 import QrService from '../services/qr.service.js';
+import UbicacionModel from '../models/Ubicacion.model.js';
 import {
   successResponse,
   errorResponse,
@@ -326,6 +327,72 @@ export class EstructuraController {
       return res.status(200).send(pdfBuffer);
     } catch (error) {
       const status = error.message?.includes('no encontrado') ? 404 : 500;
+      return errorResponse(res, error.message, status, error);
+    }
+  }
+
+  /**
+   * Generar PDF con etiquetas de ubicaciones para imprimir.
+   * GET /api/ubicaciones/etiquetas?ids=id1,id2,id3
+   * o ?all=true&bodegaId=xxx para TODAS las ubicaciones de una bodega
+   */
+  static async getEtiquetasPdf(req, res) {
+    try {
+      let ubicaciones;
+
+      if (req.query.all === 'true' && req.query.bodegaId) {
+        // Traer TODAS las ubicaciones activas de la bodega
+        const { supabase } = await import('../config/supabase.js');
+        const { data, error } = await supabase
+          .from('inv_general_ubicaciones')
+          .select(`
+            *,
+            pasillo:inv_general_pasillos(
+              *,
+              zona:inv_general_zonas!inner(
+                bodega_id
+              )
+            )
+          `)
+          .eq('pasillo.zona.bodega_id', req.query.bodegaId)
+          .eq('activo', true)
+          .order('pasillo_id')
+          .order('numero');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          return errorResponse(res, 'No se encontraron ubicaciones para esta bodega', 404);
+        }
+        ubicaciones = data;
+      } else if (req.query.ids) {
+        const ids = req.query.ids.split(',').map(id => id.trim()).filter(Boolean);
+        if (ids.length === 0) {
+          return errorResponse(res, 'Debe proporcionar al menos un ID de ubicación', 400);
+        }
+        ubicaciones = await Promise.all(ids.map(id => UbicacionModel.findById(id)));
+        ubicaciones = ubicaciones.filter(Boolean);
+        if (ubicaciones.length === 0) {
+          return errorResponse(res, 'Ninguna ubicación encontrada', 404);
+        }
+      } else {
+        return errorResponse(res, 'Debe proporcionar ids de ubicaciones o all=true con bodegaId', 400);
+      }
+
+      // Verificar que tengan la info del pasillo
+      for (const u of ubicaciones) {
+        if (!u.pasillo) {
+          return errorResponse(res, `La ubicación ${u.numero || u.id} no tiene pasillo asociado`, 400);
+        }
+      }
+
+      const pdfBuffer = await QrService.generateEtiquetasPdf(ubicaciones);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="etiquetas-ubicaciones.pdf"');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(pdfBuffer);
+    } catch (error) {
+      const status = error.message?.includes('no encontrado') || error.message?.includes('No se encontraron') ? 404 : 500;
       return errorResponse(res, error.message, status, error);
     }
   }

@@ -93,10 +93,11 @@ class ConteoService {
               finalQty = q4; 
               status = 'Ajuste Final'; 
           }
-          // Si el ajuste es 0, verifiquemos si es lógico (si C1 o C2 eran enormes, el 0 es sospechoso)
-          else if (q4 === 0 && (q1 > 0 || q2 > 0)) {
-               // Si C4 es 0 pero C1/C2 tienen datos, ignoramos C4 temporalmente para mostrar el hallazgo
-               if (q2 > 0) { finalQty = q2; status = 'Conteo 2 (Recuperado)'; }
+          // Si el ajuste es 0, verifiquemos si es lógico (si hay historia positiva, el 0 es sospechoso)
+          else if (q4 === 0 && (q1 > 0 || q2 > 0 || (q3 !== null && q3 > 0))) {
+               // C4 es 0 pero hay datos históricos, recuperamos en orden: Reconteo (C3) > C2 > C1
+               if (q3 !== null && q3 > 0) { finalQty = q3; status = 'Reconteo (Recuperado)'; }
+               else if (q2 > 0) { finalQty = q2; status = 'Conteo 2 (Recuperado)'; }
                else { finalQty = q1; status = 'Conteo 1 (Recuperado)'; }
           }
           else if (q4 === 0) {

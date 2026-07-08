@@ -19,4 +19,7 @@ router.get('/:id/qr', EstructuraController.getUbicacionQr);
 // Obtener ubicación por ID
 router.get('/:id', EstructuraController.getUbicacion);
 
+// Generar PDF con etiquetas para imprimir (media carta, pasillo + ubicacion + codigo barras)
+router.get('/etiquetas/imprimir', EstructuraController.getEtiquetasPdf);
+
 export default router;
