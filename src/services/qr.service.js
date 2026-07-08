@@ -318,14 +318,14 @@ export class QrService {
   }
 
   /**
-   * Renderizar PDF media carta (612 x 396 pts = half letter landscape).
+   * Renderizar PDF media carta RETRATO (396 x 612 pts = 5.5" x 8.5").
    * 2 columnas x 2 filas = 4 etiquetas por pagina.
    */
   static _renderEtiquetasPdf(ubicaciones, barcodeBuffers) {
     return new Promise((resolve, reject) => {
       try {
-        const PAGE_W = 612; // 8.5"
-        const PAGE_H = 396; // 5.5"
+        const PAGE_W = 396; // 5.5"
+        const PAGE_H = 612; // 8.5"
         const MARGIN = 18;
         const doc = new PDFDocument({
           size: [PAGE_W, PAGE_H],
@@ -394,54 +394,62 @@ export class QrService {
   }
 
   /**
-   * Dibuja una etiqueta individual: Pasillo, Ubicacion, codigo de barras.
+   * Dibuja una etiqueta individual: Pasillo grande, Ubicacion grande, codigo de barras,
+   * y clave de referencia clara al final.
    */
   static _drawLabel(doc, { x, y, width, height, pasillo, numero, clave, barcodeBuffer }) {
-    // Borde punteado suave para guia de corte
+    // Borde para guia de corte
     doc
       .rect(x, y, width, height)
       .lineWidth(0.5)
       .strokeColor("#cbd5e1")
       .stroke();
 
-    // Pasillo
-    doc
-      .fontSize(11)
-      .fillColor("#374151")
-      .font("Helvetica-Bold")
-      .text(`Pasillo: ${pasillo}`, x, y + 10, {
-        width,
-        align: "center",
-      });
-
-    // Ubicacion
+    // --- Pasillo (grande) ---
     doc
       .fontSize(16)
-      .fillColor("#111827")
+      .fillColor("#374151")
       .font("Helvetica-Bold")
-      .text(`Ubicación ${numero}`, x, y + 30, {
+      .text(`Pasillo: ${pasillo}`, x, y + 18, {
         width,
         align: "center",
       });
 
-    // Codigo de barras
-    const barcodeW = width - 28;
+    // --- Ubicacion (muy grande) ---
+    doc
+      .fontSize(26)
+      .fillColor("#111827")
+      .font("Helvetica-Bold")
+      .text(`Ubicación ${numero}`, x, y + 48, {
+        width,
+        align: "center",
+      });
+
+    // --- Codigo de barras ---
+    const barcodeW = Math.min(width - 28, 180);
     const barcodeX = x + (width - barcodeW) / 2;
-    const barcodeY = y + 58;
+    const barcodeY = y + 96;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
       });
     }
 
-    // Clave debajo del codigo (referencia)
+    // --- Clave (separada, debajo del codigo) ---
+    const claveY = barcodeY + (barcodeBuffer ? 44 : 0);
     doc
       .fontSize(10)
-      .fillColor("#6b7280")
+      .fillColor("#94a3b8")
       .font("Helvetica")
-      .text(String(clave ?? ""), x, barcodeY + (barcodeBuffer ? 28 : 0), {
+      .text("CLAVE", x, claveY, { width, align: "center" });
+    doc
+      .fontSize(13)
+      .fillColor("#1e293b")
+      .font("Helvetica-Bold")
+      .text(String(clave ?? "—"), x, claveY + 14, {
         width,
         align: "center",
+        characterSpacing: 1,
       });
 
     doc.font("Helvetica");
