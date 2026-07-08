@@ -318,15 +318,15 @@ export class QrService {
   }
 
   /**
-   * Renderizar PDF media carta RETRATO (396 x 612 pts = 5.5" x 8.5").
-   * 2 columnas x 2 filas = 4 etiquetas por pagina.
+   * Renderizar PDF media carta RETRATO (5.5" x 8.5" = 396 x 612 pts).
+   * UNA ubicacion por pagina, centrada.
    */
   static _renderEtiquetasPdf(ubicaciones, barcodeBuffers) {
     return new Promise((resolve, reject) => {
       try {
         const PAGE_W = 396; // 5.5"
         const PAGE_H = 612; // 8.5"
-        const MARGIN = 18;
+        const MARGIN = 32;
         const doc = new PDFDocument({
           size: [PAGE_W, PAGE_H],
           margin: MARGIN,
@@ -341,49 +341,18 @@ export class QrService {
         doc.on("end", () => resolve(Buffer.concat(chunks)));
         doc.on("error", reject);
 
-        const cols = 2;
-        const rows = 2;
-        const gapX = 12;
-        const gapY = 12;
         const usableW = PAGE_W - MARGIN * 2;
-        const usableH = PAGE_H - MARGIN * 2;
-        const labelW = (usableW - gapX * (cols - 1)) / cols;
-        const labelH = (usableH - gapY * (rows - 1)) / rows;
-
-        let x = MARGIN;
-        let y = MARGIN;
-        let col = 0;
-        let row = 0;
 
         ubicaciones.forEach((u, idx) => {
-          if (row >= rows) {
-            doc.addPage();
-            x = MARGIN;
-            y = MARGIN;
-            col = 0;
-            row = 0;
-          }
+          if (idx > 0) doc.addPage();
 
           this._drawLabel(doc, {
-            x,
-            y,
-            width: labelW,
-            height: labelH,
+            width: usableW,
             pasillo: u.pasillo?.nombre || u.pasillo?.numero || "",
             numero: u.numero,
             clave: u.clave,
             barcodeBuffer: barcodeBuffers[idx],
           });
-
-          col += 1;
-          if (col >= cols) {
-            col = 0;
-            x = MARGIN;
-            y += labelH + gapY;
-            row += 1;
-          } else {
-            x += labelW + gapX;
-          }
         });
 
         doc.end();
@@ -394,59 +363,55 @@ export class QrService {
   }
 
   /**
-   * Dibuja una etiqueta individual: Pasillo grande, Ubicacion grande, codigo de barras,
-   * y clave de referencia clara al final.
+   * Dibuja UNA etiqueta centrada en toda la pagina media carta.
+   * Layout: Pasillo -> Ubicacion (grande) -> Codigo barras -> Clave
    */
-  static _drawLabel(doc, { x, y, width, height, pasillo, numero, clave, barcodeBuffer }) {
-    // Borde para guia de corte
-    doc
-      .rect(x, y, width, height)
-      .lineWidth(0.5)
-      .strokeColor("#cbd5e1")
-      .stroke();
+  static _drawLabel(doc, { width, pasillo, numero, clave, barcodeBuffer }) {
+    const centerX = doc.page.margins.left;
 
-    // --- Pasillo (grande) ---
+    // --- Pasillo ---
     doc
       .fontSize(16)
       .fillColor("#374151")
       .font("Helvetica-Bold")
-      .text(`Pasillo: ${pasillo}`, x, y + 18, {
+      .text(`Pasillo: ${pasillo}`, centerX, 80, {
         width,
         align: "center",
       });
 
-    // --- Ubicacion (muy grande) ---
+    // --- Ubicacion ---
     doc
-      .fontSize(26)
+      .fontSize(24)
       .fillColor("#111827")
       .font("Helvetica-Bold")
-      .text(`Ubicación ${numero}`, x, y + 48, {
+      .text(`Ubicación ${numero}`, centerX, 120, {
         width,
         align: "center",
       });
 
     // --- Codigo de barras ---
-    const barcodeW = Math.min(width - 28, 180);
-    const barcodeX = x + (width - barcodeW) / 2;
-    const barcodeY = y + 96;
+    const barcodeW = Math.min(width - 40, 280);
+    const barcodeX = centerX + (width - barcodeW) / 2;
+    const barcodeY = 190;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
       });
     }
 
-    // --- Clave (separada, debajo del codigo) ---
-    const claveY = barcodeY + (barcodeBuffer ? 44 : 0);
+    // --- Clave ---
+    const claveLabelY = barcodeY + (barcodeBuffer ? 50 : 0);
     doc
       .fontSize(10)
       .fillColor("#94a3b8")
       .font("Helvetica")
-      .text("CLAVE", x, claveY, { width, align: "center" });
+      .text("CLAVE", centerX, claveLabelY, { width, align: "center" });
+
     doc
-      .fontSize(13)
+      .fontSize(16)
       .fillColor("#1e293b")
       .font("Helvetica-Bold")
-      .text(String(clave ?? "—"), x, claveY + 14, {
+      .text(String(clave ?? "—"), centerX, claveLabelY + 16, {
         width,
         align: "center",
         characterSpacing: 1,
