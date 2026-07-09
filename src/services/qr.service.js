@@ -22,11 +22,11 @@ const BARCODE_CFG = {
 
 const BARCODE_CFG_PDF = {
   bcid: "code128",
-  scale: 2,
-  height: 8,
+  scale: 3,
+  height: 12,
   includetext: false,
-  paddingwidth: 6,
-  paddingheight: 4,
+  paddingwidth: 8,
+  paddingheight: 6,
   backgroundcolor: "ffffff",
   barcolor: "000000",
 };
@@ -371,28 +371,28 @@ export class QrService {
 
     // --- Pasillo ---
     doc
-      .fontSize(16)
+      .fontSize(22)
       .fillColor("#374151")
       .font("Helvetica-Bold")
-      .text(`Pasillo: ${pasillo}`, centerX, 55, {
+      .text(`Pasillo: ${pasillo}`, centerX, 50, {
         width,
         align: "center",
       });
 
     // --- Ubicacion ---
     doc
-      .fontSize(24)
+      .fontSize(38)
       .fillColor("#111827")
       .font("Helvetica-Bold")
-      .text(`Ubicación ${numero}`, centerX, 95, {
+      .text(`Ubicación ${numero}`, centerX, 100, {
         width,
         align: "center",
       });
 
     // --- Codigo de barras ---
-    const barcodeW = Math.min(width - 40, 280);
+    const barcodeW = Math.min(width - 24, 320);
     const barcodeX = centerX + (width - barcodeW) / 2;
-    const barcodeY = 155;
+    const barcodeY = 190;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
@@ -400,47 +400,47 @@ export class QrService {
     }
 
     // --- Clave (bien separada del codigo) ---
-    const claveLabelY = barcodeY + (barcodeBuffer ? 80 : 0);
+    const claveLabelY = barcodeY + (barcodeBuffer ? 96 : 0);
     doc
-      .fontSize(10)
+      .fontSize(11)
       .fillColor("#94a3b8")
       .font("Helvetica")
       .text("CLAVE", centerX, claveLabelY, { width, align: "center" });
 
     doc
-      .fontSize(16)
+      .fontSize(20)
       .fillColor("#1e293b")
       .font("Helvetica-Bold")
-      .text(String(clave ?? "—"), centerX, claveLabelY + 16, {
+      .text(String(clave ?? "—"), centerX, claveLabelY + 18, {
         width,
         align: "center",
         characterSpacing: 1,
       });
 
     // --- Lineas de Conteo (una al lado de la otra: Conteo 1 ___  Conteo 2 ___) ---
-    const conteoY = claveLabelY + 68;
+    const conteoY = claveLabelY + 90;
     const halfW = (width - 24) / 2;
     const gap = 16;
 
     // Conteo 1
-    doc.fontSize(13).fillColor("#334155").font("Helvetica-Bold");
-    doc.text("Conteo 1", centerX + 4, conteoY, { width: 80 });
+    doc.fontSize(15).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 1", centerX + 4, conteoY, { width: 90 });
     doc
-      .moveTo(centerX + 84, conteoY + 11)
-      .lineTo(centerX + 4 + halfW, conteoY + 11)
-      .lineWidth(1.5)
-      .strokeColor("#cbd5e1")
+      .moveTo(centerX + 94, conteoY + 12)
+      .lineTo(centerX + 4 + halfW, conteoY + 12)
+      .lineWidth(2)
+      .strokeColor("#94a3b8")
       .stroke();
 
     // Conteo 2
     const c2x = centerX + halfW + gap;
-    doc.fontSize(13).fillColor("#334155").font("Helvetica-Bold");
-    doc.text("Conteo 2", c2x + 4, conteoY, { width: 80 });
+    doc.fontSize(15).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 2", c2x + 4, conteoY, { width: 90 });
     doc
-      .moveTo(c2x + 84, conteoY + 11)
-      .lineTo(c2x + 4 + halfW, conteoY + 11)
-      .lineWidth(1.5)
-      .strokeColor("#cbd5e1")
+      .moveTo(c2x + 94, conteoY + 12)
+      .lineTo(c2x + 4 + halfW, conteoY + 12)
+      .lineWidth(2)
+      .strokeColor("#94a3b8")
       .stroke();
 
     doc.font("Helvetica");
