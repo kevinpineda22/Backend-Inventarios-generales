@@ -390,17 +390,18 @@ export class QrService {
       });
 
     // --- Codigo de barras ---
-    const barcodeW = Math.min(width - 24, 500);
+    const barcodeW = Math.min(width - 24, 300);
     const barcodeX = centerX + (width - barcodeW) / 2;
     const barcodeY = 85;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
+        height: 50,
       });
     }
 
     // --- Clave (bien separada del codigo) ---
-    const claveLabelY = barcodeY + (barcodeBuffer ? 140 : 0);
+    const claveLabelY = barcodeY + (barcodeBuffer ? 180 : 0);
     doc
       .fontSize(10)
       .fillColor("#94a3b8")
