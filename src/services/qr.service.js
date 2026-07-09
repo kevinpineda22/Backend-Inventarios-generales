@@ -417,27 +417,28 @@ export class QrService {
         characterSpacing: 1,
       });
 
-    // --- Lineas de Conteo (para marcar con X al realizar cada conteo) ---
-    const conteoY1 = claveLabelY + 68;
-    const labelW = 90;
-    const lineFromX = centerX + labelW + 10;
-    const lineToX = centerX + width - 16;
+    // --- Lineas de Conteo (una al lado de la otra: Conteo 1 ___  Conteo 2 ___) ---
+    const conteoY = claveLabelY + 68;
+    const halfW = (width - 24) / 2;
+    const gap = 16;
 
-    doc.fontSize(14).fillColor("#334155").font("Helvetica-Bold");
-    doc.text("Conteo 1", centerX + 8, conteoY1, { width: labelW });
+    // Conteo 1
+    doc.fontSize(13).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 1", centerX + 4, conteoY, { width: 80 });
     doc
-      .moveTo(lineFromX, conteoY1 + 12)
-      .lineTo(lineToX, conteoY1 + 12)
+      .moveTo(centerX + 84, conteoY + 11)
+      .lineTo(centerX + 4 + halfW, conteoY + 11)
       .lineWidth(1.5)
       .strokeColor("#cbd5e1")
       .stroke();
 
-    const conteoY2 = conteoY1 + 36;
-    doc.fontSize(14).fillColor("#334155").font("Helvetica-Bold");
-    doc.text("Conteo 2", centerX + 8, conteoY2, { width: labelW });
+    // Conteo 2
+    const c2x = centerX + halfW + gap;
+    doc.fontSize(13).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 2", c2x + 4, conteoY, { width: 80 });
     doc
-      .moveTo(lineFromX, conteoY2 + 12)
-      .lineTo(lineToX, conteoY2 + 12)
+      .moveTo(c2x + 84, conteoY + 11)
+      .lineTo(c2x + 4 + halfW, conteoY + 11)
       .lineWidth(1.5)
       .strokeColor("#cbd5e1")
       .stroke();
