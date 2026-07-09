@@ -400,7 +400,7 @@ export class QrService {
     }
 
     // --- Clave (bien separada del codigo) ---
-    const claveLabelY = barcodeY + (barcodeBuffer ? 96 : 0);
+    const claveLabelY = barcodeY + (barcodeBuffer ? 130 : 0);
     doc
       .fontSize(11)
       .fillColor("#94a3b8")
