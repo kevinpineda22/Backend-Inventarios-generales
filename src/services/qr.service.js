@@ -324,8 +324,8 @@ export class QrService {
   static _renderEtiquetasPdf(ubicaciones, barcodeBuffers) {
     return new Promise((resolve, reject) => {
       try {
-        const PAGE_W = 396; // 5.5"
-        const PAGE_H = 612; // 8.5"
+        const PAGE_W = 612; // 8.5"
+        const PAGE_H = 396; // 5.5"
         const MARGIN = 32;
         const doc = new PDFDocument({
           size: [PAGE_W, PAGE_H],
@@ -371,28 +371,28 @@ export class QrService {
 
     // --- Pasillo ---
     doc
-      .fontSize(22)
+      .fontSize(18)
       .fillColor("#374151")
       .font("Helvetica-Bold")
-      .text(`Pasillo: ${pasillo}`, centerX, 50, {
+      .text(`Pasillo: ${pasillo}`, centerX, 20, {
         width,
         align: "center",
       });
 
     // --- Ubicacion ---
     doc
-      .fontSize(38)
+      .fontSize(28)
       .fillColor("#111827")
       .font("Helvetica-Bold")
-      .text(`Ubicación ${numero}`, centerX, 100, {
+      .text(`Ubicación ${numero}`, centerX, 48, {
         width,
         align: "center",
       });
 
     // --- Codigo de barras ---
-    const barcodeW = Math.min(width - 24, 320);
+    const barcodeW = Math.min(width - 24, 500);
     const barcodeX = centerX + (width - barcodeW) / 2;
-    const barcodeY = 190;
+    const barcodeY = 100;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
@@ -400,46 +400,46 @@ export class QrService {
     }
 
     // --- Clave (bien separada del codigo) ---
-    const claveLabelY = barcodeY + (barcodeBuffer ? 130 : 0);
+    const claveLabelY = barcodeY + (barcodeBuffer ? 82 : 0);
     doc
-      .fontSize(11)
+      .fontSize(10)
       .fillColor("#94a3b8")
       .font("Helvetica")
       .text("CLAVE", centerX, claveLabelY, { width, align: "center" });
 
     doc
-      .fontSize(20)
+      .fontSize(16)
       .fillColor("#1e293b")
       .font("Helvetica-Bold")
-      .text(String(clave ?? "—"), centerX, claveLabelY + 18, {
+      .text(String(clave ?? "—"), centerX, claveLabelY + 14, {
         width,
         align: "center",
         characterSpacing: 1,
       });
 
     // --- Lineas de Conteo (una al lado de la otra: Conteo 1 ___  Conteo 2 ___) ---
-    const conteoY = claveLabelY + 90;
+    const conteoY = claveLabelY + 58;
     const halfW = (width - 24) / 2;
     const gap = 16;
 
     // Conteo 1
-    doc.fontSize(15).fillColor("#334155").font("Helvetica-Bold");
-    doc.text("Conteo 1", centerX + 4, conteoY, { width: 90 });
+    doc.fontSize(13).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 1", centerX + 4, conteoY, { width: 85 });
     doc
-      .moveTo(centerX + 94, conteoY + 12)
-      .lineTo(centerX + 4 + halfW, conteoY + 12)
-      .lineWidth(2)
+      .moveTo(centerX + 89, conteoY + 11)
+      .lineTo(centerX + 4 + halfW, conteoY + 11)
+      .lineWidth(1.5)
       .strokeColor("#94a3b8")
       .stroke();
 
     // Conteo 2
     const c2x = centerX + halfW + gap;
-    doc.fontSize(15).fillColor("#334155").font("Helvetica-Bold");
-    doc.text("Conteo 2", c2x + 4, conteoY, { width: 90 });
+    doc.fontSize(13).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 2", c2x + 4, conteoY, { width: 85 });
     doc
-      .moveTo(c2x + 94, conteoY + 12)
-      .lineTo(c2x + 4 + halfW, conteoY + 12)
-      .lineWidth(2)
+      .moveTo(c2x + 89, conteoY + 11)
+      .lineTo(c2x + 4 + halfW, conteoY + 11)
+      .lineWidth(1.5)
       .strokeColor("#94a3b8")
       .stroke();
 
