@@ -417,6 +417,31 @@ export class QrService {
         characterSpacing: 1,
       });
 
+    // --- Lineas de Conteo (para marcar con X al realizar cada conteo) ---
+    const conteoY1 = claveLabelY + 68;
+    const labelW = 90;
+    const lineFromX = centerX + labelW + 10;
+    const lineToX = centerX + width - 16;
+
+    doc.fontSize(14).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 1", centerX + 8, conteoY1, { width: labelW });
+    doc
+      .moveTo(lineFromX, conteoY1 + 12)
+      .lineTo(lineToX, conteoY1 + 12)
+      .lineWidth(1.5)
+      .strokeColor("#cbd5e1")
+      .stroke();
+
+    const conteoY2 = conteoY1 + 36;
+    doc.fontSize(14).fillColor("#334155").font("Helvetica-Bold");
+    doc.text("Conteo 2", centerX + 8, conteoY2, { width: labelW });
+    doc
+      .moveTo(lineFromX, conteoY2 + 12)
+      .lineTo(lineToX, conteoY2 + 12)
+      .lineWidth(1.5)
+      .strokeColor("#cbd5e1")
+      .stroke();
+
     doc.font("Helvetica");
   }
 }
