@@ -390,18 +390,18 @@ export class QrService {
       });
 
     // --- Codigo de barras ---
-    const barcodeW = Math.min(width - 24, 300);
+    const barcodeW = Math.min(width - 24, 420);
     const barcodeX = centerX + (width - barcodeW) / 2;
-    const barcodeY = 85;
+    const barcodeY = 80;
     if (barcodeBuffer) {
       doc.image(barcodeBuffer, barcodeX, barcodeY, {
         width: barcodeW,
-        height: 50,
+        height: 60,
       });
     }
 
     // --- Clave (bien separada del codigo) ---
-    const claveLabelY = barcodeY + (barcodeBuffer ? 180 : 0);
+    const claveLabelY = barcodeY + (barcodeBuffer ? 100 : 0);
     doc
       .fontSize(10)
       .fillColor("#94a3b8")
@@ -419,7 +419,7 @@ export class QrService {
       });
 
     // --- Lineas de Conteo (una al lado de la otra: Conteo 1 ___  Conteo 2 ___) ---
-    const conteoY = claveLabelY + 56;
+    const conteoY = claveLabelY + 50;
     const halfW = (width - 24) / 2;
     const gap = 16;
 
