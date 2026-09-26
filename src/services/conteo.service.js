@@ -776,21 +776,26 @@ class ConteoService {
       // 4. Calcular diferencias reales en paralelo
       // Solo traemos items para las ubicaciones que pasaron el filtro inicial
       const promesasCalculo = ubicacionesCandidatas.map(async (ubicacionId) => {
+        // Un fallo NO se traga: antes devolvía null y la ubicación desaparecía de la
+        // lista como si no tuviera diferencias. Se reintenta una vez y, si vuelve a
+        // fallar, el endpoint responde error y el panel lo muestra.
+        let diffResult;
         try {
-            const diffResult = await this.calcularDiferencias(ubicacionId);
-            const dataUbicacion = ubicacionesMap.get(ubicacionId);
-
-            if (diffResult.success && diffResult.data.total_diferencias > 0) {
-                return {
-                    ubicacion: dataUbicacion.ubicacion,
-                    diferencias: diffResult.data.diferencias,
-                    total_diferencias: diffResult.data.total_diferencias,
-                    conteo1: dataUbicacion.c1,
-                    conteo2: dataUbicacion.c2
-                };
-            }
+            diffResult = await this.calcularDiferencias(ubicacionId);
         } catch (e) {
-            console.error(`Error calculando diferencias para ubicación ${ubicacionId}`, e);
+            console.error(`Error calculando diferencias para ubicación ${ubicacionId}, reintentando`, e);
+            diffResult = await this.calcularDiferencias(ubicacionId);
+        }
+        const dataUbicacion = ubicacionesMap.get(ubicacionId);
+
+        if (diffResult.success && diffResult.data.total_diferencias > 0) {
+            return {
+                ubicacion: dataUbicacion.ubicacion,
+                diferencias: diffResult.data.diferencias,
+                total_diferencias: diffResult.data.total_diferencias,
+                conteo1: dataUbicacion.c1,
+                conteo2: dataUbicacion.c2
+            };
         }
         return null;
       });

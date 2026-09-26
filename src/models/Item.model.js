@@ -378,17 +378,34 @@ export class ItemModel {
    */
   static async findGruposByCompany(companiaId) {
     try {
-      // NOTA: Se aumenta el límite para garantizar traer todas las categorías
-      // ya que por defecto Supabase limita a 1000 filas.
-      const { data, error } = await supabase
+      // Paginated: the server caps every response (db-max-rows) no matter what
+      // .limit() asks for, so .limit(100000) still returned only 5000 of 22k+
+      // items and groups defined past that row were missing. Pages are fetched
+      // in parallel so a 22k-item master stays well under the Vercel timeout.
+      const PAGE = 1000;
+      const baseQuery = () => supabase
         .from(TABLES.ITEMS)
-        .select('grupo')
+        .select('grupo', { count: 'exact' })
         .eq('compania_id', companiaId)
         .not('grupo', 'is', null)
-        .limit(100000); // Límite alto para cubrir todo el maestro de items
+        .order('id', { ascending: true });
 
+      const { data: firstPage, count, error } = await baseQuery().range(0, PAGE - 1);
       if (error) throw error;
-      
+
+      const restPages = await Promise.all(
+        Array.from({ length: Math.max(0, Math.ceil((count || 0) / PAGE) - 1) }, (_, i) => {
+          const from = (i + 1) * PAGE;
+          return baseQuery().range(from, from + PAGE - 1);
+        })
+      );
+
+      const data = [...firstPage];
+      for (const page of restPages) {
+        if (page.error) throw page.error;
+        data.push(...page.data);
+      }
+
       // Obtener valores únicos en memoria (Javscript Set)
       const uniqueGrupos = [...new Set(data.map(item => item.grupo).filter(g => g && g.trim() !== ''))];
       

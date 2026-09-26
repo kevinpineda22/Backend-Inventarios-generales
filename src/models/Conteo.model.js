@@ -535,8 +535,8 @@ export class ConteoModel {
         conteos: e.conteos
       })).sort((a, b) => b.conteos - a.conteos);
     } catch (error) {
-      console.warn('Error al obtener empleados por bodega:', error.message);
-      return [];
+      // Propagar: devolver [] hacía que un fallo se viera como "sin empleados"
+      throw handleSupabaseError(error);
     }
   }
 
