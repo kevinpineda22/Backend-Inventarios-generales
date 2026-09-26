@@ -713,13 +713,35 @@ class ConteoService {
    */
   static async getUbicacionesConDiferencias(companiaId) {
     try {
-      // 1. Obtener SOLO CABECERAS de conteos finalizados (Lightweight)
-      // Evitamos traer millones de registros de items filtrando solo los headers
-      const conteosHeaders = await ConteoModel.findHeadersByCompany(companiaId);
-      
-      // 2. Agrupar por ubicación en memoria
+      // 1. Cada inventario general es una bodega ("INV. GENERAL <fecha>") y las
+      // anteriores siguen activas. Solo se recuentan diferencias del inventario
+      // vigente: la bodega activa creada más recientemente.
+      const { data: bodegaVigente, error: bodegaError } = await supabase
+        .from('inv_general_bodegas')
+        .select('id')
+        .eq('compania_id', companiaId)
+        .eq('activo', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (bodegaError) throw bodegaError;
+      if (!bodegaVigente) return { success: true, data: [], count: 0 };
+
+      // Solo CABECERAS de conteos finalizados de esa bodega (sin items)
+      const conteosHeaders = await ConteoModel.findHeadersByCompany(companiaId, bodegaVigente.id);
+
+      // 2. Agrupar por ubicación en memoria, conservando el conteo MÁS RECIENTE
+      // de cada tipo (antes ganaba el último que llegara, en orden arbitrario)
       const ubicacionesMap = new Map();
-      
+      const tiempoConteo = (c) => Math.max(
+        ...[c.created_at, c.updated_at, c.fecha_fin]
+          .filter(Boolean)
+          .map(f => new Date(f).getTime())
+      );
+      const masReciente = (actual, nuevo) =>
+        !actual || tiempoConteo(nuevo) > tiempoConteo(actual) ? nuevo : actual;
+
       conteosHeaders.forEach(c => {
         const ubicacionId = c.ubicacion_id;
         if (!ubicacionesMap.has(ubicacionId)) {
@@ -733,16 +755,20 @@ class ConteoService {
         }
         
         const entry = ubicacionesMap.get(ubicacionId);
-        if (c.tipo_conteo === 1) entry.c1 = c;
-        if (c.tipo_conteo === 2) entry.c2 = c;
-        if (c.tipo_conteo === 3) entry.c3 = c;
-        if (c.tipo_conteo === 4) entry.c4 = c;
+        if (c.tipo_conteo === 1) entry.c1 = masReciente(entry.c1, c);
+        if (c.tipo_conteo === 2) entry.c2 = masReciente(entry.c2, c);
+        if (c.tipo_conteo === 3) entry.c3 = masReciente(entry.c3, c);
+        if (c.tipo_conteo === 4) entry.c4 = masReciente(entry.c4, c);
       });
 
-      // 3. Filtrar candidatos: Tienen C1 y C2, pero NO C3 y NO C4
+      // 3. Filtrar candidatos: tienen C1 y C2, y ningún C3/C4 POSTERIOR a ellos.
+      // Un C3/C4 de un inventario anterior no debe ocultar la ubicación.
       const ubicacionesCandidatas = [];
       for (const [id, data] of ubicacionesMap) {
-        if (data.c1 && data.c2 && !data.c3 && !data.c4) {
+        if (!data.c1 || !data.c2) continue;
+        const inicioVigente = Math.max(tiempoConteo(data.c1), tiempoConteo(data.c2));
+        const resuelta = [data.c3, data.c4].some(c => c && tiempoConteo(c) >= inicioVigente);
+        if (!resuelta) {
           ubicacionesCandidatas.push(id);
         }
       }
@@ -811,6 +837,12 @@ class ConteoService {
                 await ConteoItemModel.delete(item.id);
             }
         }
+        // Refrescar updated_at/fecha_fin: getUbicacionesConDiferencias solo da por
+        // resuelta la ubicación si el C4 es posterior al C1/C2 vigente.
+        conteo = await ConteoModel.update(conteo.id, {
+          estado: 'finalizado',
+          fecha_fin: new Date().toISOString()
+        });
       } else {
         // Crear nuevo encabezado
         conteo = await ConteoModel.create({

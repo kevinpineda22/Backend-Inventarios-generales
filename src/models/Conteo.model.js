@@ -51,40 +51,63 @@ export class ConteoModel {
   /**
    * Obtener solo cabeceras de conteos (sin items) para análisis rápido
    */
-  static async findHeadersByCompany(companiaId) {
+  static async findHeadersByCompany(companiaId, bodegaId = null) {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.CONTEOS)
-        .select(`
-          id,
-          tipo_conteo,
-          estado,
-          ubicacion_id,
-          created_at,
-          ubicacion:inv_general_ubicaciones!inner(
+      // Keyset pagination by id: without it Supabase caps the response at 1000
+      // rows, and during a large inventory the C1/C2 headers of many locations
+      // were silently dropped, hiding them from the recount panel.
+      const PAGE = 1000;
+      const headers = [];
+      let lastId = null;
+
+      while (true) {
+        let query = supabase
+          .from(TABLES.CONTEOS)
+          .select(`
             id,
-            numero,
-            clave,
-            pasillo:inv_general_pasillos!inner(
+            tipo_conteo,
+            estado,
+            ubicacion_id,
+            created_at,
+            updated_at,
+            fecha_fin,
+            ubicacion:inv_general_ubicaciones!inner(
               id,
               numero,
-              zona:inv_general_zonas!inner(
+              clave,
+              pasillo:inv_general_pasillos!inner(
                 id,
-                nombre,
-                bodega:inv_general_bodegas!inner(
+                numero,
+                zona:inv_general_zonas!inner(
                   id,
                   nombre,
-                  compania_id
+                  bodega:inv_general_bodegas!inner(
+                    id,
+                    nombre,
+                    compania_id
+                  )
                 )
               )
             )
-          )
-        `)
-        .eq('estado', 'finalizado')
-        .eq('ubicacion.pasillo.zona.bodega.compania_id', companiaId);
+          `)
+          .eq('estado', 'finalizado')
+          .eq('ubicacion.pasillo.zona.bodega.compania_id', companiaId)
+          .order('id', { ascending: true })
+          .limit(PAGE);
 
-      if (error) throw error;
-      return data;
+        if (bodegaId) query = query.eq('ubicacion.pasillo.zona.bodega.id', bodegaId);
+
+        if (lastId !== null) query = query.gt('id', lastId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        headers.push(...data);
+        if (data.length < PAGE) break;
+        lastId = data[data.length - 1].id;
+      }
+
+      return headers;
     } catch (error) {
       throw handleSupabaseError(error);
     }
