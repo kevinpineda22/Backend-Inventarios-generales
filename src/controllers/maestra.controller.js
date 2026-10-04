@@ -6,32 +6,45 @@ export const upsertCodigos = async (req, res) => {
       return responses.validationErrorResponse(res, ['No se recibieron códigos para insertar']);
     }
 
-    // Extraer códigos de items únicos para buscar sus UUIDs
-    const itemCodes = [...new Set(codigos.map(c => c.item_codigo))];
-    
-    // Buscar los UUIDs de los items en la base de datos
-    const { default: ItemModel } = await import('../models/Item.model.js');
+    // Un mismo f120 (item_codigo) existe en varias compañías. Buscarlo sin filtrar
+    // por compañía enlazaba códigos de Merkahorro a items de Megamayorista (y al
+    // revés), y el escaneo con la compañía correcta no los encontraba.
+    if (codigos.some(c => c.compania_id === undefined || c.compania_id === null || c.compania_id === '')) {
+      return responses.validationErrorResponse(res, ['Cada código debe incluir compania_id']);
+    }
+
     const { supabase, TABLES } = await import('../config/supabase.js');
-    
-    const { data: items, error: itemsError } = await supabase
-      .from(TABLES.ITEMS)
-      .select('id, codigo')
-      .in('codigo', itemCodes);
-    
-    if (itemsError) throw itemsError;
-    
-    // Crear un mapa de codigo -> UUID
-    const itemMap = new Map();
-    items.forEach(item => {
-      itemMap.set(item.codigo, item.id);
+
+    // Buscar los UUIDs por compañía, en lotes (evita URLs gigantes y el tope de filas)
+    const itemMap = new Map(); // `${compania_id}|${codigo}` -> UUID
+    const codigosPorCompania = new Map();
+    codigos.forEach(c => {
+      const cia = String(c.compania_id);
+      if (!codigosPorCompania.has(cia)) codigosPorCompania.set(cia, new Set());
+      codigosPorCompania.get(cia).add(c.item_codigo);
     });
-    
+
+    const LOTE = 300;
+    for (const [cia, setCodigos] of codigosPorCompania) {
+      const lista = [...setCodigos];
+      for (let i = 0; i < lista.length; i += LOTE) {
+        const { data: items, error: itemsError } = await supabase
+          .from(TABLES.ITEMS)
+          .select('id, codigo')
+          .eq('compania_id', cia)
+          .in('codigo', lista.slice(i, i + LOTE));
+
+        if (itemsError) throw itemsError;
+        items.forEach(item => itemMap.set(`${cia}|${item.codigo}`, item.id));
+      }
+    }
+
     // Mapear códigos con UUIDs correctos
     const codigosConUUID = codigos
       .map(c => {
-        const uuid = itemMap.get(c.item_codigo);
+        const uuid = itemMap.get(`${c.compania_id}|${c.item_codigo}`);
         if (!uuid) {
-          console.warn(`No se encontró UUID para item_codigo: ${c.item_codigo}`);
+          console.warn(`No se encontró UUID para item_codigo: ${c.item_codigo} (compañía ${c.compania_id})`);
           return null;
         }
         
@@ -41,7 +54,7 @@ export const upsertCodigos = async (req, res) => {
           unidad_medida: c.unidad_medida || 'UND',
           factor: c.factor || 1,
           activo: typeof c.activo !== 'undefined' ? c.activo : true,
-          compania_id: c.compania_id ?? null,
+          compania_id: c.compania_id,
           imported_from: c.imported_from
         };
       })
